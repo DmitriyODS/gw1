@@ -123,7 +123,10 @@ def move_task(task_id):
     status = request.json.get('status')
     if status not in TaskStatus.LABELS:
         return jsonify({'error': 'Неверный статус'}), 400
-    if task.status == TaskStatus.IN_PROGRESS and status != TaskStatus.IN_PROGRESS:
+    if status == TaskStatus.IN_PROGRESS:
+        return jsonify({'error': 'Нельзя перетащить в «В работе» — используйте кнопку таймера'}), 400
+    # Stop active timers when moving away from in_progress
+    if task.status == TaskStatus.IN_PROGRESS:
         for log in task.active_timers:
             log.ended_at = datetime.utcnow()
     task.status = status

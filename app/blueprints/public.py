@@ -62,7 +62,7 @@ def _save_attachments(files, task_id):
     for f in files:
         if f and f.filename:
             ext = os.path.splitext(f.filename)[1].lower()
-            if ext in allowed:
+            if allowed is None or ext in allowed:
                 fname = f'{uuid.uuid4().hex}{ext}'
                 f.save(os.path.join(upload_dir, fname))
                 db.session.add(TaskAttachment(

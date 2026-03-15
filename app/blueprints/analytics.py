@@ -1,7 +1,7 @@
 import io
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, send_file, request, jsonify
-from flask_login import login_required
+from flask_login import login_required, current_user
 from sqlalchemy import func
 from extensions import db
 from models import Task, TimeLog, User, Department, TaskStatus, Urgency
@@ -120,6 +120,83 @@ def build_stats(period):
         'top_tasks': top_tasks,
         'top_time': top_time,
     }
+
+
+@analytics_bp.route('/analytics/time')
+@login_required
+def time_report():
+    now = datetime.utcnow()
+    period = request.args.get('period', 'week')
+    selected_uid = request.args.get('user_id', type=int)
+
+    # Who can see what
+    can_see_all = current_user.can_manage
+    all_users = User.query.filter_by(is_active=True).order_by(User.full_name).all() if can_see_all else None
+    target_uid = (selected_uid if can_see_all else current_user.id)
+
+    # Period start
+    start, _ = get_range(period)
+
+    # All-period totals for summary cards
+    ranges = {
+        'day':   now.replace(hour=0, minute=0, second=0, microsecond=0),
+        'week':  (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0),
+        'month': now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+        'year':  now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
+    }
+
+    def _secs(start_dt, uid=None):
+        q = db.session.query(
+            func.coalesce(func.sum(
+                func.extract('epoch', func.coalesce(TimeLog.ended_at, now) - TimeLog.started_at)
+            ), 0)
+        ).filter(TimeLog.started_at >= start_dt)
+        if uid:
+            q = q.filter(TimeLog.user_id == uid)
+        elif not can_see_all:
+            q = q.filter(TimeLog.user_id == current_user.id)
+        return int(q.scalar() or 0)
+
+    totals = {p: _secs(r, target_uid) for p, r in ranges.items()}
+
+    # Detailed logs for selected period
+    q = db.session.query(TimeLog, Task, User).join(
+        Task, TimeLog.task_id == Task.id
+    ).join(User, TimeLog.user_id == User.id).filter(TimeLog.started_at >= start)
+    if target_uid:
+        q = q.filter(TimeLog.user_id == target_uid)
+    elif not can_see_all:
+        q = q.filter(TimeLog.user_id == current_user.id)
+    logs = q.order_by(TimeLog.started_at.desc()).all()
+
+    # Group logs by date then by user
+    from collections import defaultdict
+    by_date = defaultdict(list)
+    for log, task, user in logs:
+        date_key = log.started_at.date()
+        end = log.ended_at or now
+        secs = int((end - log.started_at).total_seconds())
+        by_date[date_key].append({
+            'task_id': task.id, 'task_title': task.title,
+            'user_name': user.full_name,
+            'started': log.started_at, 'ended': log.ended_at,
+            'secs': secs, 'active': log.ended_at is None,
+        })
+
+    # Per-user summary for managers (when no specific user selected)
+    user_summary = []
+    if can_see_all and not target_uid:
+        for u in all_users:
+            s = _secs(start, u.id)
+            if s > 0:
+                user_summary.append({'name': u.full_name, 'id': u.id, 'secs': s})
+        user_summary.sort(key=lambda x: x['secs'], reverse=True)
+
+    return render_template('analytics/time.html',
+        period=period, target_uid=target_uid,
+        all_users=all_users, can_see_all=can_see_all,
+        totals=totals, by_date=dict(sorted(by_date.items(), reverse=True)),
+        user_summary=user_summary)
 
 
 @analytics_bp.route('/analytics')

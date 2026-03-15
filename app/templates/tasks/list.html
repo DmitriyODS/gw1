@@ -113,20 +113,20 @@
           {% endif %}
           {% set active = task.active_timers %}
           {% if active %}
-          <span class="badge bg-success" style="font-size:0.7rem">
+          <span class="badge bg-success" style="font-size:0.7rem" title="{{ active | map(attribute='user') | map(attribute='full_name') | join(', ') }}">
             <i class="bi bi-play-fill"></i> {{ active | length }} раб.
           </span>
           {% endif %}
         </div>
-        {% if task.status in ('new', 'paused') %}
-        <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}"
-                title="Начать работу">
-          <i class="bi bi-play-fill"></i> В работу
-        </button>
-        {% elif task.status == 'in_progress' %}
+        {% if task.id in my_active_task_ids %}
         <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}"
                 title="Поставить на паузу">
           <i class="bi bi-pause-fill"></i> Пауза
+        </button>
+        {% elif task.status not in ('done', 'review') %}
+        <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}"
+                title="Начать работу">
+          <i class="bi bi-play-fill"></i> В работу
         </button>
         {% endif %}
       </div>
@@ -161,15 +161,28 @@ function timerStart(taskId, btn) {
     method: 'POST', headers: {'X-CSRFToken': CSRF}
   }).then(r => r.json()).then(d => {
     if (d.conflict) {
-      if (confirm(`Сейчас работаете над «${d.active_task_title}». Остановить и переключиться на эту задачу?`)) {
+      const prevTaskId = d.active_task_id;
+      if (confirm(`Сейчас работаете над «${d.active_task_title}». Остановить и переключиться?`)) {
         fetch(`/tasks/${taskId}/timer/force_start`, {
           method: 'POST', headers: {'X-CSRFToken': CSRF}
         }).then(r => r.json()).then(d2 => {
-          if (d2.success) moveCardToColumn(btn, 'in_progress');
+          if (!d2.success) return;
+          // Update previous card: if no other users working → move to paused, else just update button
+          const prevCard = document.querySelector(`.task-card[data-id="${prevTaskId}"]`);
+          if (prevCard) {
+            if (d2.prev_task_status === 'paused') {
+              moveCard(prevCard, 'paused');
+            } else {
+              // Still in_progress (other users working), just reset our button
+              setBtnStart(prevCard.querySelector('.btn-timer'), prevTaskId);
+            }
+          }
+          // Activate current card
+          activateCard(btn.closest('.task-card'));
         });
       }
-    } else if (d.success) {
-      moveCardToColumn(btn, 'in_progress');
+    } else if (d.success && !d.already_running) {
+      activateCard(btn.closest('.task-card'));
     }
   });
 }
@@ -178,33 +191,68 @@ function timerPause(taskId, btn) {
   fetch(`/tasks/${taskId}/timer/pause`, {
     method: 'POST', headers: {'X-CSRFToken': CSRF}
   }).then(r => r.json()).then(d => {
-    if (d.success) moveCardToColumn(btn, 'paused');
+    if (d.success) {
+      const card = btn.closest('.task-card');
+      if (d.task_status === 'in_progress') {
+        // Other users still working — keep card in in_progress, just update our button
+        setBtnStart(btn, taskId);
+        card.dataset.status = 'in_progress';
+      } else {
+        // No one else working — move card to paused
+        moveCard(card, 'paused');
+      }
+    }
   });
 }
 
-function moveCardToColumn(btn, newStatus) {
-  const card = btn.closest('.task-card');
+// Activate a card: move to in_progress, switch button to Pause
+function activateCard(card) {
+  const btn = card.querySelector('.btn-timer');
+  const targetBody = document.querySelector('.kanban-body[data-status="in_progress"]');
   const originBody = card.closest('.kanban-body');
-  const targetBody = document.querySelector(`.kanban-body[data-status="${newStatus}"]`);
-  if (!targetBody) return;
-
-  // Swap timer button
-  card.dataset.status = newStatus;
-  const taskId = card.dataset.id;
-  if (newStatus === 'in_progress') {
+  if (targetBody && originBody !== targetBody) {
+    targetBody.querySelectorAll('.empty-col').forEach(el => el.remove());
+    card.classList.add('was-dragged');
+    targetBody.appendChild(card);
+    if (!originBody.querySelector('.task-card')) {
+      originBody.innerHTML = '<div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>';
+    }
+    updateCount(originBody);
+    updateCount(targetBody);
+  }
+  if (btn) {
     btn.className = 'btn-timer btn-timer-pause';
     btn.dataset.action = 'pause';
     btn.innerHTML = '<i class="bi bi-pause-fill"></i> Пауза';
     btn.title = 'Поставить на паузу';
-    // Also stop any other in_progress card for this user (visual only)
-  } else if (newStatus === 'paused') {
-    btn.className = 'btn-timer btn-timer-start';
-    btn.dataset.action = 'start';
-    btn.innerHTML = '<i class="bi bi-play-fill"></i> В работу';
-    btn.title = 'Начать работу';
+  }
+}
+
+// Set a button back to "В работу" state without moving the card
+function setBtnStart(btn, taskId) {
+  if (!btn) return;
+  btn.className = 'btn-timer btn-timer-start';
+  btn.dataset.action = 'start';
+  btn.dataset.id = taskId;
+  btn.innerHTML = '<i class="bi bi-play-fill"></i> В работу';
+  btn.title = 'Начать работу';
+}
+
+// Move any card to a column and update its button
+function moveCard(card, newStatus) {
+  const originBody = card.closest('.kanban-body');
+  const targetBody = document.querySelector(`.kanban-body[data-status="${newStatus}"]`);
+  if (!targetBody || originBody === targetBody) return;
+
+  card.dataset.status = newStatus;
+  const btn = card.querySelector('.btn-timer');
+  if (btn) {
+    if (newStatus === 'paused' || newStatus === 'new') {
+      setBtnStart(btn, card.dataset.id);
+    }
+    // in_progress button is handled by activateCard(); drag to in_progress is blocked
   }
 
-  // Move in DOM
   targetBody.querySelectorAll('.empty-col').forEach(el => el.remove());
   card.classList.add('was-dragged');
   targetBody.appendChild(card);
@@ -272,17 +320,14 @@ document.querySelectorAll('.kanban-body').forEach(body => {
         originBody.innerHTML = '<div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>';
       }
 
-      // Update timer button if card left in_progress
+      // Update button on dragged card
       const btn = dragCard.querySelector('.btn-timer');
-      if (btn && newStatus === 'paused') {
-        btn.className = 'btn-timer btn-timer-start';
-        btn.dataset.action = 'start';
-        btn.innerHTML = '<i class="bi bi-play-fill"></i> В работу';
-      } else if (btn && newStatus === 'new') {
+      if (btn && newStatus !== 'in_progress') {
         btn.className = 'btn-timer btn-timer-start';
         btn.dataset.action = 'start';
         btn.innerHTML = '<i class="bi bi-play-fill"></i> В работу';
       }
+      dragCard.dataset.status = newStatus;
 
       updateCount(originBody);
       updateCount(body);

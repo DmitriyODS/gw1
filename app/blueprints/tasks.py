@@ -28,8 +28,13 @@ def sorted_tasks(query):
 @login_required
 def list_tasks():
     tasks = sorted_tasks(Task.query)
+    my_active_task_ids = {
+        log.task_id for log in
+        TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
+    }
     return render_template('tasks/list.html', tasks=tasks,
-                           TaskStatus=TaskStatus, Urgency=Urgency)
+                           TaskStatus=TaskStatus, Urgency=Urgency,
+                           my_active_task_ids=my_active_task_ids)
 
 
 @tasks_bp.route('/tasks/<int:task_id>')
@@ -125,10 +130,10 @@ def move_task(task_id):
         return jsonify({'error': 'Неверный статус'}), 400
     if status == TaskStatus.IN_PROGRESS:
         return jsonify({'error': 'Нельзя перетащить в «В работе» — используйте кнопку таймера'}), 400
-    # Stop active timers when moving away from in_progress
-    if task.status == TaskStatus.IN_PROGRESS:
-        for log in task.active_timers:
-            log.ended_at = datetime.utcnow()
+    # Stop all active timers when moving task
+    now = datetime.utcnow()
+    for log in task.active_timers:
+        log.ended_at = now
     task.status = status
     db.session.commit()
     return jsonify({'ok': True})
@@ -140,9 +145,18 @@ def move_task(task_id):
 @login_required
 def timer_start(task_id):
     task = Task.query.get_or_404(task_id)
-    if task.status not in (TaskStatus.NEW, TaskStatus.PAUSED):
+    if task.status in (TaskStatus.DONE, TaskStatus.REVIEW):
         return jsonify({'error': 'Нельзя запустить таймер в текущем статусе'}), 400
 
+    # Already running on this task for this user
+    my_active_here = TimeLog.query.filter_by(
+        task_id=task_id, user_id=current_user.id, ended_at=None
+    ).first()
+    if my_active_here:
+        return jsonify({'success': True, 'already_running': True,
+                        'started_at': my_active_here.started_at.isoformat()})
+
+    # User has active timer on a different task
     active = current_user.active_timer
     if active and active.task_id != task_id:
         return jsonify({
@@ -151,54 +165,66 @@ def timer_start(task_id):
             'active_task_title': active.task.title
         })
 
-    if not active:
-        log = TimeLog(task_id=task_id, user_id=current_user.id)
-        db.session.add(log)
-        task.status = TaskStatus.IN_PROGRESS
-        db.session.commit()
-        return jsonify({'success': True, 'started_at': log.started_at.isoformat()})
-
-    return jsonify({'success': True, 'already_running': True,
-                    'started_at': active.started_at.isoformat()})
+    log = TimeLog(task_id=task_id, user_id=current_user.id)
+    db.session.add(log)
+    task.status = TaskStatus.IN_PROGRESS
+    db.session.commit()
+    return jsonify({'success': True, 'started_at': log.started_at.isoformat()})
 
 
 @tasks_bp.route('/tasks/<int:task_id>/timer/force_start', methods=['POST'])
 @login_required
 def timer_force_start(task_id):
+    prev_task_status = None
     active = current_user.active_timer
     if active:
+        prev_task_id = active.task_id
         active.ended_at = datetime.utcnow()
-        active.task.status = TaskStatus.PAUSED
+        prev_task = active.task
+        # Only set previous task to paused if no other users still working on it
+        if not prev_task.active_timers:
+            prev_task.status = TaskStatus.PAUSED
+            prev_task_status = TaskStatus.PAUSED
+        else:
+            prev_task_status = TaskStatus.IN_PROGRESS
 
     task = Task.query.get_or_404(task_id)
     log = TimeLog(task_id=task_id, user_id=current_user.id)
     task.status = TaskStatus.IN_PROGRESS
     db.session.add(log)
     db.session.commit()
-    return jsonify({'success': True, 'started_at': log.started_at.isoformat()})
+    return jsonify({
+        'success': True,
+        'started_at': log.started_at.isoformat(),
+        'prev_task_status': prev_task_status,
+    })
 
 
 @tasks_bp.route('/tasks/<int:task_id>/timer/pause', methods=['POST'])
 @login_required
 def timer_pause(task_id):
     log = TimeLog.query.filter_by(task_id=task_id, user_id=current_user.id, ended_at=None).first()
+    task_status = None
     if log:
         log.ended_at = datetime.utcnow()
         task = Task.query.get(task_id)
-        # Only pause if no other active timers on this task
+        # Only set global status to paused if no other users still working
         if not task.active_timers:
             task.status = TaskStatus.PAUSED
+            task_status = TaskStatus.PAUSED
+        else:
+            task_status = TaskStatus.IN_PROGRESS
         db.session.commit()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'task_status': task_status})
 
 
 @tasks_bp.route('/tasks/<int:task_id>/review', methods=['POST'])
 @login_required
 def send_to_review(task_id):
     task = Task.query.get_or_404(task_id)
-    log = TimeLog.query.filter_by(task_id=task_id, user_id=current_user.id, ended_at=None).first()
-    if log:
-        log.ended_at = datetime.utcnow()
+    now = datetime.utcnow()
+    for log in task.active_timers:
+        log.ended_at = now
     task.status = TaskStatus.REVIEW
     db.session.commit()
     flash('Задача отправлена на проверку', 'success')
@@ -212,6 +238,9 @@ def mark_done(task_id):
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.detail', task_id=task_id))
     task = Task.query.get_or_404(task_id)
+    now = datetime.utcnow()
+    for log in task.active_timers:
+        log.ended_at = now
     task.status = TaskStatus.DONE
     db.session.commit()
     flash('Задача закрыта', 'success')

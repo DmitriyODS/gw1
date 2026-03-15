@@ -44,10 +44,18 @@
           </a>
         </li>
         {% endif %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('analytics.dashboard') }}">
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
             <i class="bi bi-bar-chart-line"></i> Аналитика
           </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('analytics.dashboard') }}">
+              <i class="bi bi-graph-up"></i> Дашборд
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('analytics.time_report') }}">
+              <i class="bi bi-hourglass-split"></i> Учёт времени
+            </a></li>
+          </ul>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('analytics.tv_mode') }}" target="_blank">

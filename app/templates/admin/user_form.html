@@ -2,35 +2,40 @@
 {% block title %}{% if user %}Редактировать пользователя{% else %}Новый пользователь{% endif %} — TaskTime{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-<div class="col-md-6">
-<div class="card shadow-sm">
-  <div class="card-header">
-    <h5 class="mb-0">{% if user %}Редактировать: {{ user.full_name }}{% else %}Новый пользователь{% endif %}</h5>
-  </div>
+<div class="flex justify-center">
+<div class="w-full max-w-md">
+<div class="card bg-base-100 shadow-sm">
   <div class="card-body">
-    <form method="post">
+    <h2 class="card-title text-lg mb-4">
+      {% if user %}Редактировать: {{ user.full_name }}{% else %}Новый пользователь{% endif %}
+    </h2>
+    <form method="post" class="flex flex-col gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="mb-3">
-        <label class="form-label">ФИО <span class="text-danger">*</span></label>
-        <input type="text" name="full_name" class="form-control" required value="{{ user.full_name if user else '' }}">
+      <div>
+        <label class="label pb-1"><span class="label-text font-medium">ФИО <span class="text-error">*</span></span></label>
+        <input type="text" name="full_name" class="input input-bordered w-full" required value="{{ user.full_name if user else '' }}">
       </div>
-      <div class="mb-3">
-        <label class="form-label">Логин <span class="text-danger">*</span></label>
-        <input type="text" name="username" class="form-control" required value="{{ user.username if user else '' }}">
+      <div>
+        <label class="label pb-1"><span class="label-text font-medium">Логин <span class="text-error">*</span></span></label>
+        <input type="text" name="username" class="input input-bordered w-full" required value="{{ user.username if user else '' }}">
       </div>
-      <div class="mb-3">
-        <label class="form-label">Email <span class="text-danger">*</span></label>
-        <input type="email" name="email" class="form-control" required value="{{ user.email if user else '' }}">
+      <div>
+        <label class="label pb-1"><span class="label-text font-medium">Email <span class="text-error">*</span></span></label>
+        <input type="email" name="email" class="input input-bordered w-full" required value="{{ user.email if user else '' }}">
       </div>
-      <div class="mb-3">
-        <label class="form-label">Пароль {% if user %}<span class="text-muted small">(оставьте пустым, чтобы не менять)</span>{% else %}<span class="text-danger">*</span>{% endif %}</label>
-        <input type="password" name="password" class="form-control" {% if not user %}required{% endif %}>
+      <div>
+        <label class="label pb-1">
+          <span class="label-text font-medium">Пароль
+            {% if user %}<span class="text-base-content/50 text-xs font-normal">(оставьте пустым, чтобы не менять)</span>
+            {% else %}<span class="text-error">*</span>{% endif %}
+          </span>
+        </label>
+        <input type="password" name="password" class="input input-bordered w-full" {% if not user %}required{% endif %}>
       </div>
       {% if not (user and user.is_super_admin) %}
-      <div class="mb-3">
-        <label class="form-label">Роль</label>
-        <select name="role" class="form-select">
+      <div>
+        <label class="label pb-1"><span class="label-text font-medium">Роль</span></label>
+        <select name="role" class="select select-bordered w-full">
           {% for val in ['manager','admin','staff'] %}
           <option value="{{ val }}" {% if user and user.role == val %}selected{% elif not user and val == 'staff' %}selected{% endif %}>
             {{ Role.LABELS.get(val, val) }}
@@ -40,16 +45,16 @@
       </div>
       {% endif %}
       {% if user %}
-      <div class="mb-3 form-check">
-        <input type="checkbox" name="is_active" class="form-check-input" id="is_active" {% if user.is_active %}checked{% endif %}>
-        <label class="form-check-label" for="is_active">Активен</label>
-      </div>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" name="is_active" class="checkbox checkbox-primary" {% if user.is_active %}checked{% endif %}>
+        <span class="label-text">Активен</span>
+      </label>
       {% endif %}
-      <div class="d-flex gap-2">
+      <div class="flex gap-2 pt-2">
         <button type="submit" class="btn btn-primary">
           {% if user %}Сохранить{% else %}Создать{% endif %}
         </button>
-        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">Отмена</a>
+        <a href="{{ url_for('admin.users') }}" class="btn btn-ghost">Отмена</a>
       </div>
     </form>
   </div>

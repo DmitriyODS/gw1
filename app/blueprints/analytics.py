@@ -215,39 +215,89 @@ def tv_mode():
 
 @analytics_bp.route('/analytics/tv/data')
 def tv_data():
+    from collections import defaultdict
     result = {}
-    for p in ['day', 'week', 'month', 'year']:
+
+    for p in ['week', 'month', 'year']:
         s = build_stats(p)
+        start, _ = get_range(p)
+        now = datetime.utcnow()
+
+        # Total time logged in period
+        total_secs = int(db.session.query(
+            func.coalesce(func.sum(
+                func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+            ), 0)
+        ).filter(TimeLog.started_at >= start, TimeLog.ended_at.isnot(None)).scalar() or 0)
+
+        # Burn-up: cumulative created vs done tasks by day
+        days_data = defaultdict(lambda: {'created': 0, 'done': 0})
+        for t in Task.query.filter(Task.created_at >= start).all():
+            d = t.created_at.date()
+            days_data[d]['created'] += 1
+            if t.status == TaskStatus.DONE:
+                days_data[d]['done'] += 1
+
+        dates, c_series, d_series = [], [], []
+        c_c = c_d = 0
+        cur = start.date()
+        while cur <= now.date():
+            c_c += days_data[cur]['created']
+            c_d += days_data[cur]['done']
+            dates.append(cur.strftime('%d.%m'))
+            c_series.append(c_c)
+            d_series.append(c_d)
+            cur += timedelta(days=1)
+
+        # Top by tasks: users with time logged on done tasks
+        top_tasks_q = db.session.query(
+            User.full_name, func.count(func.distinct(Task.id)).label('cnt')
+        ).join(TimeLog, TimeLog.user_id == User.id).join(
+            Task, TimeLog.task_id == Task.id
+        ).filter(
+            TimeLog.started_at >= start, Task.status == TaskStatus.DONE
+        ).group_by(User.full_name).order_by(
+            func.count(func.distinct(Task.id)).desc()
+        ).limit(5).all()
+
+        # Top by time logged
+        top_time_q = db.session.query(
+            User.full_name,
+            func.coalesce(func.sum(
+                func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+            ), 0).label('secs')
+        ).join(TimeLog, TimeLog.user_id == User.id).filter(
+            TimeLog.started_at >= start, TimeLog.ended_at.isnot(None)
+        ).group_by(User.full_name).order_by(
+            func.sum(func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)).desc()
+        ).limit(5).all()
+
+        # Focus: longest single uninterrupted session
+        focus = db.session.query(
+            User.full_name, Task.title,
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at).label('secs')
+        ).join(User, TimeLog.user_id == User.id).join(
+            Task, TimeLog.task_id == Task.id
+        ).filter(
+            TimeLog.started_at >= start, TimeLog.ended_at.isnot(None)
+        ).order_by(
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at).desc()
+        ).first()
+
         result[p] = {
             'by_status': s['by_status'],
             'dept_labels': [r[0] for r in s['dept_stats']],
             'dept_values': [r[1] for r in s['dept_stats']],
-            'dept_by_status': s['dept_by_status'],
             'type_labels': [TYPE_LABELS.get(r[0], r[0] or 'Другое') for r in s['type_stats']],
             'type_values': [r[1] for r in s['type_stats']],
-            'type_by_status': s['type_by_status'],
-            'top_customers': [{'name': r[0], 'cnt': r[1]} for r in s['top_customers']],
-            'top_dept_incoming': [{'name': r[0], 'cnt': r[1]} for r in s['top_dept_incoming']],
+            'total_secs': total_secs,
+            'burn_up': {'dates': dates, 'created': c_series, 'done': d_series},
+            'top_by_tasks': [{'name': r[0], 'cnt': r[1]} for r in top_tasks_q],
+            'top_by_time': [{'name': r[0], 'secs': int(r[1])} for r in top_time_q],
+            'focus': {
+                'name': focus[0], 'task': focus[1], 'secs': int(focus[2])
+            } if focus else None,
         }
-
-    # All-time employee rating
-    all_time = build_stats('year')
-    result['employees'] = []
-    staff = User.query.filter(User.is_active == True).all()
-    for u in staff:
-        done = Task.query.filter_by(created_by_id=u.id, status=TaskStatus.DONE).count()
-        total_secs = db.session.query(
-            func.coalesce(func.sum(
-                func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
-            ), 0)
-        ).filter(TimeLog.user_id == u.id, TimeLog.ended_at != None).scalar() or 0
-        result['employees'].append({
-            'name': u.full_name,
-            'role': u.role,
-            'done': done,
-            'hours': round(total_secs / 3600, 1),
-        })
-    result['employees'].sort(key=lambda x: x['done'], reverse=True)
 
     return jsonify(result)
 

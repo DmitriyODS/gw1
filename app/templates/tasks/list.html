@@ -3,138 +3,291 @@
 
 {% block head %}
 <style>
-  .kanban-wrap { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; align-items: flex-start; }
-  .kanban-col { flex: 0 0 280px; background: #f1f3f5; border-radius: 14px; display: flex; flex-direction: column; max-height: calc(100vh - 160px); }
-  .kanban-header { padding: 0.85rem 1rem 0.6rem; font-weight: 700; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #dee2e6; position: sticky; top: 0; background: inherit; border-radius: 14px 14px 0 0; }
-  .kanban-body { overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; flex: 1; min-height: 60px; transition: background 0.15s; }
-  .kanban-body.drag-over { background: rgba(13,110,253,0.07); outline: 2px dashed #0d6efd; outline-offset: -4px; border-radius: 0 0 14px 14px; }
-  .kanban-body.drag-blocked { background: rgba(220,53,69,0.06); outline: 2px dashed #dc3545; outline-offset: -4px; border-radius: 0 0 14px 14px; cursor: not-allowed; }
-  .task-card { background: #fff; border-radius: 10px; padding: 0.75rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-left: 4px solid #adb5bd; cursor: grab; transition: box-shadow 0.15s, transform 0.15s, opacity 0.15s; text-decoration: none; color: inherit; display: block; }
-  .task-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-1px); color: inherit; text-decoration: none; }
-  .task-card.overdue { background: #fff5f5; border-left-color: #dc3545 !important; }
-  .task-card.dragging { opacity: 0.4; cursor: grabbing; }
-  .urgency-urgent    { border-left-color: #dc3545; }
-  .urgency-important { border-left-color: #fd7e14; }
-  .urgency-normal    { border-left-color: #0d6efd; }
-  .urgency-slow      { border-left-color: #adb5bd; }
-  .task-title { font-size: 0.9rem; font-weight: 600; line-height: 1.3; margin-bottom: 0.4rem; }
-  .task-meta { font-size: 0.78rem; color: #6c757d; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
-  .col-new .kanban-header { color: #6c757d; }
-  .col-in_progress .kanban-header { color: #0d6efd; }
-  .col-paused .kanban-header { color: #e67e00; }
-  .col-review .kanban-header { color: #0891b2; }
-  .col-done .kanban-header { color: #198754; }
-  .col-in_progress { background: #f0f5ff; }
-  .col-review { background: #f0fafc; }
-  .col-done { background: #f0faf4; }
-  .col-paused { background: #fffbf0; }
-  .kanban-count { background: rgba(0,0,0,0.08); border-radius: 20px; padding: 1px 8px; font-size: 0.8rem; }
-  .empty-col { text-align: center; color: #adb5bd; font-size: 0.85rem; padding: 1.5rem 0; }
+  /* ── Kanban layout ── */
+  .kanban-wrap {
+    display: flex; gap: 12px;
+    overflow-x: auto; padding-bottom: 12px;
+    align-items: flex-start;
+    /* let it breathe on desktop */
+    min-height: calc(100vh - 160px);
+  }
+  .kanban-col {
+    flex: 0 0 272px;
+    display: flex; flex-direction: column;
+    max-height: calc(100vh - 160px);
+    border-radius: 16px;
+    background: var(--color-base-100);
+    border: 1px solid var(--color-base-300);
+  }
+  .kanban-header {
+    padding: 12px 14px 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--color-base-300);
+    border-radius: 16px 16px 0 0;
+    position: sticky; top: 0; background: var(--color-base-100);
+  }
+  .kanban-header-title {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.82rem; font-weight: 700;
+  }
+  .col-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .kanban-count {
+    background: var(--color-base-100);
+    border: 1px solid var(--color-base-200);
+    border-radius: 20px; padding: 1px 9px;
+    font-size: 0.75rem; font-weight: 600;
+    color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+  }
+  .kanban-body {
+    overflow-y: auto; padding: 10px;
+    display: flex; flex-direction: column; gap: 7px;
+    flex: 1; min-height: 80px;
+    transition: background 0.15s;
+    border-radius: 0 0 16px 16px;
+  }
+  .kanban-body.drag-over {
+    background: color-mix(in oklch, var(--color-primary) 6%, transparent);
+    outline: 2px dashed var(--color-primary); outline-offset: -4px;
+    border-radius: 0 0 16px 16px;
+  }
+  .kanban-body.drag-blocked {
+    background: color-mix(in oklch, var(--color-error) 5%, transparent);
+    outline: 2px dashed var(--color-error); outline-offset: -4px;
+    border-radius: 0 0 16px 16px; cursor: not-allowed;
+  }
 
-  .card-footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
-  .btn-timer { border: none; border-radius: 6px; padding: 3px 10px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: opacity 0.15s; }
-  .btn-timer:hover { opacity: 0.8; }
-  .btn-timer-start { background: #e8f5e9; color: #198754; }
-  .btn-timer-pause { background: #fff3cd; color: #856404; }
+  /* ── Task card ── */
+  .task-card {
+    background: var(--color-base-100); border-radius: 12px;
+    padding: 11px 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    border: 1px solid var(--color-base-300);
+    border-left: 3px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
+    cursor: grab; text-decoration: none; color: inherit; display: block;
+    transition: box-shadow 0.15s, transform 0.12s;
+  }
+  .task-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1); transform: translateY(-1px); color: inherit; }
+  .task-card.overdue { background: color-mix(in oklch, var(--color-error) 7%, var(--color-base-100)); border-left-color: var(--color-error) !important; }
+  .task-card.dragging { opacity: 0.35; cursor: grabbing; transform: scale(0.97); }
+
+  .urgency-urgent    { border-left-color: var(--color-error) !important; }
+  .urgency-important { border-left-color: #f97316 !important; }
+  .urgency-normal    { border-left-color: var(--color-info) !important; }
+  .urgency-slow      { border-left-color: #cbd5e1; }
+
+  .task-title { font-size: 0.875rem; font-weight: 600; line-height: 1.35; margin: 5px 0; }
+  .task-meta {
+    font-size: 0.75rem;
+    color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+    display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+  }
+  .task-meta-item { display: flex; align-items: center; gap: 3px; }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+
+  .btn-timer {
+    border: none; border-radius: 7px; padding: 3px 10px;
+    font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: opacity 0.15s;
+  }
+  .btn-timer:hover { opacity: 0.75; }
+  .btn-timer-start { background: color-mix(in oklch, var(--color-success) 14%, var(--color-base-100)); color: var(--color-success); }
+  .btn-timer-pause { background: color-mix(in oklch, var(--color-warning) 16%, var(--color-base-100)); color: color-mix(in oklch, var(--color-warning) 80%, var(--color-base-content)); }
+
+  .empty-col {
+    text-align: center; padding: 24px 0;
+    color: color-mix(in oklch, var(--color-base-content) 30%, transparent);
+    font-size: 0.82rem;
+  }
+
+  /* ── Column accent colors ── */
+  .col-in_progress .kanban-header { background: color-mix(in oklch, var(--color-primary) 8%, var(--color-base-100)); }
+  .col-review .kanban-header      { background: color-mix(in oklch, var(--color-info) 8%, var(--color-base-100)); }
+  .col-done .kanban-header        { background: color-mix(in oklch, var(--color-success) 8%, var(--color-base-100)); }
+  .col-paused .kanban-header      { background: color-mix(in oklch, var(--color-warning) 8%, var(--color-base-100)); }
+  .col-in_progress .col-dot       { background: var(--color-primary); }
+  .col-review .col-dot            { background: var(--color-info); }
+  .col-done .col-dot              { background: var(--color-success); }
+  .col-paused .col-dot            { background: var(--color-warning); }
+  .col-new .col-dot               { background: #94a3b8; }
+
+  /* ── Mobile tabs ── */
+  .mobile-col-tabs {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding: 0 0 8px; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mobile-col-tabs::-webkit-scrollbar { display: none; }
+  .mobile-tab {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 13px; border-radius: 20px; flex-shrink: 0;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    border: 1.5px solid var(--color-base-300);
+    background: var(--color-base-100); color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+    transition: all 0.15s;
+  }
+  .mobile-tab.active {
+    background: var(--color-primary); border-color: var(--color-primary);
+    color: white;
+  }
+  .mobile-tab .tab-count {
+    background: rgba(255,255,255,0.25); border-radius: 10px;
+    padding: 0 6px; font-size: 0.7rem; min-width: 18px; text-align: center;
+  }
+  .mobile-tab:not(.active) .tab-count {
+    background: var(--color-base-200); color: var(--color-base-content);
+  }
+
+  /* Mobile: hide all cols, show active only */
+  @media (max-width: 1023px) {
+    .kanban-wrap { overflow-x: visible; }
+    .kanban-col { flex: 0 0 100%; max-height: none; display: none; }
+    .kanban-col.mobile-active { display: flex; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h5 class="mb-0"><i class="bi bi-kanban"></i> Задачи</h5>
-  <div class="d-flex gap-2">
-    {% if current_user.can_admin %}
-    <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-lg"></i> Создать
-    </a>
-    {% endif %}
-  </div>
-</div>
 
 {% set columns = [
-  ('new', 'Новые', 'bi-inbox'),
+  ('new',         'Новые',    'bi-inbox'),
   ('in_progress', 'В работе', 'bi-play-circle'),
-  ('paused', 'На паузе', 'bi-pause-circle'),
-  ('review', 'Проверка', 'bi-eye'),
-  ('done', 'Готово', 'bi-check-circle'),
+  ('paused',      'На паузе', 'bi-pause-circle'),
+  ('review',      'Проверка', 'bi-eye'),
+  ('done',        'Готово',   'bi-check-circle'),
 ] %}
 
 {% set grouped = {} %}
 {% for task in tasks %}
-  {% if task.status not in grouped %}
-    {% set _ = grouped.update({task.status: []}) %}
-  {% endif %}
+  {% if task.status not in grouped %}{% set _ = grouped.update({task.status: []}) %}{% endif %}
   {% set _ = grouped[task.status].append(task) %}
 {% endfor %}
 
-<div class="kanban-wrap">
-{% for status, label, icon in columns %}
-{% set col_tasks = grouped.get(status, []) %}
-<div class="kanban-col col-{{ status }}">
-  <div class="kanban-header">
-    <span><i class="bi {{ icon }} me-1"></i>{{ label }}</span>
-    <span class="kanban-count" id="cnt-{{ status }}">{{ col_tasks | length }}</span>
-  </div>
-  <div class="kanban-body" data-status="{{ status }}">
-    {% if not col_tasks %}
-    <div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>
-    {% endif %}
-    {% for task in col_tasks %}
-    <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
-       class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %}"
-       data-id="{{ task.id }}" data-status="{{ task.status }}"
-       {% if current_user.can_manage %}draggable="true"{% endif %}>
-      <div class="d-flex justify-content-between align-items-start mb-1">
-        <span class="badge bg-{{ Urgency.COLORS[task.urgency] }} text-white" style="font-size:0.7rem">
-          {{ Urgency.LABELS[task.urgency] }}
-        </span>
-        <span class="text-muted" style="font-size:0.75rem">#{{ task.id }}</span>
-      </div>
-      <div class="task-title">{{ task.title }}</div>
-      <div class="task-meta">
-        {% if task.is_overdue %}
-        <span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle-fill"></i> Просрочено</span>
-        {% endif %}
-        {% if task.department %}<span><i class="bi bi-building"></i> {{ task.department.name }}</span>{% endif %}
-        {% if task.customer_name %}<span><i class="bi bi-person"></i> {{ task.customer_name }}</span>{% endif %}
-      </div>
-      {% if task.deadline %}
-      <div class="task-meta mt-1">
-        <span class="{% if task.is_overdue %}text-danger{% endif %}">
-          <i class="bi bi-calendar-event"></i> {{ task.deadline.strftime('%d.%m %H:%M') }}
-        </span>
-      </div>
-      {% endif %}
+<!-- Page header -->
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-lg font-bold flex items-center gap-2">
+    <i class="bi bi-kanban opacity-60"></i> Задачи
+  </h1>
+  {% if current_user.can_admin %}
+  <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm rounded-xl gap-1.5">
+    <i class="bi bi-plus-lg"></i> Создать
+  </a>
+  {% endif %}
+</div>
 
-      <div class="card-footer-row">
-        <div class="d-flex align-items-center gap-2">
-          {% if task.total_seconds > 0 %}
-          <span class="task-meta"><i class="bi bi-clock"></i> {{ task.total_seconds | duration }}</span>
-          {% endif %}
-          {% set active = task.active_timers %}
-          {% if active %}
-          <span class="badge bg-success" style="font-size:0.7rem" title="{{ active | map(attribute='user') | map(attribute='full_name') | join(', ') }}">
-            <i class="bi bi-play-fill"></i> {{ active | length }} раб.
-          </span>
-          {% endif %}
-        </div>
-        {% if task.id in my_active_task_ids %}
-        <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}"
-                title="Поставить на паузу">
-          <i class="bi bi-pause-fill"></i> Пауза
-        </button>
-        {% elif task.status not in ('done', 'review') %}
-        <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}"
-                title="Начать работу">
-          <i class="bi bi-play-fill"></i> В работу
-        </button>
-        {% endif %}
-      </div>
-    </a>
+<!-- Mobile column tabs (hidden on desktop) -->
+<div class="lg:hidden mb-3">
+  <div class="mobile-col-tabs" id="mobile-tabs">
+    {% for status, label, icon in columns %}
+    {% set cnt = grouped.get(status, []) | length %}
+    <button class="mobile-tab {% if loop.first %}active{% endif %}"
+            data-status="{{ status }}" onclick="switchMobileTab('{{ status }}')">
+      {{ label }}
+      <span class="tab-count">{{ cnt }}</span>
+    </button>
     {% endfor %}
   </div>
 </div>
-{% endfor %}
+
+<!-- Kanban board -->
+<div class="kanban-wrap" id="kanban-wrap">
+  {% for status, label, icon in columns %}
+  {% set col_tasks = grouped.get(status, []) %}
+  <div class="kanban-col col-{{ status }} {% if loop.first %}mobile-active{% endif %}"
+       id="col-{{ status }}" data-col="{{ status }}">
+
+    <div class="kanban-header">
+      <div class="kanban-header-title">
+        <span class="col-dot"></span>
+        {{ label }}
+      </div>
+      <span class="kanban-count" id="cnt-{{ status }}">{{ col_tasks | length }}</span>
+    </div>
+
+    <div class="kanban-body" data-status="{{ status }}">
+      {% if not col_tasks %}
+      <div class="empty-col">
+        <i class="bi bi-inbox block text-xl mb-1 opacity-30"></i>
+        Пусто
+      </div>
+      {% endif %}
+
+      {% for task in col_tasks %}
+      <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+         class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %}"
+         data-id="{{ task.id }}" data-status="{{ task.status }}"
+         {% if current_user.can_manage %}draggable="true"{% endif %}>
+
+        <!-- Top row: urgency + id -->
+        <div class="flex items-center justify-between">
+          <span class="badge badge-{{ Urgency.COLORS[task.urgency] }} badge-sm text-xs">
+            {{ Urgency.LABELS[task.urgency] }}
+          </span>
+          <span class="text-xs opacity-30 font-mono">#{{ task.id }}</span>
+        </div>
+
+        <!-- Title -->
+        <div class="task-title">{{ task.title }}</div>
+
+        <!-- Meta -->
+        <div class="task-meta">
+          {% if task.is_overdue %}
+          <span class="task-meta-item font-semibold" style="color: var(--color-error)">
+            <i class="bi bi-exclamation-triangle-fill"></i> Просрочено
+          </span>
+          {% endif %}
+          {% if task.department %}
+          <span class="task-meta-item">
+            <i class="bi bi-building"></i> {{ task.department.name }}
+          </span>
+          {% endif %}
+          {% if task.customer_name %}
+          <span class="task-meta-item">
+            <i class="bi bi-person"></i> {{ task.customer_name }}
+          </span>
+          {% endif %}
+          {% if task.deadline %}
+          <span class="task-meta-item {% if task.is_overdue %}text-error font-semibold{% endif %}">
+            <i class="bi bi-calendar-event"></i> {{ task.deadline.strftime('%d.%m %H:%M') }}
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- Footer: time + timer btn -->
+        <div class="card-footer">
+          <div class="flex items-center gap-2">
+            {% if task.total_seconds > 0 %}
+            <span class="task-meta-item task-meta">
+              <i class="bi bi-clock"></i> {{ task.total_seconds | duration }}
+            </span>
+            {% endif %}
+            {% set active = task.active_timers %}
+            {% if active %}
+            <span class="badge badge-success badge-sm text-xs"
+                  title="{{ active | map(attribute='user') | map(attribute='full_name') | join(', ') }}">
+              <i class="bi bi-play-fill"></i> {{ active | length }}
+            </span>
+            {% endif %}
+          </div>
+
+          {% if task.id in my_active_task_ids %}
+          <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}">
+            <i class="bi bi-pause-fill"></i> Пауза
+          </button>
+          {% elif task.status not in ('done', 'review') %}
+          <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}">
+            <i class="bi bi-play-fill"></i> В работу
+          </button>
+          {% endif %}
+        </div>
+
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
 </div>
 {% endblock %}
 
@@ -144,13 +297,19 @@ const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 let dragCard = null;
 let originBody = null;
 
-// ---- Timer buttons ----
+// ── Mobile tabs ──
+function switchMobileTab(status) {
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('mobile-active'));
+  document.querySelectorAll('.mobile-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('col-' + status)?.classList.add('mobile-active');
+  document.querySelector(`.mobile-tab[data-status="${status}"]`)?.classList.add('active');
+}
+
+// ── Timer buttons ──
 document.querySelectorAll('.btn-timer').forEach(btn => {
   btn.addEventListener('click', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    const action = btn.dataset.action;
-    const taskId = btn.dataset.id;
+    e.preventDefault(); e.stopPropagation();
+    const action = btn.dataset.action, taskId = btn.dataset.id;
     if (action === 'start') timerStart(taskId, btn);
     if (action === 'pause') timerPause(taskId, btn);
   });
@@ -161,23 +320,16 @@ function timerStart(taskId, btn) {
     method: 'POST', headers: {'X-CSRFToken': CSRF}
   }).then(r => r.json()).then(d => {
     if (d.conflict) {
-      const prevTaskId = d.active_task_id;
       if (confirm(`Сейчас работаете над «${d.active_task_title}». Остановить и переключиться?`)) {
         fetch(`/tasks/${taskId}/timer/force_start`, {
           method: 'POST', headers: {'X-CSRFToken': CSRF}
         }).then(r => r.json()).then(d2 => {
           if (!d2.success) return;
-          // Update previous card: if no other users working → move to paused, else just update button
-          const prevCard = document.querySelector(`.task-card[data-id="${prevTaskId}"]`);
+          const prevCard = document.querySelector(`.task-card[data-id="${d.active_task_id}"]`);
           if (prevCard) {
-            if (d2.prev_task_status === 'paused') {
-              moveCard(prevCard, 'paused');
-            } else {
-              // Still in_progress (other users working), just reset our button
-              setBtnStart(prevCard.querySelector('.btn-timer'), prevTaskId);
-            }
+            if (d2.prev_task_status === 'paused') moveCard(prevCard, 'paused');
+            else setBtnStart(prevCard.querySelector('.btn-timer'), d.active_task_id);
           }
-          // Activate current card
           activateCard(btn.closest('.task-card'));
         });
       }
@@ -193,83 +345,69 @@ function timerPause(taskId, btn) {
   }).then(r => r.json()).then(d => {
     if (d.success) {
       const card = btn.closest('.task-card');
-      if (d.task_status === 'in_progress') {
-        // Other users still working — keep card in in_progress, just update our button
-        setBtnStart(btn, taskId);
-        card.dataset.status = 'in_progress';
-      } else {
-        // No one else working — move card to paused
-        moveCard(card, 'paused');
-      }
+      if (d.task_status === 'in_progress') { setBtnStart(btn, taskId); card.dataset.status = 'in_progress'; }
+      else moveCard(card, 'paused');
     }
   });
 }
 
-// Activate a card: move to in_progress, switch button to Pause
 function activateCard(card) {
   const btn = card.querySelector('.btn-timer');
   const targetBody = document.querySelector('.kanban-body[data-status="in_progress"]');
-  const originBody = card.closest('.kanban-body');
-  if (targetBody && originBody !== targetBody) {
+  const origin = card.closest('.kanban-body');
+  if (targetBody && origin !== targetBody) {
     targetBody.querySelectorAll('.empty-col').forEach(el => el.remove());
     card.classList.add('was-dragged');
     targetBody.appendChild(card);
-    if (!originBody.querySelector('.task-card')) {
-      originBody.innerHTML = '<div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>';
-    }
-    updateCount(originBody);
-    updateCount(targetBody);
+    if (!origin.querySelector('.task-card')) origin.innerHTML = emptyHtml();
+    updateCount(origin); updateCount(targetBody);
   }
   if (btn) {
     btn.className = 'btn-timer btn-timer-pause';
     btn.dataset.action = 'pause';
     btn.innerHTML = '<i class="bi bi-pause-fill"></i> Пауза';
-    btn.title = 'Поставить на паузу';
   }
 }
 
-// Set a button back to "В работу" state without moving the card
 function setBtnStart(btn, taskId) {
   if (!btn) return;
   btn.className = 'btn-timer btn-timer-start';
-  btn.dataset.action = 'start';
-  btn.dataset.id = taskId;
+  btn.dataset.action = 'start'; btn.dataset.id = taskId;
   btn.innerHTML = '<i class="bi bi-play-fill"></i> В работу';
-  btn.title = 'Начать работу';
 }
 
-// Move any card to a column and update its button
 function moveCard(card, newStatus) {
-  const originBody = card.closest('.kanban-body');
+  const origin = card.closest('.kanban-body');
   const targetBody = document.querySelector(`.kanban-body[data-status="${newStatus}"]`);
-  if (!targetBody || originBody === targetBody) return;
-
+  if (!targetBody || origin === targetBody) return;
   card.dataset.status = newStatus;
   const btn = card.querySelector('.btn-timer');
-  if (btn) {
-    if (newStatus === 'paused' || newStatus === 'new') {
-      setBtnStart(btn, card.dataset.id);
-    }
-    // in_progress button is handled by activateCard(); drag to in_progress is blocked
-  }
-
+  if (btn && (newStatus === 'paused' || newStatus === 'new')) setBtnStart(btn, card.dataset.id);
   targetBody.querySelectorAll('.empty-col').forEach(el => el.remove());
   card.classList.add('was-dragged');
   targetBody.appendChild(card);
-
-  if (!originBody.querySelector('.task-card')) {
-    originBody.innerHTML = '<div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>';
-  }
-  updateCount(originBody);
-  updateCount(targetBody);
+  if (!origin.querySelector('.task-card')) origin.innerHTML = emptyHtml();
+  updateCount(origin); updateCount(targetBody);
 }
 
-// ---- Drag & drop (managers only) ----
+function emptyHtml() {
+  return '<div class="empty-col"><i class="bi bi-inbox block text-xl mb-1 opacity-30"></i>Пусто</div>';
+}
+
+function updateCount(body) {
+  const cnt = body.querySelectorAll('.task-card').length;
+  const status = body.dataset.status;
+  const badge = document.getElementById('cnt-' + status);
+  if (badge) badge.textContent = cnt;
+  const tabCount = document.querySelector(`.mobile-tab[data-status="${status}"] .tab-count`);
+  if (tabCount) tabCount.textContent = cnt;
+}
+
+// ── Drag & drop ──
 {% if current_user.can_manage %}
 document.querySelectorAll('.task-card[draggable]').forEach(card => {
   card.addEventListener('dragstart', e => {
-    dragCard = card;
-    originBody = card.closest('.kanban-body');
+    dragCard = card; originBody = card.closest('.kanban-body');
     card.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', card.dataset.id);
@@ -279,16 +417,12 @@ document.querySelectorAll('.task-card[draggable]').forEach(card => {
     document.querySelectorAll('.kanban-body').forEach(b => b.classList.remove('drag-over', 'drag-blocked'));
   });
   card.addEventListener('click', e => {
-    if (card.classList.contains('was-dragged')) {
-      e.preventDefault();
-      card.classList.remove('was-dragged');
-    }
+    if (card.classList.contains('was-dragged')) { e.preventDefault(); card.classList.remove('was-dragged'); }
   });
 });
 
 document.querySelectorAll('.kanban-body').forEach(body => {
   const blocked = body.dataset.status === 'in_progress';
-
   body.addEventListener('dragover', e => {
     e.preventDefault();
     e.dataTransfer.dropEffect = blocked ? 'none' : 'move';
@@ -301,44 +435,25 @@ document.querySelectorAll('.kanban-body').forEach(body => {
     e.preventDefault();
     body.classList.remove('drag-over', 'drag-blocked');
     if (!dragCard || body === originBody || blocked) return;
-
     const newStatus = body.dataset.status;
     const taskId = dragCard.dataset.id;
-
     fetch(`/tasks/${taskId}/move`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
       body: JSON.stringify({status: newStatus})
     }).then(r => r.json()).then(d => {
       if (!d.ok) { alert(d.error || 'Ошибка'); return; }
-
       body.querySelectorAll('.empty-col').forEach(el => el.remove());
       dragCard.classList.add('was-dragged');
       body.appendChild(dragCard);
-
-      if (!originBody.querySelector('.task-card')) {
-        originBody.innerHTML = '<div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>';
-      }
-
-      // Update button on dragged card
+      if (!originBody.querySelector('.task-card')) originBody.innerHTML = emptyHtml();
       const btn = dragCard.querySelector('.btn-timer');
-      if (btn && newStatus !== 'in_progress') {
-        btn.className = 'btn-timer btn-timer-start';
-        btn.dataset.action = 'start';
-        btn.innerHTML = '<i class="bi bi-play-fill"></i> В работу';
-      }
+      if (btn && newStatus !== 'in_progress') setBtnStart(btn, taskId);
       dragCard.dataset.status = newStatus;
-
-      updateCount(originBody);
-      updateCount(body);
+      updateCount(originBody); updateCount(body);
     });
   });
 });
 {% endif %}
-
-function updateCount(body) {
-  const cnt = body.querySelectorAll('.task-card').length;
-  document.getElementById('cnt-' + body.dataset.status).textContent = cnt;
-}
 </script>
 {% endblock %}

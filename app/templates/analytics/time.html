@@ -4,11 +4,10 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .period-btn.active { font-weight: 700; }
-  .log-row-active { background: #fff8e1; }
+  .log-row-active { background-color: color-mix(in oklch, var(--color-warning) 8%, transparent); }
   .secs-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .date-group { background: #f1f3f5; font-weight: 700; font-size: 0.85rem; color: #495057; padding: 0.4rem 0.75rem; border-radius: 6px; }
-  .user-badge { font-size: 0.78rem; background: #e9ecef; border-radius: 20px; padding: 2px 10px; color: #495057; }
+  .date-group { background: var(--color-base-200); font-weight: 700; font-size: 0.85rem; padding: 0.3rem 0.75rem; border-radius: 6px; }
+  .user-badge { font-size: 0.78rem; background: var(--color-base-200); border-radius: 20px; padding: 2px 10px; }
 </style>
 {% endblock %}
 
@@ -19,14 +18,14 @@
 {% endmacro %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h5 class="mb-0"><i class="bi bi-hourglass-split"></i> Учёт времени</h5>
+<div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+  <h5 class="text-lg font-bold flex items-center gap-2"><i class="bi bi-hourglass-split"></i> Учёт времени</h5>
 
-  <div class="d-flex gap-2 flex-wrap align-items-center">
+  <div class="flex gap-2 flex-wrap items-center">
     {% if can_see_all %}
-    <form method="get" class="d-flex gap-2 align-items-center">
+    <form method="get" class="flex gap-2 items-center">
       <input type="hidden" name="period" value="{{ period }}">
-      <select name="user_id" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <select name="user_id" class="select select-bordered select-sm" onchange="this.form.submit()">
         <option value="">— Все сотрудники —</option>
         {% for u in all_users %}
         <option value="{{ u.id }}" {% if target_uid == u.id %}selected{% endif %}>{{ u.full_name }}</option>
@@ -35,45 +34,45 @@
     </form>
     {% endif %}
 
-    <div class="btn-group btn-group-sm">
+    <div class="join">
       {% for p, lbl in [('day','День'),('week','Неделя'),('month','Месяц'),('year','Год')] %}
       <a href="?period={{ p }}{% if target_uid %}&user_id={{ target_uid }}{% endif %}"
-         class="btn btn-outline-secondary period-btn {% if period == p %}active{% endif %}">{{ lbl }}</a>
+         class="join-item btn btn-outline btn-sm {% if period == p %}btn-active{% endif %}">{{ lbl }}</a>
       {% endfor %}
     </div>
   </div>
 </div>
 
 <!-- Summary cards -->
-<div class="row g-3 mb-4">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
   {% for p, lbl, color in [('day','Сегодня','primary'),('week','Эта неделя','info'),('month','Этот месяц','success'),('year','Этот год','warning')] %}
-  <div class="col-6 col-md-3">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-body text-center py-3">
-        <div class="fs-3 fw-bold text-{{ color }}">{{ fmt(totals[p]) }}</div>
-        <div class="text-muted small mt-1">{{ lbl }}</div>
-      </div>
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body py-3 items-center text-center">
+      <div class="text-2xl font-bold text-{{ color }}">{{ fmt(totals[p]) }}</div>
+      <div class="text-xs text-base-content/60 mt-1">{{ lbl }}</div>
     </div>
   </div>
   {% endfor %}
 </div>
 
-<!-- Per-user summary (managers, no filter selected) -->
+<!-- Per-user summary -->
 {% if user_summary %}
-<div class="card shadow-sm border-0 mb-4">
-  <div class="card-header fw-semibold"><i class="bi bi-people"></i> По сотрудникам</div>
+<div class="card bg-base-100 shadow-sm mb-4">
+  <div class="px-4 py-2 border-b border-base-300 font-semibold text-sm">
+    <i class="bi bi-people"></i> По сотрудникам
+  </div>
   <div class="card-body p-0">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr><th>Сотрудник</th><th class="text-end">Время</th><th class="text-end">Действие</th></tr>
+    <table class="table table-sm">
+      <thead>
+        <tr><th>Сотрудник</th><th class="text-right">Время</th><th class="text-right">Действие</th></tr>
       </thead>
       <tbody>
         {% for row in user_summary %}
-        <tr>
+        <tr class="hover">
           <td>{{ row.name }}</td>
-          <td class="text-end fw-semibold secs-cell">{{ fmt(row.secs) }}</td>
-          <td class="text-end">
-            <a href="?period={{ period }}&user_id={{ row.id }}" class="btn btn-outline-secondary btn-sm py-0">
+          <td class="text-right font-semibold secs-cell">{{ fmt(row.secs) }}</td>
+          <td class="text-right">
+            <a href="?period={{ period }}&user_id={{ row.id }}" class="btn btn-ghost btn-xs">
               <i class="bi bi-zoom-in"></i> Подробно
             </a>
           </td>
@@ -87,64 +86,66 @@
 
 <!-- Detailed log table -->
 {% if by_date %}
-<div class="card shadow-sm border-0">
-  <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
-    <span><i class="bi bi-list-ul"></i> Детализация
+<div class="card bg-base-100 shadow-sm">
+  <div class="flex justify-between items-center px-4 py-2 border-b border-base-300">
+    <span class="font-semibold text-sm">
+      <i class="bi bi-list-ul"></i> Детализация
       {% if period == 'day' %}— Сегодня
       {% elif period == 'week' %}— Эта неделя
       {% elif period == 'month' %}— Этот месяц
       {% else %}— Этот год
       {% endif %}
     </span>
-    <span class="text-muted fw-normal small">{{ by_date | length }} дн.</span>
+    <span class="text-base-content/50 text-xs">{{ by_date | length }} дн.</span>
   </div>
   <div class="card-body p-0">
-    <table class="table table-hover mb-0 align-middle">
-      <thead class="table-light">
-        <tr>
-          {% if can_see_all and not target_uid %}<th style="width:160px">Сотрудник</th>{% endif %}
-          <th>Задача</th>
-          <th style="width:120px">Начало</th>
-          <th style="width:120px">Конец</th>
-          <th class="text-end" style="width:100px">Длит.</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for date, entries in by_date.items() %}
-        {# Date group row with daily total #}
-        {% set day_secs = entries | sum(attribute='secs') %}
-        <tr>
-          <td colspan="{% if can_see_all and not target_uid %}5{% else %}4{% endif %}" class="py-1">
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="date-group">📅 {{ date.strftime('%d.%m.%Y, %A') }}</span>
-              <span class="fw-semibold text-primary small me-2">Итого: {{ fmt(day_secs) }}</span>
-            </div>
-          </td>
-        </tr>
-        {% for e in entries %}
-        <tr class="{% if e.active %}log-row-active{% endif %}">
-          {% if can_see_all and not target_uid %}
-          <td><span class="user-badge">{{ e.user_name }}</span></td>
-          {% endif %}
-          <td>
-            <a href="{{ url_for('tasks.detail', task_id=e.task_id) }}" class="text-decoration-none">
-              #{{ e.task_id }} {{ e.task_title }}
-            </a>
-            {% if e.active %}<span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem">активен</span>{% endif %}
-          </td>
-          <td class="text-muted small secs-cell">{{ e.started.strftime('%H:%M') }}</td>
-          <td class="text-muted small secs-cell">{% if e.ended %}{{ e.ended.strftime('%H:%M') }}{% else %}—{% endif %}</td>
-          <td class="text-end fw-semibold secs-cell">{{ fmt(e.secs) }}</td>
-        </tr>
-        {% endfor %}
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="overflow-x-auto">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            {% if can_see_all and not target_uid %}<th style="width:160px">Сотрудник</th>{% endif %}
+            <th>Задача</th>
+            <th style="width:120px">Начало</th>
+            <th style="width:120px">Конец</th>
+            <th class="text-right" style="width:100px">Длит.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for date, entries in by_date.items() %}
+          {% set day_secs = entries | sum(attribute='secs') %}
+          <tr>
+            <td colspan="{% if can_see_all and not target_uid %}5{% else %}4{% endif %}" class="py-1">
+              <div class="flex justify-between items-center">
+                <span class="date-group">📅 {{ date.strftime('%d.%m.%Y, %A') }}</span>
+                <span class="font-semibold text-primary text-xs mr-2">Итого: {{ fmt(day_secs) }}</span>
+              </div>
+            </td>
+          </tr>
+          {% for e in entries %}
+          <tr class="{% if e.active %}log-row-active{% else %}hover{% endif %}">
+            {% if can_see_all and not target_uid %}
+            <td><span class="user-badge">{{ e.user_name }}</span></td>
+            {% endif %}
+            <td>
+              <a href="{{ url_for('tasks.detail', task_id=e.task_id) }}" class="no-underline hover:underline">
+                #{{ e.task_id }} {{ e.task_title }}
+              </a>
+              {% if e.active %}<span class="badge badge-warning badge-sm ml-1">активен</span>{% endif %}
+            </td>
+            <td class="text-base-content/60 text-xs secs-cell">{{ e.started.strftime('%H:%M') }}</td>
+            <td class="text-base-content/60 text-xs secs-cell">{% if e.ended %}{{ e.ended.strftime('%H:%M') }}{% else %}—{% endif %}</td>
+            <td class="text-right font-semibold secs-cell text-sm">{{ fmt(e.secs) }}</td>
+          </tr>
+          {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% else %}
-<div class="text-center text-muted py-5">
-  <i class="bi bi-clock-history fs-1 d-block mb-2"></i>
+<div class="text-center text-base-content/50 py-16">
+  <i class="bi bi-clock-history text-5xl block mb-3"></i>
   За выбранный период записей нет
 </div>
 {% endif %}

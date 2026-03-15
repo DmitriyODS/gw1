@@ -33,7 +33,7 @@ class TaskStatus:
         'done': 'Готово',
     }
     COLORS = {
-        'new': 'secondary',
+        'new': 'neutral',
         'in_progress': 'primary',
         'paused': 'warning',
         'review': 'info',
@@ -54,10 +54,10 @@ class Urgency:
         'urgent': 'Срочно',
     }
     COLORS = {
-        'slow': 'secondary',
+        'slow': 'neutral',
         'normal': 'info',
         'important': 'warning',
-        'urgent': 'danger',
+        'urgent': 'error',
     }
 
 

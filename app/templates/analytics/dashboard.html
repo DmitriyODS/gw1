@@ -5,68 +5,72 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Аналитика</h5>
-  <div class="d-flex gap-2">
-    <a href="{{ url_for('analytics.export_excel') }}" class="btn btn-outline-success btn-sm">
+<div class="flex justify-between items-center mb-4">
+  <h5 class="text-lg font-bold flex items-center gap-2"><i class="bi bi-bar-chart-line"></i> Аналитика</h5>
+  <div class="flex gap-2">
+    <a href="{{ url_for('analytics.export_excel') }}" class="btn btn-outline btn-success btn-sm">
       <i class="bi bi-file-earmark-excel"></i> Excel
     </a>
-    <a href="{{ url_for('analytics.export_pdf') }}" class="btn btn-outline-danger btn-sm">
+    <a href="{{ url_for('analytics.export_pdf') }}" class="btn btn-outline btn-error btn-sm">
       <i class="bi bi-file-earmark-pdf"></i> PDF
     </a>
   </div>
 </div>
 
 <!-- Period tabs -->
-<ul class="nav nav-pills mb-4">
+<div role="tablist" class="tabs tabs-boxed mb-4 w-fit">
   {% for p, label in [('day','День'),('week','Неделя'),('month','Месяц'),('year','Год')] %}
-  <li class="nav-item">
-    <a class="nav-link {% if period == p %}active{% endif %}" href="{{ url_for('analytics.dashboard', period=p) }}">{{ label }}</a>
-  </li>
+  <a role="tab" class="tab {% if period == p %}tab-active{% endif %}"
+     href="{{ url_for('analytics.dashboard', period=p) }}">{{ label }}</a>
   {% endfor %}
-</ul>
+</div>
 
 <!-- Status cards -->
-<div class="row g-3 mb-4">
-  {% set colors = {'new':'secondary','in_progress':'primary','paused':'warning','review':'info','done':'success'} %}
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+  {% set border_colors = {'new':'neutral','in_progress':'primary','paused':'warning','review':'info','done':'success'} %}
+  {% set text_colors   = {'new':'base-content','in_progress':'primary','paused':'warning','review':'info','done':'success'} %}
   {% for s, label in [('new','Новые'),('in_progress','В работе'),('paused','На паузе'),('review','Проверка'),('done','Готово')] %}
-  <div class="col-6 col-md-4 col-lg-2">
-    <div class="card text-center border-{{ colors[s] }}">
-      <div class="card-body py-2">
-        <div class="fs-3 fw-bold text-{{ colors[s] }}">{{ by_status[s] }}</div>
-        <div class="small text-muted">{{ label }}</div>
-      </div>
+  <div class="card bg-base-100 border border-{{ border_colors[s] }}">
+    <div class="card-body py-3 items-center text-center">
+      <div class="text-3xl font-bold text-{{ text_colors[s] }}">{{ by_status[s] }}</div>
+      <div class="text-xs text-base-content/60">{{ label }}</div>
     </div>
   </div>
   {% endfor %}
 </div>
 
 <!-- Charts row -->
-<div class="row g-3 mb-4">
-  <div class="col-md-5">
-    <div class="card h-100">
-      <div class="card-header py-2"><small class="fw-semibold">По отделам</small></div>
-      <div class="card-body"><canvas id="deptChart" height="220"></canvas></div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
+  <div class="md:col-span-5">
+    <div class="card bg-base-100 h-full">
+      <div class="px-4 py-2 border-b border-base-300">
+        <span class="font-semibold text-sm">По отделам</span>
+      </div>
+      <div class="card-body p-3"><canvas id="deptChart" height="220"></canvas></div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card h-100">
-      <div class="card-header py-2"><small class="fw-semibold">По типам</small></div>
-      <div class="card-body"><canvas id="typeChart" height="220"></canvas></div>
+  <div class="md:col-span-3">
+    <div class="card bg-base-100 h-full">
+      <div class="px-4 py-2 border-b border-base-300">
+        <span class="font-semibold text-sm">По типам</span>
+      </div>
+      <div class="card-body p-3"><canvas id="typeChart" height="220"></canvas></div>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="card h-100">
-      <div class="card-header py-2"><small class="fw-semibold">Топ по времени</small></div>
+  <div class="md:col-span-4">
+    <div class="card bg-base-100 h-full">
+      <div class="px-4 py-2 border-b border-base-300">
+        <span class="font-semibold text-sm">Топ по времени</span>
+      </div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm">
           {% for name, secs in top_time %}
           <tr>
-            <td class="small">{{ name }}</td>
-            <td class="small text-end text-muted">{{ secs | int | duration }}</td>
+            <td class="text-sm">{{ name }}</td>
+            <td class="text-sm text-right text-base-content/60">{{ secs | int | duration }}</td>
           </tr>
           {% else %}
-          <tr><td class="text-muted text-center py-3 small">Нет данных</td></tr>
+          <tr><td class="text-base-content/50 text-center py-4 text-sm" colspan="2">Нет данных</td></tr>
           {% endfor %}
         </table>
       </div>
@@ -75,22 +79,24 @@
 </div>
 
 <!-- Top by tasks -->
-<div class="card">
-  <div class="card-header py-2"><small class="fw-semibold">Топ по закрытым задачам</small></div>
+<div class="card bg-base-100 shadow-sm">
+  <div class="px-4 py-2 border-b border-base-300">
+    <span class="font-semibold text-sm">Топ по закрытым задачам</span>
+  </div>
   <div class="card-body p-0">
-    <table class="table table-sm table-hover mb-0">
-      <thead class="table-light">
+    <table class="table table-sm">
+      <thead>
         <tr><th>#</th><th>Сотрудник</th><th>Закрыто задач</th></tr>
       </thead>
       <tbody>
       {% for name, cnt in top_tasks %}
-      <tr>
-        <td class="text-muted">{{ loop.index }}</td>
+      <tr class="hover">
+        <td class="text-base-content/50">{{ loop.index }}</td>
         <td>{{ name }}</td>
-        <td><span class="badge bg-success">{{ cnt }}</span></td>
+        <td><span class="badge badge-success badge-sm">{{ cnt }}</span></td>
       </tr>
       {% else %}
-      <tr><td colspan="3" class="text-center text-muted py-3">Нет данных</td></tr>
+      <tr><td colspan="3" class="text-center text-base-content/50 py-4 text-sm">Нет данных</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -2,88 +2,89 @@
 {% block title %}{% if task %}Редактировать #{{ task.id }}{% else %}Новая задача{% endif %} — TaskTime{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-<div class="col-lg-8">
-<div class="card shadow-sm">
-  <div class="card-header">
-    <h5 class="mb-0">{% if task %}Редактировать задачу #{{ task.id }}{% else %}Новая задача{% endif %}</h5>
-  </div>
+<div class="flex justify-center">
+<div class="w-full max-w-2xl">
+<div class="card bg-base-100 shadow-sm">
   <div class="card-body">
-    <form method="post" enctype="multipart/form-data">
+    <h2 class="card-title text-lg mb-4">
+      {% if task %}Редактировать задачу #{{ task.id }}{% else %}Новая задача{% endif %}
+    </h2>
+    <form method="post" enctype="multipart/form-data" class="flex flex-col gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <div class="row g-3">
-        <div class="col-12">
-          <label class="form-label fw-semibold">Тема <span class="text-danger">*</span></label>
-          <input type="text" name="title" class="form-control" required value="{{ task.title if task else '' }}">
+      <div>
+        <label class="label pb-1"><span class="label-text font-semibold">Тема <span class="text-error">*</span></span></label>
+        <input type="text" name="title" class="input input-bordered w-full" required value="{{ task.title if task else '' }}">
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="label pb-1"><span class="label-text">ФИО заказчика</span></label>
+          <input type="text" name="customer_name" class="input input-bordered w-full" value="{{ task.customer_name if task else '' }}">
         </div>
-        <div class="col-md-6">
-          <label class="form-label">ФИО заказчика</label>
-          <input type="text" name="customer_name" class="form-control" value="{{ task.customer_name if task else '' }}">
+        <div>
+          <label class="label pb-1"><span class="label-text">Телефон</span></label>
+          <input type="tel" name="customer_phone" class="input input-bordered w-full" value="{{ task.customer_phone if task else '' }}">
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Телефон</label>
-          <input type="tel" name="customer_phone" class="form-control" value="{{ task.customer_phone if task else '' }}">
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Подразделение</label>
-          <select name="department_id" class="form-select">
+        <div>
+          <label class="label pb-1"><span class="label-text">Подразделение</span></label>
+          <select name="department_id" class="select select-bordered w-full">
             <option value="">— не выбрано —</option>
             {% for d in departments %}
             <option value="{{ d.id }}" {% if task and task.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Тип задачи</label>
-          <select name="task_type" class="form-select" id="task_type" onchange="showDynamic()">
+        <div>
+          <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
+          <select name="task_type" class="select select-bordered w-full" id="task_type" onchange="showDynamic()">
             <option value="">— выберите —</option>
             {% for val, label in task_types %}
             <option value="{{ val }}" {% if task and task.task_type == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
+      </div>
 
-        <!-- Publication block -->
-        <div class="col-12" id="block-publication" style="display:none">
-          <div class="border rounded p-3 bg-light">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Подтип</label>
-              <div class="d-flex gap-4">
-                {% for val, label in pub_subtypes %}
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="subtype" value="{{ val }}" id="st_{{ val }}"
-                    {% if task and task.dynamic_fields.get('subtype') == val %}checked{% endif %}>
-                  <label class="form-check-label" for="st_{{ val }}">{{ label }}</label>
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-            <label class="form-label fw-semibold">Площадки размещения</label>
-            <div class="row g-1">
-              {% for p in platforms %}
-              <div class="col-sm-6">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="platforms" value="{{ p }}" id="p_{{ loop.index }}"
-                    {% if task and p in (task.dynamic_fields.get('platforms') or []) %}checked{% endif %}>
-                  <label class="form-check-label" for="p_{{ loop.index }}">{{ p }}</label>
-                </div>
-              </div>
+      <!-- Publication block -->
+      <div id="block-publication" style="display:none">
+        <div class="bg-base-200 rounded-xl p-4">
+          <div class="mb-4">
+            <div class="label-text font-semibold mb-2">Подтип</div>
+            <div class="flex gap-4 flex-wrap">
+              {% for val, label in pub_subtypes %}
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input class="radio radio-primary radio-sm" type="radio" name="subtype" value="{{ val }}"
+                  {% if task and task.dynamic_fields.get('subtype') == val %}checked{% endif %}>
+                <span class="label-text">{{ label }}</span>
+              </label>
               {% endfor %}
             </div>
           </div>
+          <div class="label-text font-semibold mb-2">Площадки размещения</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">
+            {% for p in platforms %}
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" name="platforms" value="{{ p }}"
+                {% if task and p in (task.dynamic_fields.get('platforms') or []) %}checked{% endif %}>
+              <span class="label-text">{{ p }}</span>
+            </label>
+            {% endfor %}
+          </div>
         </div>
+      </div>
 
-        <!-- Clarification block (for all non-publication types) -->
-        <div class="col-12" id="block-clarification" style="display:none">
-          <label class="form-label">Уточнение</label>
-          <input type="text" name="clarification" class="form-control"
-                 value="{{ task.dynamic_fields.get('clarification','') if task else '' }}">
-        </div>
+      <!-- Clarification block -->
+      <div id="block-clarification" style="display:none">
+        <label class="label pb-1"><span class="label-text">Уточнение</span></label>
+        <input type="text" name="clarification" class="input input-bordered w-full"
+               value="{{ task.dynamic_fields.get('clarification','') if task else '' }}">
+      </div>
 
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">Срочность</label>
-          <select name="urgency" class="form-select">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="label pb-1"><span class="label-text font-semibold">Срочность</span></label>
+          <select name="urgency" class="select select-bordered w-full">
             {% for val, label in [('slow','Неспешно'),('normal','Обычно'),('important','Важно'),('urgent','Срочно')] %}
             <option value="{{ val }}" {% if task and task.urgency == val %}selected{% elif not task and val == 'normal' %}selected{% endif %}>
               {{ label }}
@@ -91,56 +92,57 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">Дедлайн</label>
-          <input type="datetime-local" name="deadline" class="form-control"
+        <div>
+          <label class="label pb-1"><span class="label-text font-semibold">Дедлайн</span></label>
+          <input type="datetime-local" name="deadline" class="input input-bordered w-full"
                  value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task and task.deadline else '' }}">
-        </div>
-        <div class="col-12">
-          <label class="form-label">Описание</label>
-          <textarea name="description" class="form-control" rows="4">{{ task.description if task else '' }}</textarea>
-        </div>
-
-        <!-- File upload block -->
-        <div class="col-12">
-          <label class="form-label fw-semibold">Вложения</label>
-
-          {% if task %}
-          {% set existing = task.attachments.all() %}
-          {% if existing %}
-          <div class="mb-2">
-            <div class="text-muted small mb-1">Прикреплённые файлы:</div>
-            <div class="d-flex flex-column gap-1" id="existing-files">
-              {% for a in existing %}
-              <div class="d-flex align-items-center gap-2 bg-light border rounded px-2 py-1" id="att-{{ a.id }}">
-                <i class="bi bi-paperclip text-muted"></i>
-                <a href="{{ url_for('tasks.uploaded_file', filename=a.filename) }}" class="flex-grow-1 small text-decoration-none" target="_blank">{{ a.original_name }}</a>
-                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
-                        onclick="deleteAttachment({{ a.id }}, {{ task.id }})">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-          {% endif %}
-          {% endif %}
-
-          <button type="button" class="btn btn-outline-secondary btn-sm mb-2" onclick="document.getElementById('file-input').click()">
-            <i class="bi bi-paperclip"></i> Добавить файлы
-          </button>
-          <input type="file" id="file-input" class="d-none" multiple>
-          <div id="file-inputs-container"></div>
-          <div id="file-list" class="d-flex flex-column gap-1 mt-1"></div>
         </div>
       </div>
 
-      <div class="mt-4 d-flex gap-2 flex-wrap">
+      <div>
+        <label class="label pb-1"><span class="label-text">Описание</span></label>
+        <textarea name="description" class="textarea textarea-bordered w-full" rows="4">{{ task.description if task else '' }}</textarea>
+      </div>
+
+      <!-- File upload -->
+      <div>
+        <div class="label-text font-semibold mb-2">Вложения</div>
+
+        {% if task %}
+        {% set existing = task.attachments.all() %}
+        {% if existing %}
+        <div class="mb-2">
+          <div class="text-xs text-base-content/60 mb-1">Прикреплённые файлы:</div>
+          <div class="flex flex-col gap-1" id="existing-files">
+            {% for a in existing %}
+            <div class="flex items-center gap-2 bg-base-200 rounded px-3 py-1.5" id="att-{{ a.id }}">
+              <i class="bi bi-paperclip text-base-content/50 text-sm"></i>
+              <a href="{{ url_for('tasks.uploaded_file', filename=a.filename) }}" class="flex-1 text-sm truncate no-underline" target="_blank">{{ a.original_name }}</a>
+              <button type="button" class="btn btn-ghost btn-xs text-error"
+                      onclick="deleteAttachment({{ a.id }}, {{ task.id }})">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <button type="button" class="btn btn-outline btn-sm mb-2" onclick="document.getElementById('file-input').click()">
+          <i class="bi bi-paperclip"></i> Добавить файлы
+        </button>
+        <input type="file" id="file-input" class="hidden" multiple>
+        <div id="file-inputs-container"></div>
+        <div id="file-list" class="flex flex-col gap-1 mt-1"></div>
+      </div>
+
+      <div class="flex gap-2 flex-wrap pt-2">
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-save"></i> {% if task %}Сохранить{% else %}Создать{% endif %}
         </button>
         <a href="{{ url_for('tasks.detail', task_id=task.id) if task else url_for('tasks.list_tasks') }}"
-           class="btn btn-outline-secondary">Отмена</a>
+           class="btn btn-ghost">Отмена</a>
       </div>
     </form>
   </div>
@@ -160,7 +162,6 @@ function showDynamic() {
 }
 showDynamic();
 
-// --- File management ---
 let dt = new DataTransfer();
 
 document.getElementById('file-input').addEventListener('change', function() {
@@ -184,26 +185,25 @@ function formatSize(b) {
 
 function renderNewFiles() {
   const list = document.getElementById('file-list');
-  const icons = { pdf:'bi-file-pdf text-danger', doc:'bi-file-word text-primary',
+  const icons = { pdf:'bi-file-pdf text-error', doc:'bi-file-word text-primary',
     docx:'bi-file-word text-primary', xls:'bi-file-excel text-success',
     xlsx:'bi-file-excel text-success', jpg:'bi-file-image text-warning',
     jpeg:'bi-file-image text-warning', png:'bi-file-image text-warning',
-    zip:'bi-file-zip text-secondary', rar:'bi-file-zip text-secondary' };
+    zip:'bi-file-zip text-neutral', rar:'bi-file-zip text-neutral' };
 
   list.innerHTML = [...dt.files].map((f, i) => {
     const ext = f.name.split('.').pop().toLowerCase();
-    const icon = icons[ext] || 'bi-file-earmark text-muted';
-    return `<div class="d-flex align-items-center gap-2 bg-white border rounded px-2 py-1">
-      <i class="bi ${icon}"></i>
-      <span class="flex-grow-1 small text-truncate" title="${f.name}">${f.name}</span>
-      <span class="text-muted" style="font-size:0.75rem;flex-shrink:0">${formatSize(f.size)}</span>
-      <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeNewFile(${i})">
+    const icon = icons[ext] || 'bi-file-earmark text-base-content/50';
+    return `<div class="flex items-center gap-2 bg-base-100 border border-base-300 rounded px-3 py-1.5">
+      <i class="bi ${icon} text-sm"></i>
+      <span class="flex-1 text-sm truncate" title="${f.name}">${f.name}</span>
+      <span class="text-base-content/50 text-xs shrink-0">${formatSize(f.size)}</span>
+      <button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeNewFile(${i})">
         <i class="bi bi-x"></i>
       </button>
     </div>`;
   }).join('');
 
-  // Sync to real input
   const container = document.getElementById('file-inputs-container');
   container.innerHTML = '';
   if (dt.files.length > 0) {
@@ -214,7 +214,6 @@ function renderNewFiles() {
   }
 }
 
-// Delete existing attachment (AJAX)
 function deleteAttachment(attId, taskId) {
   if (!confirm('Удалить файл?')) return;
   fetch(`/tasks/${taskId}/attachments/${attId}/delete`, {

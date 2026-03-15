@@ -2,8 +2,8 @@
 {% block title %}Пользователи — TaskTime{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h5 class="mb-0"><i class="bi bi-people"></i> Пользователи</h5>
+<div class="flex justify-between items-center mb-4">
+  <h5 class="text-lg font-bold flex items-center gap-2"><i class="bi bi-people"></i> Пользователи</h5>
   {% if current_user.is_super_admin %}
   <a href="{{ url_for('admin.create_user') }}" class="btn btn-primary btn-sm">
     <i class="bi bi-person-plus"></i> Добавить
@@ -11,48 +11,52 @@
   {% endif %}
 </div>
 
-<div class="card shadow-sm">
-  <table class="table table-hover mb-0">
-    <thead class="table-dark">
-      <tr>
-        <th>ФИО</th><th>Логин</th><th>Email</th><th>Роль</th><th>Статус</th>
-        {% if current_user.is_super_admin %}<th></th>{% endif %}
+<div class="card bg-base-100 shadow-sm">
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr class="bg-neutral text-neutral-content">
+          <th>ФИО</th><th>Логин</th><th>Email</th><th>Роль</th><th>Статус</th>
+          {% if current_user.is_super_admin %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+      <tr class="hover">
+        <td class="font-medium">{{ u.full_name }}</td>
+        <td><code class="bg-base-200 px-1 rounded text-sm">{{ u.username }}</code></td>
+        <td class="text-base-content/60 text-sm">{{ u.email }}</td>
+        <td>
+          {% set role_colors = {'super_admin':'error','manager':'warning','admin':'info','staff':'neutral'} %}
+          <span class="badge badge-{{ role_colors.get(u.role, 'neutral') }}">{{ Role.LABELS.get(u.role, u.role) }}</span>
+        </td>
+        <td>
+          {% if u.is_active %}
+          <span class="badge badge-success badge-sm">Активен</span>
+          {% else %}
+          <span class="badge badge-neutral badge-sm">Отключён</span>
+          {% endif %}
+        </td>
+        {% if current_user.is_super_admin %}
+        <td class="text-right">
+          <div class="flex gap-1 justify-end">
+            <a href="{{ url_for('admin.edit_user', user_id=u.id) }}" class="btn btn-ghost btn-xs">
+              <i class="bi bi-pencil"></i>
+            </a>
+            {% if not u.is_super_admin %}
+            <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}" class="inline"
+                  onsubmit="return confirm('Удалить пользователя {{ u.full_name }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-ghost btn-xs text-error"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+        {% endif %}
       </tr>
-    </thead>
-    <tbody>
-    {% for u in users %}
-    <tr>
-      <td>{{ u.full_name }}</td>
-      <td><code>{{ u.username }}</code></td>
-      <td class="text-muted small">{{ u.email }}</td>
-      <td>
-        {% set role_colors = {'super_admin':'danger','manager':'warning','admin':'info','staff':'secondary'} %}
-        <span class="badge bg-{{ role_colors.get(u.role, 'secondary') }}">{{ Role.LABELS.get(u.role, u.role) }}</span>
-      </td>
-      <td>
-        {% if u.is_active %}
-        <span class="badge bg-success">Активен</span>
-        {% else %}
-        <span class="badge bg-secondary">Отключён</span>
-        {% endif %}
-      </td>
-      {% if current_user.is_super_admin %}
-      <td class="text-end">
-        <a href="{{ url_for('admin.edit_user', user_id=u.id) }}" class="btn btn-outline-secondary btn-sm">
-          <i class="bi bi-pencil"></i>
-        </a>
-        {% if not u.is_super_admin %}
-        <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}" class="d-inline"
-              onsubmit="return confirm('Удалить пользователя {{ u.full_name }}?')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
-        </form>
-        {% endif %}
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

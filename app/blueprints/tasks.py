@@ -284,3 +284,25 @@ def delete_attachment(task_id, att_id):
     db.session.delete(att)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@tasks_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])
+@login_required
+def delete_task(task_id):
+    if not current_user.can_admin:
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('tasks.detail', task_id=task_id))
+    task = Task.query.get_or_404(task_id)
+    # Delete attachment files from disk
+    for att in task.attachments.all():
+        path = os.path.join(current_app.config['UPLOAD_FOLDER'], att.filename)
+        if os.path.exists(path):
+            os.remove(path)
+        db.session.delete(att)
+    # Delete time logs
+    for log in task.time_logs.all():
+        db.session.delete(log)
+    db.session.delete(task)
+    db.session.commit()
+    flash('Задача удалена', 'success')
+    return redirect(url_for('tasks.list_tasks'))

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TV — TaskTime</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; height: 100vh; }
+
+    .screen { display: none; height: 100vh; padding: 2.5rem 3rem; flex-direction: column; }
+    .screen.active { display: flex; }
+
+    .screen-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .screen-title { font-size: 2rem; font-weight: 800; display: flex; align-items: center; gap: 0.75rem; }
+    .period-pill { background: #1f6feb; padding: 5px 18px; border-radius: 20px; font-size: 0.95rem; font-weight: 600; }
+    .clock { font-size: 1.4rem; font-weight: 700; color: #8b949e; font-variant-numeric: tabular-nums; }
+
+    .stat-grid { display: grid; gap: 1.2rem; flex: 1; align-content: center; }
+    .stat-card { background: #161b22; border: 1px solid #21262d; border-radius: 14px; padding: 1.5rem 2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .stat-num { font-size: 3.5rem; font-weight: 900; line-height: 1; }
+    .stat-lbl { color: #8b949e; font-size: 0.9rem; margin-top: 6px; text-align: center; }
+
+    .chart-card { background: #161b22; border: 1px solid #21262d; border-radius: 14px; padding: 1.5rem; display: flex; flex-direction: column; }
+    .chart-title { font-size: 1rem; font-weight: 700; color: #8b949e; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 1px; }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; flex: 1; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; flex: 1; }
+    .row-full { flex: 1; display: flex; flex-direction: column; }
+
+    .top-list { display: flex; flex-direction: column; gap: 0.6rem; overflow: hidden; }
+    .top-item { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 0.75rem 1.2rem; display: flex; align-items: center; gap: 1rem; }
+    .top-rank { font-size: 1.4rem; width: 2rem; text-align: center; flex-shrink: 0; }
+    .top-name { flex: 1; font-weight: 600; font-size: 1.1rem; }
+    .top-val { font-weight: 800; font-size: 1.2rem; color: #ffd700; }
+    .top-sub { font-size: 0.85rem; color: #8b949e; }
+
+    .bar-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.6rem; }
+    .bar-label { width: 180px; font-size: 0.9rem; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { flex: 1; height: 24px; background: #21262d; border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.8s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 0.8rem; font-weight: 700; }
+    .bar-count { width: 40px; text-align: right; font-weight: 700; color: #8b949e; font-size: 0.9rem; }
+
+    .status-mini { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .status-dot { padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+
+    .progress-bar { height: 3px; background: #1f6feb; position: fixed; bottom: 0; left: 0; transition: width 10s linear; }
+    .screen-counter { font-size: 0.85rem; color: #8b949e; }
+
+    .employee-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; flex: 1; align-content: start; overflow: hidden; }
+    .emp-card { background: #161b22; border: 1px solid #21262d; border-radius: 12px; padding: 1rem 1.25rem; display: flex; align-items: center; gap: 1rem; }
+    .emp-rank { font-size: 1.6rem; width: 2.5rem; text-align: center; }
+    .emp-info { flex: 1; }
+    .emp-name { font-weight: 700; font-size: 1rem; }
+    .emp-role { font-size: 0.8rem; color: #8b949e; margin-top: 2px; }
+    .emp-stats { display: flex; gap: 1rem; margin-top: 6px; }
+    .emp-stat { font-size: 0.85rem; }
+    .emp-stat span { font-weight: 700; color: #58a6ff; }
+  </style>
+</head>
+<body>
+<div class="progress-bar" id="progressBar" style="width:0%"></div>
+
+<!-- S1: Day -->
+<div class="screen" id="s-day">
+  <div class="screen-header">
+    <div class="screen-title">📅 Сегодня</div>
+    <div style="display:flex;gap:1rem;align-items:center">
+      <span class="period-pill">День</span>
+      <span class="clock" id="clock"></span>
+    </div>
+  </div>
+  <div class="stat-grid" style="grid-template-columns:repeat(5,1fr)" id="cards-day"></div>
+</div>
+
+<!-- S2: Week -->
+<div class="screen" id="s-week">
+  <div class="screen-header">
+    <div class="screen-title">📆 Неделя</div>
+    <span class="period-pill">Эта неделя</span>
+  </div>
+  <div class="row-2">
+    <div class="chart-card">
+      <div class="chart-title">По статусам</div>
+      <div style="flex:1;position:relative"><canvas id="chart-week-status"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">По подразделениям</div>
+      <div id="bar-week-dept" style="flex:1;overflow:hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- S3: Month -->
+<div class="screen" id="s-month">
+  <div class="screen-header">
+    <div class="screen-title">🗓️ Месяц</div>
+    <span class="period-pill">Этот месяц</span>
+  </div>
+  <div class="row-2">
+    <div class="chart-card">
+      <div class="chart-title">По статусам</div>
+      <div style="flex:1;position:relative"><canvas id="chart-month-status"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">По типам задач</div>
+      <div style="flex:1;position:relative"><canvas id="chart-month-types"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- S4: Year -->
+<div class="screen" id="s-year">
+  <div class="screen-header">
+    <div class="screen-title">📊 Год</div>
+    <span class="period-pill">Этот год</span>
+  </div>
+  <div class="row-3">
+    <div class="chart-card" style="grid-column:span 2">
+      <div class="chart-title">Задачи по подразделениям (год)</div>
+      <div id="bar-year-dept" style="flex:1;overflow:hidden"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Итого за год</div>
+      <div id="cards-year" style="display:flex;flex-direction:column;gap:0.8rem;flex:1;justify-content:center"></div>
+    </div>
+  </div>
+</div>
+
+<!-- S5: Types breakdown -->
+<div class="screen" id="s-types">
+  <div class="screen-header">
+    <div class="screen-title">🗂️ Типы задач</div>
+    <span class="period-pill">По статусам</span>
+  </div>
+  <div class="row-full chart-card">
+    <div class="chart-title">Распределение типов по статусам (неделя)</div>
+    <div style="flex:1;position:relative"><canvas id="chart-types-stacked"></canvas></div>
+  </div>
+</div>
+
+<!-- S6: Departments -->
+<div class="screen" id="s-depts">
+  <div class="screen-header">
+    <div class="screen-title">🏢 Подразделения</div>
+    <span class="period-pill">Входящие заявки</span>
+  </div>
+  <div class="row-2">
+    <div class="chart-card">
+      <div class="chart-title">Задачи по подразделениям (месяц)</div>
+      <div id="bar-dept-month" style="flex:1;overflow:hidden"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Статусы по подразделениям</div>
+      <div style="flex:1;position:relative"><canvas id="chart-dept-stacked"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- S7: Top requesters -->
+<div class="screen" id="s-requesters">
+  <div class="screen-header">
+    <div class="screen-title">📨 Источники заявок</div>
+    <span class="period-pill">Месяц</span>
+  </div>
+  <div class="row-2">
+    <div class="chart-card">
+      <div class="chart-title">Топ заказчиков</div>
+      <div id="bar-customers" style="flex:1;overflow:hidden"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Топ подразделений (входящие)</div>
+      <div id="bar-dept-incoming" style="flex:1;overflow:hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- S8: Employee rating -->
+<div class="screen" id="s-employees">
+  <div class="screen-header">
+    <div class="screen-title">🏆 Рейтинг сотрудников</div>
+    <span class="period-pill">Всё время</span>
+  </div>
+  <div class="employee-grid" id="emp-grid"></div>
+</div>
+
+<script>
+const SCREENS = ['day','week','month','year','types','depts','requesters','employees'];
+const STATUS_LABELS = {new:'Новые',in_progress:'В работе',paused:'Пауза',review:'Проверка',done:'Готово'};
+const STATUS_COLORS = {new:'#6c757d',in_progress:'#0d6efd',paused:'#ffc107',review:'#0dcaf0',done:'#198754'};
+const BAR_COLORS = ['#1f6feb','#388bfd','#58a6ff','#79c0ff','#a5d6ff','#cae8ff','#0ea5e9','#06b6d4'];
+
+let current = 0;
+let data = null;
+const charts = {};
+
+// Clock
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}, 1000);
+
+function formatHours(h) {
+  if (h >= 1) return h.toFixed(1) + 'ч';
+  return Math.round(h * 60) + 'мин';
+}
+
+// Status cards
+function renderCards(period, containerId) {
+  const el = document.getElementById(containerId);
+  if (!data || !data[period]) return;
+  const bs = data[period].by_status;
+  el.innerHTML = Object.entries(STATUS_LABELS).map(([k,v]) => `
+    <div class="stat-card">
+      <div class="stat-num" style="color:${STATUS_COLORS[k]}">${bs[k]||0}</div>
+      <div class="stat-lbl">${v}</div>
+    </div>
+  `).join('');
+}
+
+function renderYearCards() {
+  const el = document.getElementById('cards-year');
+  if (!data || !data.year) return;
+  const bs = data.year.by_status;
+  el.innerHTML = Object.entries(STATUS_LABELS).map(([k,v]) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;background:#0d1117;border-radius:8px;padding:0.6rem 1rem">
+      <span style="color:#8b949e">${v}</span>
+      <span style="font-weight:800;color:${STATUS_COLORS[k]};font-size:1.3rem">${bs[k]||0}</span>
+    </div>
+  `).join('');
+}
+
+function renderBars(containerId, labels, values, color) {
+  const el = document.getElementById(containerId);
+  if (!el || !labels.length) { if(el) el.innerHTML = '<p style="color:#8b949e;text-align:center;padding:2rem">Нет данных</p>'; return; }
+  const max = Math.max(...values, 1);
+  el.innerHTML = labels.map((lbl, i) => `
+    <div class="bar-row">
+      <div class="bar-label" title="${lbl}">${lbl}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(values[i]/max*100).toFixed(1)}%;background:${color || BAR_COLORS[i % BAR_COLORS.length]}">${values[i] > 2 ? values[i] : ''}</div>
+      </div>
+      <div class="bar-count">${values[i]}</div>
+    </div>
+  `).join('');
+}
+
+function makeOrUpdate(id, type, chartData, opts) {
+  if (charts[id]) { charts[id].destroy(); }
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  charts[id] = new Chart(canvas, { type, data: chartData, options: { responsive: true, maintainAspectRatio: false, ...opts } });
+}
+
+function renderAll() {
+  if (!data) return;
+  const w = data.week, m = data.month, y = data.year;
+
+  // S1 cards
+  renderCards('day', 'cards-day');
+
+  // S2 week
+  const wStatusVals = Object.keys(STATUS_LABELS).map(k => w.by_status[k]||0);
+  makeOrUpdate('chart-week-status', 'doughnut', {
+    labels: Object.values(STATUS_LABELS),
+    datasets: [{ data: wStatusVals, backgroundColor: Object.values(STATUS_COLORS), borderWidth: 0 }]
+  }, { plugins: { legend: { position: 'bottom', labels: { color: '#8b949e', padding: 12 } } } });
+  renderBars('bar-week-dept', w.dept_labels, w.dept_values);
+
+  // S3 month
+  const mStatusVals = Object.keys(STATUS_LABELS).map(k => m.by_status[k]||0);
+  makeOrUpdate('chart-month-status', 'bar', {
+    labels: Object.values(STATUS_LABELS),
+    datasets: [{ data: mStatusVals, backgroundColor: Object.values(STATUS_COLORS), borderRadius: 6 }]
+  }, { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8b949e' } }, y: { ticks: { color: '#8b949e' } } } });
+
+  makeOrUpdate('chart-month-types', 'pie', {
+    labels: m.type_labels,
+    datasets: [{ data: m.type_values, backgroundColor: BAR_COLORS, borderWidth: 0 }]
+  }, { plugins: { legend: { position: 'bottom', labels: { color: '#8b949e' } } } });
+
+  // S4 year
+  renderBars('bar-year-dept', y.dept_labels, y.dept_values);
+  renderYearCards();
+
+  // S5 types stacked
+  const typeNames = Object.keys(w.type_by_status || {});
+  if (typeNames.length) {
+    const statusKeys = Object.keys(STATUS_LABELS);
+    makeOrUpdate('chart-types-stacked', 'bar', {
+      labels: typeNames,
+      datasets: statusKeys.map(k => ({
+        label: STATUS_LABELS[k],
+        data: typeNames.map(t => (w.type_by_status[t] || {})[k] || 0),
+        backgroundColor: STATUS_COLORS[k],
+        borderRadius: 4,
+      }))
+    }, {
+      plugins: { legend: { position: 'bottom', labels: { color: '#8b949e' } } },
+      scales: { x: { stacked: true, ticks: { color: '#8b949e' } }, y: { stacked: true, ticks: { color: '#8b949e' } } }
+    });
+  }
+
+  // S6 dept stacked
+  renderBars('bar-dept-month', m.dept_labels, m.dept_values);
+  const deptNames = Object.keys(m.dept_by_status || {});
+  if (deptNames.length) {
+    const statusKeys = Object.keys(STATUS_LABELS);
+    makeOrUpdate('chart-dept-stacked', 'bar', {
+      labels: deptNames,
+      datasets: statusKeys.map(k => ({
+        label: STATUS_LABELS[k],
+        data: deptNames.map(d => (m.dept_by_status[d] || {})[k] || 0),
+        backgroundColor: STATUS_COLORS[k],
+        borderRadius: 4,
+      }))
+    }, {
+      plugins: { legend: { position: 'bottom', labels: { color: '#8b949e' } } },
+      scales: { x: { stacked: true, ticks: { color: '#8b949e', maxRotation: 30 } }, y: { stacked: true, ticks: { color: '#8b949e' } } }
+    });
+  }
+
+  // S7 requesters
+  const mc = m.top_customers || [];
+  renderBars('bar-customers', mc.map(r=>r.name), mc.map(r=>r.cnt), '#f0883e');
+  const md = m.top_dept_incoming || [];
+  renderBars('bar-dept-incoming', md.map(r=>r.name), md.map(r=>r.cnt), '#3fb950');
+
+  // S8 employees
+  renderEmployees();
+}
+
+function renderEmployees() {
+  const el = document.getElementById('emp-grid');
+  if (!data || !data.employees) return;
+  const medals = ['🥇','🥈','🥉'];
+  const roleMap = { super_admin:'Super Admin', manager:'Руководитель', admin:'Администратор', staff:'Сотрудник' };
+  el.innerHTML = data.employees.slice(0, 12).map((e, i) => `
+    <div class="emp-card">
+      <div class="emp-rank">${medals[i] || (i+1)}</div>
+      <div class="emp-info">
+        <div class="emp-name">${e.name}</div>
+        <div class="emp-role">${roleMap[e.role] || e.role}</div>
+        <div class="emp-stats">
+          <div class="emp-stat">Закрыто: <span>${e.done}</span></div>
+          <div class="emp-stat">Время: <span>${e.hours}ч</span></div>
+        </div>
+      </div>
+    </div>
+  `).join('') || '<p style="color:#8b949e">Нет данных</p>';
+}
+
+function showScreen(idx) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + SCREENS[idx]).classList.add('active');
+  const bar = document.getElementById('progressBar');
+  bar.style.transition = 'none'; bar.style.width = '0%';
+  setTimeout(() => { bar.style.transition = 'width 10s linear'; bar.style.width = '100%'; }, 50);
+}
+
+function next() {
+  current = (current + 1) % SCREENS.length;
+  showScreen(current);
+}
+
+async function loadData() {
+  try {
+    const r = await fetch('/analytics/tv/data');
+    data = await r.json();
+    renderAll();
+  } catch(e) { console.error('TV data load error', e); }
+}
+
+loadData();
+showScreen(0);
+setInterval(next, 10000);
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>

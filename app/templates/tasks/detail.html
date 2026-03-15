@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+{% block title %}#{{ task.id }} {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start mb-2">
+      <div>
+        <a href="{{ url_for('tasks.list_tasks') }}" class="text-muted small">← Все задачи</a>
+        <h5 class="mt-1 mb-1">{{ task.title }}</h5>
+        <div class="d-flex flex-wrap gap-1">
+          <span class="badge bg-{{ TaskStatus.COLORS[task.status] }} fs-6">{{ TaskStatus.LABELS[task.status] }}</span>
+          <span class="badge bg-{{ Urgency.COLORS[task.urgency] }}">{{ Urgency.LABELS[task.urgency] }}</span>
+          {% if task.is_overdue %}<span class="badge bg-danger">Просрочено</span>{% endif %}
+        </div>
+      </div>
+      {% if current_user.can_admin %}
+      <a href="{{ url_for('tasks.edit', task_id=task.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-pencil"></i>
+      </a>
+      {% endif %}
+    </div>
+
+    <!-- Timer Block -->
+    {% if task.status != TaskStatus.DONE %}
+    <div class="card mb-3 border-primary">
+      <div class="card-body py-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div>
+            <div class="text-muted small">Всего затрачено</div>
+            <div class="timer-mono" id="total-display">{{ task.total_seconds | duration }}</div>
+          </div>
+          {% if my_active %}
+          <div>
+            <div class="text-muted small">Текущая сессия</div>
+            <div class="timer-mono text-success" id="session-display"
+                 data-started="{{ my_active.started_at.isoformat() }}"
+                 data-total="{{ task.total_seconds }}">00:00:00</div>
+          </div>
+          {% endif %}
+          <div class="ms-auto d-flex gap-2 flex-wrap">
+            {% if task.status in (TaskStatus.NEW, TaskStatus.PAUSED) and not my_active %}
+            <button class="btn btn-success" onclick="handleStart({{ task.id }})">
+              <i class="bi bi-play-fill"></i> Старт
+            </button>
+            {% endif %}
+            {% if my_active %}
+            <button class="btn btn-warning" onclick="handlePause({{ task.id }})">
+              <i class="bi bi-pause-fill"></i> Пауза
+            </button>
+            <button class="btn btn-info" onclick="submitReview({{ task.id }})">
+              <i class="bi bi-check2"></i> На проверку
+            </button>
+            {% elif task.status == TaskStatus.IN_PROGRESS %}
+            <button class="btn btn-info" onclick="submitReview({{ task.id }})">
+              <i class="bi bi-check2"></i> На проверку
+            </button>
+            {% endif %}
+            {% if task.status == TaskStatus.REVIEW and current_user.can_manage %}
+            <form method="post" action="{{ url_for('tasks.mark_done', task_id=task.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-check-circle"></i> Закрыть задачу
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Active timers by others -->
+        {% set active = task.active_timers %}
+        {% if active %}
+        <div class="mt-2">
+          <small class="text-muted">Сейчас работают:
+            {% for log in active %}
+            <span class="badge bg-success">{{ log.user.full_name }}</span>
+            {% endfor %}
+          </small>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Details -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-2">
+          {% if task.customer_name %}
+          <div class="col-sm-6">
+            <small class="text-muted">Заказчик</small>
+            <div>{{ task.customer_name }}</div>
+          </div>
+          {% endif %}
+          {% if task.customer_phone %}
+          <div class="col-sm-6">
+            <small class="text-muted">Телефон</small>
+            <div>{{ task.customer_phone }}</div>
+          </div>
+          {% endif %}
+          {% if task.department %}
+          <div class="col-sm-6">
+            <small class="text-muted">Подразделение</small>
+            <div>{{ task.department.name }}</div>
+          </div>
+          {% endif %}
+          {% if task.deadline %}
+          <div class="col-sm-6">
+            <small class="text-muted">Дедлайн</small>
+            <div class="{% if task.is_overdue %}text-danger fw-bold{% endif %}">
+              {{ task.deadline | timeformat }}
+            </div>
+          </div>
+          {% endif %}
+          {% if task.task_type %}
+          <div class="col-sm-6">
+            <small class="text-muted">Тип</small>
+            <div>{{ {'publication':'Публикация','handout':'Разработка раздатки','banner':'Разработка баннера','merch':'Разработка сувенирной продукции','poster':'Разработка плаката/афиши','presentation':'Разработка презентации','design_verify':'Верификация дизайна','other':'Другое'}.get(task.task_type, task.task_type) }}</div>
+          </div>
+          {% endif %}
+          {% if task.created_by %}
+          <div class="col-sm-6">
+            <small class="text-muted">Создал</small>
+            <div>{{ task.created_by.full_name }} — {{ task.created_at | timeformat }}</div>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if task.dynamic_fields %}
+        <hr>
+        {% if task.task_type == 'publication' %}
+          {% if task.dynamic_fields.get('subtype') %}
+          <div><small class="text-muted">Подтип:</small> {{ task.dynamic_fields.subtype }}</div>
+          {% endif %}
+          {% if task.dynamic_fields.get('platforms') %}
+          <div class="mt-1">
+            <small class="text-muted">Площадки: </small>
+            {% for p in task.dynamic_fields.platforms %}
+            <span class="badge bg-secondary">{{ p }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% elif task.dynamic_fields.get('clarification') %}
+          <div><small class="text-muted">Уточнение:</small> {{ task.dynamic_fields.clarification }}</div>
+        {% endif %}
+        {% endif %}
+
+        {% if task.description %}
+        <hr>
+        <div class="text-muted small">Описание</div>
+        <div style="white-space: pre-wrap">{{ task.description }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Attachments -->
+    {% set atts = task.attachments.all() %}
+    {% if atts %}
+    <div class="card mb-3">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <small class="fw-semibold"><i class="bi bi-paperclip"></i> Вложения ({{ atts|length }})</small>
+        <a href="{{ url_for('tasks.download_zip', task_id=task.id) }}" class="btn btn-outline-secondary btn-sm py-0">
+          <i class="bi bi-file-zip"></i> ZIP
+        </a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for att in atts %}
+        <li class="list-group-item py-1 d-flex align-items-center gap-2" id="att-{{ att.id }}">
+          <a href="{{ url_for('tasks.uploaded_file', filename=att.filename) }}" target="_blank" class="flex-grow-1">
+            {{ att.original_name }}
+          </a>
+          {% if current_user.can_admin %}
+          <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                  onclick="deleteAtt({{ att.id }}, {{ task.id }})">
+            <i class="bi bi-x"></i>
+          </button>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Time Logs -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header py-2">
+        <small class="fw-semibold"><i class="bi bi-clock-history"></i> Лог времени</small>
+      </div>
+      <div class="card-body p-0">
+        {% if logs %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Сотрудник</th><th>Начало</th><th>Время</th></tr>
+          </thead>
+          <tbody>
+          {% for log in logs %}
+          <tr {% if not log.ended_at %}class="table-success"{% endif %}>
+            <td class="small">{{ log.user.full_name.split()[0] }}</td>
+            <td class="small">{{ log.started_at.strftime('%d.%m %H:%M') }}</td>
+            <td class="small">
+              {% if log.ended_at %}
+                {{ log.duration_seconds | duration }}
+              {% else %}
+                <i class="bi bi-play-circle text-success"></i> идёт
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted text-center py-3 small">Нет записей</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Conflict Modal -->
+<div class="modal fade" id="conflictModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Активный таймер</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Сейчас активен таймер на задаче: <strong id="conflictTitle"></strong><br>
+        Поставить ту задачу на паузу и запустить эту?
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-warning" onclick="forceStart({{ task.id }})">Поставить на паузу и запустить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+{% if my_active %}
+// Running session timer
+const sessionEl = document.getElementById('session-display');
+const started = new Date(sessionEl.dataset.started + 'Z');
+const totalBase = parseInt(sessionEl.dataset.total);
+let sessionBase = Math.floor((Date.now() - started) / 1000);
+
+setInterval(() => {
+  sessionBase++;
+  const h = Math.floor(sessionBase / 3600), m = Math.floor((sessionBase % 3600) / 60), s = sessionBase % 60;
+  sessionEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}, 1000);
+{% endif %}
+
+function post(url) {
+  return fetch(url, {method: 'POST', headers: {'X-CSRFToken': CSRF}}).then(r => r.json());
+}
+
+function handleStart(taskId) {
+  post(`/tasks/${taskId}/timer/start`).then(data => {
+    if (data.conflict) {
+      document.getElementById('conflictTitle').textContent = data.active_task_title;
+      new bootstrap.Modal(document.getElementById('conflictModal')).show();
+    } else {
+      location.reload();
+    }
+  });
+}
+
+function forceStart(taskId) {
+  post(`/tasks/${taskId}/timer/force_start`).then(() => location.reload());
+}
+
+function handlePause(taskId) {
+  post(`/tasks/${taskId}/timer/pause`).then(() => location.reload());
+}
+
+function submitReview(taskId) {
+  if (confirm('Отправить задачу на проверку?')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/tasks/${taskId}/review`;
+    form.innerHTML = `<input name="csrf_token" value="${CSRF}">`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+
+function deleteAtt(attId, taskId) {
+  if (!confirm('Удалить файл?')) return;
+  fetch(`/tasks/${taskId}/attachments/${attId}/delete`, {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}
+  }).then(r => r.json()).then(d => {
+    if (d.success) document.getElementById('att-' + attId).remove();
+  });
+}
+</script>
+{% endblock %}

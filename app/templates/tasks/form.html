@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+{% block title %}{% if task %}Редактировать #{{ task.id }}{% else %}Новая задача{% endif %} — TaskTime{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-8">
+<div class="card shadow-sm">
+  <div class="card-header">
+    <h5 class="mb-0">{% if task %}Редактировать задачу #{{ task.id }}{% else %}Новая задача{% endif %}</h5>
+  </div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label fw-semibold">Тема <span class="text-danger">*</span></label>
+          <input type="text" name="title" class="form-control" required value="{{ task.title if task else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">ФИО заказчика</label>
+          <input type="text" name="customer_name" class="form-control" value="{{ task.customer_name if task else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Телефон</label>
+          <input type="tel" name="customer_phone" class="form-control" value="{{ task.customer_phone if task else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Подразделение</label>
+          <select name="department_id" class="form-select">
+            <option value="">— не выбрано —</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}" {% if task and task.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Тип задачи</label>
+          <select name="task_type" class="form-select" id="task_type" onchange="showDynamic()">
+            <option value="">— выберите —</option>
+            {% for val, label in task_types %}
+            <option value="{{ val }}" {% if task and task.task_type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Publication block -->
+        <div class="col-12" id="block-publication" style="display:none">
+          <div class="border rounded p-3 bg-light">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Подтип</label>
+              <div class="d-flex gap-4">
+                {% for val, label in pub_subtypes %}
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="subtype" value="{{ val }}" id="st_{{ val }}"
+                    {% if task and task.dynamic_fields.get('subtype') == val %}checked{% endif %}>
+                  <label class="form-check-label" for="st_{{ val }}">{{ label }}</label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            <label class="form-label fw-semibold">Площадки размещения</label>
+            <div class="row g-1">
+              {% for p in platforms %}
+              <div class="col-sm-6">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="platforms" value="{{ p }}" id="p_{{ loop.index }}"
+                    {% if task and p in (task.dynamic_fields.get('platforms') or []) %}checked{% endif %}>
+                  <label class="form-check-label" for="p_{{ loop.index }}">{{ p }}</label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Clarification block (for all non-publication types) -->
+        <div class="col-12" id="block-clarification" style="display:none">
+          <label class="form-label">Уточнение</label>
+          <input type="text" name="clarification" class="form-control"
+                 value="{{ task.dynamic_fields.get('clarification','') if task else '' }}">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Срочность</label>
+          <select name="urgency" class="form-select">
+            {% for val, label in [('slow','Неспешно'),('normal','Обычно'),('important','Важно'),('urgent','Срочно')] %}
+            <option value="{{ val }}" {% if task and task.urgency == val %}selected{% elif not task and val == 'normal' %}selected{% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Дедлайн</label>
+          <input type="datetime-local" name="deadline" class="form-control"
+                 value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task and task.deadline else '' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Описание</label>
+          <textarea name="description" class="form-control" rows="4">{{ task.description if task else '' }}</textarea>
+        </div>
+
+        <!-- File upload block -->
+        <div class="col-12">
+          <label class="form-label fw-semibold">Вложения</label>
+
+          {% if task %}
+          {% set existing = task.attachments.all() %}
+          {% if existing %}
+          <div class="mb-2">
+            <div class="text-muted small mb-1">Прикреплённые файлы:</div>
+            <div class="d-flex flex-column gap-1" id="existing-files">
+              {% for a in existing %}
+              <div class="d-flex align-items-center gap-2 bg-light border rounded px-2 py-1" id="att-{{ a.id }}">
+                <i class="bi bi-paperclip text-muted"></i>
+                <a href="{{ url_for('tasks.uploaded_file', filename=a.filename) }}" class="flex-grow-1 small text-decoration-none" target="_blank">{{ a.original_name }}</a>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                        onclick="deleteAttachment({{ a.id }}, {{ task.id }})">
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          {% endif %}
+
+          <button type="button" class="btn btn-outline-secondary btn-sm mb-2" onclick="document.getElementById('file-input').click()">
+            <i class="bi bi-paperclip"></i> Добавить файлы
+          </button>
+          <input type="file" id="file-input" class="d-none" multiple
+                 accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt,.mp4">
+          <div id="file-inputs-container"></div>
+          <div id="file-list" class="d-flex flex-column gap-1 mt-1"></div>
+        </div>
+      </div>
+
+      <div class="mt-4 d-flex gap-2 flex-wrap">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save"></i> {% if task %}Сохранить{% else %}Создать{% endif %}
+        </button>
+        <a href="{{ url_for('tasks.detail', task_id=task.id) if task else url_for('tasks.list_tasks') }}"
+           class="btn btn-outline-secondary">Отмена</a>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+function showDynamic() {
+  const t = document.getElementById('task_type').value;
+  document.getElementById('block-publication').style.display = t === 'publication' ? '' : 'none';
+  document.getElementById('block-clarification').style.display = (t && t !== 'publication') ? '' : 'none';
+}
+showDynamic();
+
+// --- File management ---
+let dt = new DataTransfer();
+
+document.getElementById('file-input').addEventListener('change', function() {
+  for (const f of this.files) dt.items.add(f);
+  this.value = '';
+  renderNewFiles();
+});
+
+function removeNewFile(idx) {
+  const files = [...dt.files];
+  dt = new DataTransfer();
+  files.forEach((f, i) => { if (i !== idx) dt.items.add(f); });
+  renderNewFiles();
+}
+
+function formatSize(b) {
+  if (b < 1024) return b + ' Б';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' КБ';
+  return (b/1048576).toFixed(1) + ' МБ';
+}
+
+function renderNewFiles() {
+  const list = document.getElementById('file-list');
+  const icons = { pdf:'bi-file-pdf text-danger', doc:'bi-file-word text-primary',
+    docx:'bi-file-word text-primary', xls:'bi-file-excel text-success',
+    xlsx:'bi-file-excel text-success', jpg:'bi-file-image text-warning',
+    jpeg:'bi-file-image text-warning', png:'bi-file-image text-warning',
+    zip:'bi-file-zip text-secondary', rar:'bi-file-zip text-secondary' };
+
+  list.innerHTML = [...dt.files].map((f, i) => {
+    const ext = f.name.split('.').pop().toLowerCase();
+    const icon = icons[ext] || 'bi-file-earmark text-muted';
+    return `<div class="d-flex align-items-center gap-2 bg-white border rounded px-2 py-1">
+      <i class="bi ${icon}"></i>
+      <span class="flex-grow-1 small text-truncate" title="${f.name}">${f.name}</span>
+      <span class="text-muted" style="font-size:0.75rem;flex-shrink:0">${formatSize(f.size)}</span>
+      <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeNewFile(${i})">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`;
+  }).join('');
+
+  // Sync to real input
+  const container = document.getElementById('file-inputs-container');
+  container.innerHTML = '';
+  if (dt.files.length > 0) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.name = 'attachments'; inp.multiple = true; inp.style.display = 'none';
+    container.appendChild(inp);
+    try { inp.files = dt.files; } catch(e) {}
+  }
+}
+
+// Delete existing attachment (AJAX)
+function deleteAttachment(attId, taskId) {
+  if (!confirm('Удалить файл?')) return;
+  fetch(`/tasks/${taskId}/attachments/${attId}/delete`, {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}
+  }).then(r => r.json()).then(d => {
+    if (d.success) document.getElementById('att-' + attId).remove();
+  });
+}
+</script>
+{% endblock %}

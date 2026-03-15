@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Задачи — TaskTime{% endblock %}
+
+{% block head %}
+<style>
+  .kanban-wrap { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; align-items: flex-start; }
+  .kanban-col { flex: 0 0 280px; background: #f1f3f5; border-radius: 14px; display: flex; flex-direction: column; max-height: calc(100vh - 160px); }
+  .kanban-header { padding: 0.85rem 1rem 0.6rem; font-weight: 700; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #dee2e6; position: sticky; top: 0; background: inherit; border-radius: 14px 14px 0 0; }
+  .kanban-body { overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; flex: 1; min-height: 60px; transition: background 0.15s; }
+  .kanban-body.drag-over { background: rgba(13,110,253,0.07); outline: 2px dashed #0d6efd; outline-offset: -4px; border-radius: 0 0 14px 14px; }
+  .task-card { background: #fff; border-radius: 10px; padding: 0.75rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-left: 4px solid #adb5bd; cursor: grab; transition: box-shadow 0.15s, transform 0.15s, opacity 0.15s; text-decoration: none; color: inherit; display: block; }
+  .task-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-1px); color: inherit; text-decoration: none; }
+  .task-card.overdue { background: #fff5f5; border-left-color: #dc3545 !important; }
+  .task-card.dragging { opacity: 0.4; cursor: grabbing; }
+  .urgency-urgent    { border-left-color: #dc3545; }
+  .urgency-important { border-left-color: #fd7e14; }
+  .urgency-normal    { border-left-color: #0d6efd; }
+  .urgency-slow      { border-left-color: #adb5bd; }
+  .task-title { font-size: 0.9rem; font-weight: 600; line-height: 1.3; margin-bottom: 0.4rem; }
+  .task-meta { font-size: 0.78rem; color: #6c757d; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+  .col-new .kanban-header { color: #6c757d; }
+  .col-in_progress .kanban-header { color: #0d6efd; }
+  .col-paused .kanban-header { color: #e67e00; }
+  .col-review .kanban-header { color: #0891b2; }
+  .col-done .kanban-header { color: #198754; }
+  .col-in_progress { background: #f0f5ff; }
+  .col-review { background: #f0fafc; }
+  .col-done { background: #f0faf4; }
+  .col-paused { background: #fffbf0; }
+  .kanban-count { background: rgba(0,0,0,0.08); border-radius: 20px; padding: 1px 8px; font-size: 0.8rem; }
+  .empty-col { text-align: center; color: #adb5bd; font-size: 0.85rem; padding: 1.5rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0"><i class="bi bi-kanban"></i> Задачи</h5>
+  <div class="d-flex gap-2">
+    {% if current_user.can_admin %}
+    <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg"></i> Создать
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% set columns = [
+  ('new', 'Новые', 'bi-inbox'),
+  ('in_progress', 'В работе', 'bi-play-circle'),
+  ('paused', 'На паузе', 'bi-pause-circle'),
+  ('review', 'Проверка', 'bi-eye'),
+  ('done', 'Готово', 'bi-check-circle'),
+] %}
+
+{% set grouped = {} %}
+{% for task in tasks %}
+  {% if task.status not in grouped %}
+    {% set _ = grouped.update({task.status: []}) %}
+  {% endif %}
+  {% set _ = grouped[task.status].append(task) %}
+{% endfor %}
+
+<div class="kanban-wrap">
+{% for status, label, icon in columns %}
+{% set col_tasks = grouped.get(status, []) %}
+<div class="kanban-col col-{{ status }}">
+  <div class="kanban-header">
+    <span><i class="bi {{ icon }} me-1"></i>{{ label }}</span>
+    <span class="kanban-count" id="cnt-{{ status }}">{{ col_tasks | length }}</span>
+  </div>
+  <div class="kanban-body" data-status="{{ status }}">
+    {% if not col_tasks %}
+    <div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>
+    {% endif %}
+    {% for task in col_tasks %}
+    <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+       class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %}"
+       data-id="{{ task.id }}"
+       {% if current_user.can_manage %}draggable="true"{% endif %}>
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <span class="badge bg-{{ Urgency.COLORS[task.urgency] }} text-white" style="font-size:0.7rem">
+          {{ Urgency.LABELS[task.urgency] }}
+        </span>
+        <span class="text-muted" style="font-size:0.75rem">#{{ task.id }}</span>
+      </div>
+      <div class="task-title">{{ task.title }}</div>
+      <div class="task-meta">
+        {% if task.is_overdue %}
+        <span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle-fill"></i> Просрочено</span>
+        {% endif %}
+        {% if task.department %}<span><i class="bi bi-building"></i> {{ task.department.name }}</span>{% endif %}
+        {% if task.customer_name %}<span><i class="bi bi-person"></i> {{ task.customer_name }}</span>{% endif %}
+      </div>
+      {% if task.deadline %}
+      <div class="task-meta mt-1">
+        <span class="{% if task.is_overdue %}text-danger{% endif %}">
+          <i class="bi bi-calendar-event"></i> {{ task.deadline.strftime('%d.%m %H:%M') }}
+        </span>
+      </div>
+      {% endif %}
+      {% if task.total_seconds > 0 %}
+      <div class="task-meta mt-1">
+        <span><i class="bi bi-clock"></i> {{ task.total_seconds | duration }}</span>
+      </div>
+      {% endif %}
+      {% set active = task.active_timers %}
+      {% if active %}
+      <div class="mt-1">
+        <span class="badge bg-success" style="font-size:0.7rem">
+          <i class="bi bi-play-fill"></i> {{ active | length }} раб.
+        </span>
+      </div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if current_user.can_manage %}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+let dragCard = null;
+let originBody = null;
+
+document.querySelectorAll('.task-card[draggable]').forEach(card => {
+  card.addEventListener('dragstart', e => {
+    dragCard = card;
+    originBody = card.closest('.kanban-body');
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', card.dataset.id);
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    document.querySelectorAll('.kanban-body').forEach(b => b.classList.remove('drag-over'));
+  });
+  // Prevent navigation on drag
+  card.addEventListener('click', e => {
+    if (card.classList.contains('was-dragged')) {
+      e.preventDefault();
+      card.classList.remove('was-dragged');
+    }
+  });
+});
+
+document.querySelectorAll('.kanban-body').forEach(body => {
+  body.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    body.classList.add('drag-over');
+  });
+  body.addEventListener('dragleave', e => {
+    if (!body.contains(e.relatedTarget)) body.classList.remove('drag-over');
+  });
+  body.addEventListener('drop', e => {
+    e.preventDefault();
+    body.classList.remove('drag-over');
+    if (!dragCard || body === originBody) return;
+
+    const newStatus = body.dataset.status;
+    const taskId = dragCard.dataset.id;
+
+    fetch(`/tasks/${taskId}/move`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify({status: newStatus})
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) { alert(d.error || 'Ошибка'); return; }
+
+      // Remove empty-col placeholder from target
+      body.querySelectorAll('.empty-col').forEach(el => el.remove());
+
+      // Move card in DOM
+      dragCard.classList.add('was-dragged');
+      body.appendChild(dragCard);
+
+      // Add placeholder to origin if empty
+      if (!originBody.querySelector('.task-card')) {
+        originBody.innerHTML = '<div class="empty-col"><i class="bi bi-dash-circle d-block mb-1"></i>Пусто</div>';
+      }
+
+      // Update counters
+      updateCount(originBody);
+      updateCount(body);
+    });
+  });
+});
+
+function updateCount(body) {
+  const status = body.dataset.status;
+  const cnt = body.querySelectorAll('.task-card').length;
+  document.getElementById('cnt-' + status).textContent = cnt;
+}
+</script>
+{% endif %}
+{% endblock %}

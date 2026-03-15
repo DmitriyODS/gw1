@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: tasktime
+      POSTGRES_USER: tasktime
+      POSTGRES_PASSWORD: tasktime
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build: ./app
+    command: flask run --host=0.0.0.0 --port=5000 --debug
+    volumes:
+      - ./app:/app
+      - uploads:/app/uploads
+    ports:
+      - "5001:5000"
+    environment:
+      FLASK_APP: factory:create_app
+      FLASK_ENV: development
+      DATABASE_URL: postgresql://tasktime:tasktime@db:5432/tasktime
+      SECRET_KEY: dev-secret-key
+      UPLOAD_FOLDER: /app/uploads
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
+  uploads:

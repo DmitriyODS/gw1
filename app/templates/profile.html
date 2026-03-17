@@ -8,7 +8,7 @@
   <div class="flex items-center gap-4">
     <!-- Avatar with hover overlay -->
     <div class="relative group shrink-0 cursor-pointer" onclick="document.getElementById('avatar-upload').click()" title="Изменить фото">
-      <img src="{{ url_for('profile.avatar', user_id=current_user.id) }}"
+      <img src="{{ url_for('profile.avatar', user_id=current_user.id) }}?v={{ avatar_v }}"
            id="avatar-preview"
            class="w-20 h-20 rounded-full object-cover ring-2 ring-base-300 group-hover:ring-primary transition-all"
            alt="Аватар">

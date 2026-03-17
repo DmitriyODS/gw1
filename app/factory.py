@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from flask import Flask, redirect, url_for
+from flask_login import current_user
 from extensions import db, login_manager, csrf
 
 
@@ -33,6 +34,19 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(media_plan_bp)
+
+    @app.context_processor
+    def inject_avatar_v():
+        v = 0
+        try:
+            if current_user.is_authenticated:
+                p = os.path.join(app.root_path, 'static', 'avatars',
+                                 f'{current_user.id}.png')
+                if os.path.exists(p):
+                    v = int(os.path.getmtime(p))
+        except Exception:
+            pass
+        return {'avatar_v': v}
 
     @app.route('/')
     def index():

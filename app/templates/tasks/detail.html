@@ -144,6 +144,21 @@
             {% endfor %}
           </div>
           {% endif %}
+          {% if task.dynamic_fields.get('pub_date') %}
+          <div class="mt-1">
+            <span class="text-xs text-base-content/60">Дата публикации:</span>
+            <span class="text-sm font-medium">{{ task.dynamic_fields.pub_date | replace('T', ' ') }}</span>
+          </div>
+          {% endif %}
+          {% if task.dynamic_fields.get('pub_url') %}
+          <div class="mt-1">
+            <span class="text-xs text-base-content/60">Ссылка:</span>
+            <a href="{{ task.dynamic_fields.pub_url }}" target="_blank" rel="noopener"
+               class="text-sm text-primary hover:underline truncate max-w-xs inline-block align-bottom">
+              {{ task.dynamic_fields.pub_url }}
+            </a>
+          </div>
+          {% endif %}
         {% elif task.dynamic_fields.get('clarification') %}
           <div><span class="text-xs text-base-content/60">Уточнение:</span> {{ task.dynamic_fields.clarification }}</div>
         {% endif %}

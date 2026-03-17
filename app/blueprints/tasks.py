@@ -89,6 +89,12 @@ def _task_from_form(form, task=None, created_by_id=None):
     if task_type == 'publication':
         dynamic['subtype'] = form.get('subtype')
         dynamic['platforms'] = form.getlist('platforms')
+        pub_date = form.get('pub_date', '').strip()
+        if pub_date:
+            dynamic['pub_date'] = pub_date
+        pub_url = form.get('pub_url', '').strip()
+        if pub_url:
+            dynamic['pub_url'] = pub_url
     else:
         clarification = form.get('clarification', '').strip()
         if clarification:

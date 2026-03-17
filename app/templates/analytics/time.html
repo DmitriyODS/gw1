@@ -34,10 +34,13 @@
     </form>
     {% endif %}
 
-    <div class="join">
+    <div class="flex gap-0.5 bg-base-200 rounded-xl p-1">
       {% for p, lbl in [('day','День'),('week','Неделя'),('month','Месяц'),('year','Год')] %}
       <a href="?period={{ p }}{% if target_uid %}&user_id={{ target_uid }}{% endif %}"
-         class="join-item btn btn-outline btn-sm {% if period == p %}btn-active{% endif %}">{{ lbl }}</a>
+         class="px-3 py-1 rounded-lg text-sm font-medium transition-all
+         {% if period == p %}bg-base-100 shadow-sm text-base-content{% else %}text-base-content/50 hover:text-base-content{% endif %}">
+        {{ lbl }}
+      </a>
       {% endfor %}
     </div>
   </div>
@@ -116,7 +119,8 @@
           <tr>
             <td colspan="{% if can_see_all and not target_uid %}5{% else %}4{% endif %}" class="py-1">
               <div class="flex justify-between items-center">
-                <span class="date-group">📅 {{ date.strftime('%d.%m.%Y, %A') }}</span>
+                {% set wd_ru = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'] %}
+                <span class="date-group">📅 {{ date.strftime('%d.%m.%Y') }}, {{ wd_ru[date.weekday()] }}</span>
                 <span class="font-semibold text-primary text-xs mr-2">Итого: {{ fmt(day_secs) }}</span>
               </div>
             </td>

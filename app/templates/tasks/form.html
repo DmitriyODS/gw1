@@ -71,6 +71,18 @@
             </label>
             {% endfor %}
           </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            <div>
+              <label class="label pb-1"><span class="label-text font-semibold">Дата публикации</span></label>
+              <input type="datetime-local" name="pub_date" class="input input-bordered w-full"
+                     value="{{ task.dynamic_fields.get('pub_date','') if task else '' }}">
+            </div>
+            <div>
+              <label class="label pb-1"><span class="label-text font-semibold">Ссылка на публикацию</span></label>
+              <input type="url" name="pub_url" class="input input-bordered w-full" placeholder="https://…"
+                     value="{{ task.dynamic_fields.get('pub_url','') if task else '' }}">
+            </div>
+          </div>
         </div>
       </div>
 

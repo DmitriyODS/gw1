@@ -6,11 +6,18 @@
 
   <!-- Header -->
   <div class="flex items-center gap-4">
-    <div class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shrink-0"
-         style="background: var(--color-primary)">
-      {{ current_user.full_name[0] | upper }}
+    <!-- Avatar with hover overlay -->
+    <div class="relative group shrink-0 cursor-pointer" onclick="document.getElementById('avatar-upload').click()" title="Изменить фото">
+      <img src="{{ url_for('profile.avatar', user_id=current_user.id) }}"
+           id="avatar-preview"
+           class="w-20 h-20 rounded-full object-cover ring-2 ring-base-300 group-hover:ring-primary transition-all"
+           alt="Аватар">
+      <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <i class="bi bi-camera text-white text-xl"></i>
+      </div>
     </div>
-    <div>
+
+    <div class="flex-1 min-w-0">
       <h1 class="text-xl font-bold">{{ current_user.full_name }}</h1>
       <div class="text-sm text-base-content/50">
         @{{ current_user.username }} &middot; {{ current_user.role | replace('_',' ') | title }}
@@ -18,8 +25,27 @@
       <div class="text-xs text-base-content/40 mt-0.5">
         Зарегистрирован {{ current_user.created_at.strftime('%d.%m.%Y') }}
       </div>
+      <div class="flex gap-2 mt-2">
+        {% if has_custom_avatar %}
+        <form action="{{ url_for('profile.update_avatar') }}" method="post" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="reset">
+          <button type="submit" class="btn btn-ghost btn-xs gap-1 text-base-content/50">
+            <i class="bi bi-stars"></i> Сбросить до пиксель-арта
+          </button>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </div>
+
+  <!-- Hidden file input for avatar -->
+  <form action="{{ url_for('profile.update_avatar') }}" method="post"
+        enctype="multipart/form-data" id="avatar-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="upload">
+    <input type="file" id="avatar-upload" name="avatar" accept="image/*" class="hidden">
+  </form>
 
   <!-- Stats -->
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -97,4 +123,16 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('avatar-upload').addEventListener('change', function() {
+  if (!this.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('avatar-preview').src = e.target.result; };
+  reader.readAsDataURL(this.files[0]);
+  document.getElementById('avatar-form').submit();
+});
+</script>
 {% endblock %}

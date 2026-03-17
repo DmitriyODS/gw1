@@ -227,6 +227,9 @@ def _plan_from_form(form, plan=None, created_by_id=None):
         clarification = form.get('clarification', '').strip()
         if clarification:
             dynamic['clarification'] = clarification
+    event_date = form.get('event_date', '').strip()
+    if event_date:
+        dynamic['event_date'] = event_date
 
     release_date_str = form.get('release_date', '').strip()
     release_date = datetime.strptime(release_date_str, '%Y-%m-%dT%H:%M') if release_date_str else None
@@ -239,6 +242,7 @@ def _plan_from_form(form, plan=None, created_by_id=None):
     plan.description = form.get('description', '').strip() or None
     plan.customer_name = form.get('customer_name', '').strip() or None
     plan.customer_phone = form.get('customer_phone', '').strip() or None
+    plan.customer_email = form.get('customer_email', '').strip() or None
     plan.department_id = form.get('department_id') or None
     plan.task_type = task_type
     plan.urgency = form.get('urgency', Urgency.NORMAL)

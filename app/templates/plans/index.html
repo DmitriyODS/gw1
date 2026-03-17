@@ -162,16 +162,17 @@
 <div class="plans-grid">
   {% for plan in plans %}
   {% set _pd = {
-    'title':         plan.title,
-    'description':   plan.description or '',
-    'task_type':     plan.task_type or '',
-    'urgency':       plan.urgency or 'normal',
-    'group_id':      plan.group_id,
-    'department_id': plan.department_id,
-    'customer_name': plan.customer_name or '',
-    'customer_phone':plan.customer_phone or '',
-    'release_date':  plan.release_date.strftime('%Y-%m-%dT%H:%M') if plan.release_date else '',
-    'tags':          plan.tags or []
+    'title':          plan.title,
+    'description':    plan.description or '',
+    'task_type':      plan.task_type or '',
+    'urgency':        plan.urgency or 'normal',
+    'group_id':       plan.group_id,
+    'department_id':  plan.department_id,
+    'customer_name':  plan.customer_name or '',
+    'customer_phone': plan.customer_phone or '',
+    'customer_email': plan.customer_email or '',
+    'release_date':   plan.release_date.strftime('%Y-%m-%dT%H:%M') if plan.release_date else '',
+    'tags':           plan.tags or []
   } %}
   <div class="plan-card urgency-{{ plan.urgency }}"
        data-plan-id="{{ plan.id }}"
@@ -347,6 +348,10 @@
           <label class="label pb-1"><span class="label-text">Телефон</span></label>
           <input type="tel" name="customer_phone" class="input input-bordered w-full">
         </div>
+        <div class="col-span-2">
+          <label class="label pb-1"><span class="label-text">Email</span></label>
+          <input type="email" name="customer_email" class="input input-bordered w-full" placeholder="example@mail.ru">
+        </div>
       </div>
 
       <div>
@@ -450,6 +455,10 @@
         <div>
           <label class="label pb-1"><span class="label-text">Телефон</span></label>
           <input type="tel" name="customer_phone" id="e-customer-phone" class="input input-bordered w-full">
+        </div>
+        <div class="col-span-2">
+          <label class="label pb-1"><span class="label-text">Email</span></label>
+          <input type="email" name="customer_email" id="e-customer-email" class="input input-bordered w-full" placeholder="example@mail.ru">
         </div>
       </div>
 
@@ -578,12 +587,13 @@
 // Auto-tag mapping
 const AUTO_TAGS = {
   'publication':         ['публикация'],
+  'picture':             ['дизайн'],
   'banner':              ['дизайн'],
   'handout':             ['дизайн'],
   'merch':               ['дизайн'],
   'poster':              ['дизайн'],
   'presentation':        ['дизайн'],
-  'presentation_update': ['дизайн'],
+  'presentation_verify': ['дизайн'],
   'design_verify':       ['дизайн'],
   'postcard':            ['дизайн', 'текст'],
   'newsletter':          ['текст'],
@@ -591,6 +601,8 @@ const AUTO_TAGS = {
   'photo_edit':          ['фото/видео'],
   'photo_video':         ['фото/видео'],
   'mail_check':          ['внутреннее'],
+  'dept_internal':       ['внутреннее'],
+  'dept_external':       ['внешнее'],
 };
 
 function planTypeChanged(prefix, taskType) {
@@ -617,6 +629,7 @@ function openEditPlan(btn) {
   document.getElementById('e-description').value = plan.description || '';
   document.getElementById('e-customer-name').value = plan.customer_name || '';
   document.getElementById('e-customer-phone').value = plan.customer_phone || '';
+  document.getElementById('e-customer-email').value = plan.customer_email || '';
   document.getElementById('e-task-type').value = plan.task_type || '';
   document.getElementById('e-urgency').value = plan.urgency || 'normal';
   document.getElementById('e-group-id').value = plan.group_id || '';

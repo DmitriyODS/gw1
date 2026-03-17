@@ -8,45 +8,52 @@ public_bp = Blueprint('public', __name__)
 
 PLATFORMS = ['Сайт', 'Внешние соц. сети', 'Внутренние соц. сети', 'Афиша']
 TASK_TYPES = [
-    ('publication', 'Публикация'),
-    ('handout', 'Разработка раздатки'),
-    ('banner', 'Разработка баннера'),
-    ('merch', 'Разработка сувенирной продукции'),
-    ('poster', 'Разработка плаката/афиши'),
-    ('presentation', 'Разработка презентации'),
-    ('presentation_update', 'Доработка презентации'),
-    ('design_verify', 'Верификация дизайна'),
-    ('revision', 'Правки по задаче'),
-    ('mail_check', 'Проверка почты'),
-    ('newsletter', 'Рассылки'),
-    ('postcard', 'Открытки'),
-    ('video_edit', 'Монтаж видео'),
-    ('photo_edit', 'Обработка фото'),
-    ('photo_video', 'Фото/видео сопровождение'),
-    ('other', 'Другое'),
+    ('publication',          'Публикация'),
+    ('picture',              'Разработка картинки'),
+    ('handout',              'Разработка раздатки'),
+    ('banner',               'Разработка баннера'),
+    ('poster',               'Разработка плаката/афиши'),
+    ('presentation_verify',  'Верификация презентации'),
+    ('presentation',         'Разработка презентации'),
+    ('design_verify',        'Верификация дизайна'),
+    ('merch',                'Разработка сувенирной продукции'),
+    ('postcard',             'Разработка открыток'),
+    ('newsletter',           'Выполнение корпоративных рассылок'),
+    ('photo_video',          'Фото/видео сопровождение'),
+    ('other',                'Другое'),
+    # Internal-only (not shown on public form):
+    ('mail_check',           'Проверка почты'),
+    ('revision',             'Правки по задаче'),
+    ('video_edit',           'Монтаж видео'),
+    ('photo_edit',           'Обработка фото'),
+    ('dept_internal',        'Внутренняя работа отдела'),
+    ('dept_external',        'Внешняя работа отдела'),
 ]
 
 # Types only available in the internal form — hidden from the public submit form
-_INTERNAL_ONLY = {'mail_check', 'video_edit', 'photo_edit', 'photo_video', 'revision'}
+_INTERNAL_ONLY = {'mail_check', 'revision', 'video_edit', 'photo_edit', 'dept_internal', 'dept_external'}
 EXTERNAL_TASK_TYPES = [(v, l) for v, l in TASK_TYPES if v not in _INTERNAL_ONLY]
 PUB_SUBTYPES = [('news', 'Новость'), ('event', 'Мероприятие')]
 
 # Auto-tags suggested/assigned by task type
 AUTO_TAGS = {
-    'publication':          ['публикация'],
-    'banner':               ['дизайн'],
-    'handout':              ['дизайн'],
-    'merch':                ['дизайн'],
-    'poster':               ['дизайн'],
-    'presentation':         ['дизайн'],
-    'presentation_update':  ['дизайн'],
-    'design_verify':        ['дизайн'],
-    'postcard':             ['дизайн', 'текст'],
-    'newsletter':           ['текст'],
-    'video_edit':           ['фото/видео'],
-    'photo_edit':           ['фото/видео'],
-    'photo_video':          ['фото/видео'],
-    'mail_check':           ['внутреннее'],
+    'publication':         ['публикация'],
+    'picture':             ['дизайн'],
+    'banner':              ['дизайн'],
+    'handout':             ['дизайн'],
+    'merch':               ['дизайн'],
+    'poster':              ['дизайн'],
+    'presentation':        ['дизайн'],
+    'presentation_verify': ['дизайн'],
+    'design_verify':       ['дизайн'],
+    'postcard':            ['дизайн', 'текст'],
+    'newsletter':          ['текст'],
+    'video_edit':          ['фото/видео'],
+    'photo_edit':          ['фото/видео'],
+    'photo_video':         ['фото/видео'],
+    'mail_check':          ['внутреннее'],
+    'dept_internal':       ['внутреннее'],
+    'dept_external':       ['внешнее'],
 }
 
 
@@ -76,14 +83,18 @@ def submit():
             clarification = request.form.get('clarification', '').strip()
             if clarification:
                 dynamic['clarification'] = clarification
+        event_date = request.form.get('event_date', '').strip()
+        if event_date:
+            dynamic['event_date'] = event_date
 
         auto_tags = list(AUTO_TAGS.get(task_type, []))
 
         task = Task(
             title=request.form.get('title', '').strip(),
             description=request.form.get('description', '').strip(),
-            customer_name=request.form.get('customer_name', '').strip(),
-            customer_phone=request.form.get('customer_phone', '').strip(),
+            customer_name=request.form.get('customer_name', '').strip() or None,
+            customer_phone=request.form.get('customer_phone', '').strip() or None,
+            customer_email=request.form.get('customer_email', '').strip() or None,
             department_id=request.form.get('department_id') or None,
             task_type=task_type,
             tags=auto_tags,

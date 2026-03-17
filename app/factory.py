@@ -84,7 +84,9 @@ def create_app():
             ('tasks', 'assigned_to_id',  'INTEGER REFERENCES users(id)'),
             ('tasks', 'parent_task_id',  'INTEGER REFERENCES tasks(id)'),
             ('tasks', 'tags',            'JSON'),
+            ('tasks', 'customer_email',  'VARCHAR(200)'),
             ('plans', 'release_date',    'TIMESTAMP'),
+            ('plans', 'customer_email',  'VARCHAR(200)'),
         ]
         for table, col, col_type in cols:
             try:

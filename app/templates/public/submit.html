@@ -10,22 +10,6 @@
     <style>
         body { background: #f4f6fb; }
 
-        .type-chip {
-            display: flex; align-items: center; gap: 8px;
-            padding: 10px 16px; border-radius: 10px;
-            border: 1.5px solid var(--color-base-300);
-            cursor: pointer; transition: all 0.15s; user-select: none;
-            font-size: 0.875rem; font-weight: 500;
-            background: var(--color-base-100);
-        }
-        .type-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
-        .type-chip.selected {
-            border-color: var(--color-primary);
-            background: color-mix(in oklch, var(--color-primary) 8%, white);
-            color: var(--color-primary);
-        }
-        .type-chip input[type=radio] { display: none; }
-
         .drop-zone {
             border: 2px dashed var(--color-base-300);
             border-radius: 12px; padding: 28px 20px;
@@ -37,6 +21,14 @@
 
         .field-label { font-size: 0.8rem; font-weight: 600; color: var(--color-base-content); opacity: 0.6; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
         .section-divider { height: 1px; background: var(--color-base-200); margin: 28px 0; }
+
+        input[type="datetime-local"] { color-scheme: light; cursor: pointer; }
+        .datetime-wrap { position: relative; display: flex; align-items: center; }
+        .datetime-wrap .dt-icon {
+            position: absolute; left: 12px; pointer-events: none; z-index: 1;
+            color: color-mix(in oklch, var(--color-base-content) 40%, transparent); font-size: 0.9rem;
+        }
+        .datetime-wrap input { padding-left: 2.2rem; flex: 1; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -115,9 +107,14 @@
                                    required placeholder="Иванов Иван Иванович">
                         </div>
                         <div>
-                            <div class="field-label">Телефон <span class="text-error normal-case">*</span></div>
+                            <div class="field-label">Телефон</div>
                             <input type="tel" name="customer_phone" class="input input-bordered w-full rounded-xl"
-                                   required placeholder="+7 (900) 000-00-00">
+                                   placeholder="+7 (900) 000-00-00">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <div class="field-label">Email</div>
+                            <input type="email" name="customer_email" class="input input-bordered w-full rounded-xl"
+                                   placeholder="example@mail.ru">
                         </div>
                     </div>
 
@@ -143,20 +140,25 @@
 
                 <!-- Task type -->
                 <div class="mb-7">
-                    <div class="text-xs font-bold opacity-40 uppercase tracking-widest mb-5">
+                    <div class="text-xs font-bold opacity-40 uppercase tracking-widest mb-3">
                         Тип задачи <span class="text-error normal-case">*</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        {% for val, label in task_types %}
-                        <label class="type-chip" id="chip_{{ val }}" onclick="selectType('{{ val }}')">
-                            <input type="radio" name="_type_radio" id="tr_{{ val }}" value="{{ val }}">
-                            <span>{{ label }}</span>
-                        </label>
-                        {% endfor %}
+
+                    <div class="ss-wrap relative" id="type_wrap" data-blank="— выберите тип задачи —">
+                        <div class="ss-trigger input input-bordered w-full rounded-xl flex items-center gap-2 cursor-pointer select-none" tabindex="0">
+                            <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— выберите тип задачи —</span>
+                            <i class="bi bi-chevron-down text-xs opacity-40"></i>
+                        </div>
+                        <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-base-300 rounded-xl shadow-lg overflow-hidden">
+                            <div class="p-2 border-b border-base-200">
+                                <input type="text" class="ss-search input input-sm input-bordered w-full rounded-xl" placeholder="Поиск…" autocomplete="off">
+                            </div>
+                            <div class="ss-list max-h-52 overflow-y-auto py-1"></div>
+                        </div>
                     </div>
 
                     <!-- Publication sub-block -->
-                    <div class="dynamic-block hidden mt-5" id="block-publication">
+                    <div class="dynamic-block hidden mt-4" id="block-publication">
                         <div class="bg-base-50 rounded-xl border border-base-200 p-4">
                             <div class="mb-4">
                                 <div class="field-label mb-3">Подтип публикации</div>
@@ -183,8 +185,17 @@
                         </div>
                     </div>
 
+                    <!-- Photo/video event date sub-block -->
+                    <div class="dynamic-block hidden mt-4" id="block-photo_video">
+                        <div class="field-label">Дата мероприятия <span class="text-error normal-case">*</span></div>
+                        <div class="datetime-wrap">
+                            <i class="bi bi-camera-video dt-icon"></i>
+                            <input type="datetime-local" name="event_date" class="input input-bordered w-full rounded-xl">
+                        </div>
+                    </div>
+
                     <!-- Other sub-block -->
-                    <div class="dynamic-block hidden mt-5" id="block-other">
+                    <div class="dynamic-block hidden mt-4" id="block-other">
                         <div class="field-label">Уточните задачу</div>
                         <input type="text" name="clarification" class="input input-bordered w-full rounded-xl"
                                placeholder="Опишите подробнее...">
@@ -227,7 +238,7 @@
 
 <script>
     // Searchable select component
-    function initSS(wrapId, data) {
+    function initSS(wrapId, data, onChange) {
         const wrap = document.getElementById(wrapId);
         const trigger = wrap.querySelector('.ss-trigger');
         const valueEl = wrap.querySelector('.ss-value');
@@ -259,10 +270,11 @@
         listEl.addEventListener('click', e => {
             const item = e.target.closest('.ss-item');
             if (!item) return;
-            valueEl.value = item.dataset.value;
+            if (valueEl) valueEl.value = item.dataset.value;
             labelEl.textContent = item.textContent;
             labelEl.classList.remove('opacity-50');
             close();
+            if (onChange) onChange(item.dataset.value);
         });
 
         document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
@@ -273,17 +285,22 @@
         .then(data => initSS('dept_wrap', data.map(d => ({ value: d.id, label: d.name }))))
         .catch(() => {});
 
+    // Task type searchable select
+    const TASK_TYPE_DATA = [
+        {% for val, label in task_types %}
+        { value: {{ val | tojson }}, label: {{ label | tojson }} }{% if not loop.last %},{% endif %}
+
+        {% endfor %}
+    ];
+    initSS('type_wrap', TASK_TYPE_DATA, val => {
+        document.getElementById('task_type_hidden').value = val;
+        selectType(val);
+    });
+
     function selectType(type) {
-        document.getElementById('task_type_hidden').value = type;
         document.querySelectorAll('.dynamic-block').forEach(b => b.classList.add('hidden'));
         const block = document.getElementById('block-' + type);
         if (block) block.classList.remove('hidden');
-        document.querySelectorAll('.type-chip').forEach(c => c.classList.remove('selected'));
-        const chip = document.getElementById('chip_' + type);
-        if (chip) {
-            chip.classList.add('selected');
-            chip.querySelector('input[type=radio]').checked = true;
-        }
     }
 
     // Drag & drop

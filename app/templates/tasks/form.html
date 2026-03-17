@@ -62,6 +62,10 @@
           <input type="tel" name="customer_phone" class="input input-bordered w-full" value="{{ task.customer_phone if task else '' }}">
         </div>
         <div>
+          <label class="label pb-1"><span class="label-text">Email</span></label>
+          <input type="email" name="customer_email" class="input input-bordered w-full" value="{{ task.customer_email if task else '' }}" placeholder="example@mail.ru">
+        </div>
+        <div>
           <label class="label pb-1"><span class="label-text">Подразделение</span></label>
           <div class="ss-wrap relative" id="dept_wrap" data-blank="— не выбрано —">
             <div class="ss-trigger input input-bordered w-full flex items-center gap-2 cursor-pointer select-none" tabindex="0">
@@ -169,6 +173,16 @@
         <input type="text" name="revision_ref" class="input input-bordered w-full"
                placeholder="Номер или название задачи"
                value="{{ task.dynamic_fields.get('revision_ref','') if task else '' }}">
+      </div>
+
+      <!-- Event date block (photo/video) -->
+      <div id="block-event-date" style="display:none">
+        <label class="label pb-1"><span class="label-text font-semibold">Дата мероприятия <span class="text-error">*</span></span></label>
+        <div class="datetime-wrap">
+          <i class="bi bi-camera-video dt-icon"></i>
+          <input type="datetime-local" name="event_date" class="input input-bordered w-full"
+                 value="{{ task.dynamic_fields.get('event_date','') if task else '' }}">
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -329,12 +343,13 @@ Promise.all([
 // Auto-tag mapping (mirrors server-side AUTO_TAGS)
 const AUTO_TAGS = {
   'publication':         ['публикация'],
+  'picture':             ['дизайн'],
   'banner':              ['дизайн'],
   'handout':             ['дизайн'],
   'merch':               ['дизайн'],
   'poster':              ['дизайн'],
   'presentation':        ['дизайн'],
-  'presentation_update': ['дизайн'],
+  'presentation_verify': ['дизайн'],
   'design_verify':       ['дизайн'],
   'postcard':            ['дизайн', 'текст'],
   'newsletter':          ['текст'],
@@ -342,6 +357,8 @@ const AUTO_TAGS = {
   'photo_edit':          ['фото/видео'],
   'photo_video':         ['фото/видео'],
   'mail_check':          ['внутреннее'],
+  'dept_internal':       ['внутреннее'],
+  'dept_external':       ['внешнее'],
 };
 
 const IS_CREATE = {{ 'true' if not task else 'false' }};
@@ -359,8 +376,9 @@ function showDynamic(t) {
   if (t === undefined) t = document.getElementById('task_type_hidden').value;
   document.getElementById('block-publication').style.display = t === 'publication' ? '' : 'none';
   document.getElementById('block-revision').style.display = t === 'revision' ? '' : 'none';
+  document.getElementById('block-event-date').style.display = t === 'photo_video' ? '' : 'none';
   document.getElementById('block-clarification').style.display =
-    (t && t !== 'publication' && t !== 'revision') ? '' : 'none';
+    (t && t !== 'publication' && t !== 'revision' && t !== 'photo_video') ? '' : 'none';
   const tagNotice = document.getElementById('pub-tag-notice');
   if (tagNotice) tagNotice.classList.toggle('hidden', t !== 'publication');
   applyAutoTags(t);

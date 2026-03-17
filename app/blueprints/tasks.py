@@ -152,6 +152,9 @@ def _task_from_form(form, task=None, created_by_id=None):
         clarification = form.get('clarification', '').strip()
         if clarification:
             dynamic['clarification'] = clarification
+    event_date = form.get('event_date', '').strip()
+    if event_date:
+        dynamic['event_date'] = event_date
 
     deadline_str = form.get('deadline')
     deadline = datetime.strptime(deadline_str, '%Y-%m-%dT%H:%M') if deadline_str else None
@@ -163,8 +166,9 @@ def _task_from_form(form, task=None, created_by_id=None):
 
     task.title = form.get('title', '').strip()
     task.description = form.get('description', '').strip()
-    task.customer_name = form.get('customer_name', '').strip()
-    task.customer_phone = form.get('customer_phone', '').strip()
+    task.customer_name = form.get('customer_name', '').strip() or None
+    task.customer_phone = form.get('customer_phone', '').strip() or None
+    task.customer_email = form.get('customer_email', '').strip() or None
     task.department_id = form.get('department_id') or None
     task.task_type = task_type
     task.urgency = form.get('urgency', Urgency.NORMAL)

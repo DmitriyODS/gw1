@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from flask import Flask, redirect, url_for
 from extensions import db, login_manager, csrf
 
@@ -95,6 +96,20 @@ def create_app():
             print('Departments seeded')
 
         print('DB initialized!')
+
+    @app.cli.command('migrate-review')
+    def migrate_review_cmd():
+        """Move all tasks with status=review to done."""
+        from models import Task, TaskStatus
+        now = datetime.now()
+        tasks = Task.query.filter_by(status='review').all()
+        count = len(tasks)
+        for t in tasks:
+            t.status = TaskStatus.DONE
+            if not t.completed_at:
+                t.completed_at = now
+        db.session.commit()
+        print(f'Done: {count} tasks moved from review → done')
 
     @app.cli.command('archive-old')
     def archive_old():

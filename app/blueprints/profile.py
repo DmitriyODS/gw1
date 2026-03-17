@@ -48,11 +48,13 @@ def _pixel_art_svg(seed, size=64):
 def avatar(user_id):
     avatars_dir = os.path.join(current_app.root_path, 'static', 'avatars')
     filename = f'{user_id}.png'
+    no_cache = {'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache'}
     if os.path.exists(os.path.join(avatars_dir, filename)):
-        return send_from_directory(avatars_dir, filename, mimetype='image/png')
+        resp = send_from_directory(avatars_dir, filename, mimetype='image/png')
+        resp.headers.update(no_cache)
+        return resp
     svg = _pixel_art_svg(user_id)
-    return Response(svg, mimetype='image/svg+xml',
-                    headers={'Cache-Control': 'public, max-age=86400'})
+    return Response(svg, mimetype='image/svg+xml', headers=no_cache)
 
 
 # ── Profile page ─────────────────────────────────────────────────────────────

@@ -8,6 +8,22 @@
     <i class="bi bi-archive opacity-60"></i> Архив данных
   </h1>
 
+  <!-- Review migration alert -->
+  {% if review_task_count > 0 %}
+  <div class="alert alert-warning shadow-sm">
+    <i class="bi bi-exclamation-triangle-fill text-lg"></i>
+    <div>
+      <span class="font-semibold">Задач со статусом «На проверке»: {{ review_task_count }}</span>
+      <div class="text-sm opacity-70">Эти задачи скрыты с доски, так как статус «Проверка» удалён. Переведите их в «Готово».</div>
+    </div>
+    <form method="POST" action="{{ url_for('admin.migrate_review') }}" class="ml-auto"
+          onsubmit="return confirm('Перевести все {{ review_task_count }} задач в статус «Готово»?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-warning btn-sm">Перевести в «Готово»</button>
+    </form>
+  </div>
+  {% endif %}
+
   <!-- Stats -->
   <div class="card bg-base-100 shadow-sm">
     <div class="card-body py-4">

@@ -124,11 +124,8 @@
 
                     <div>
                         <div class="field-label">Подразделение</div>
-                        <select name="department_id" class="select select-bordered w-full rounded-xl">
+                        <select name="department_id" id="dept_select" class="select select-bordered w-full rounded-xl">
                             <option value="">— выберите —</option>
-                            {% for d in departments %}
-                            <option value="{{ d.id }}">{{ d.name }}</option>
-                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -220,6 +217,20 @@
 </main>
 
 <script>
+    // Load departments dynamically from server
+    async function loadDepts() {
+        try {
+            const r = await fetch('/api/departments');
+            const data = await r.json();
+            const sel = document.getElementById('dept_select');
+            const cur = sel.value;
+            sel.innerHTML = '<option value="">— выберите —</option>' +
+                data.map(d => `<option value="${d.id}" ${d.id == cur ? 'selected' : ''}>${d.name}</option>`).join('');
+        } catch (_) {}
+    }
+    loadDepts();
+    document.getElementById('dept_select').addEventListener('mousedown', loadDepts);
+
     function selectType(type) {
         document.getElementById('task_type_hidden').value = type;
         document.querySelectorAll('.dynamic-block').forEach(b => b.classList.add('hidden'));

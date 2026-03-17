@@ -31,14 +31,12 @@ class TaskStatus:
         'new': 'Новая',
         'in_progress': 'В работе',
         'paused': 'На паузе',
-        'review': 'Проверка',
         'done': 'Готово',
     }
     COLORS = {
         'new': 'neutral',
         'in_progress': 'primary',
         'paused': 'warning',
-        'review': 'info',
         'done': 'success',
     }
 

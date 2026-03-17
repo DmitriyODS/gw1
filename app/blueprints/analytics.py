@@ -137,7 +137,7 @@ def time_report():
     selected_uid = request.args.get('user_id', type=int)
 
     # Who can see what
-    can_see_all = current_user.can_manage
+    can_see_all = current_user.can_admin
     all_users = User.query.filter_by(is_active=True).order_by(User.full_name).all() if can_see_all else None
     target_uid = (selected_uid if can_see_all else current_user.id)
 

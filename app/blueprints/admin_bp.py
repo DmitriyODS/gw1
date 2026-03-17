@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, Response
 from flask_login import login_required, current_user
 from extensions import db
-from models import User, Department, Role, Task, TaskAttachment, TaskComment, TimeLog
+from models import User, Department, Role, Task, TaskAttachment, TaskComment, TimeLog, TaskStatus
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -194,7 +194,26 @@ def archive():
         'attachments': TaskAttachment.query.count(),
         'departments': Department.query.count(),
     }
-    return render_template('admin/archive.html', stats=stats)
+    review_count = Task.query.filter_by(status='review').count()
+    return render_template('admin/archive.html', stats=stats, review_task_count=review_count)
+
+
+@admin_bp.route('/archive/migrate-review', methods=['POST'])
+@login_required
+def migrate_review():
+    if not current_user.can_admin:
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('admin.archive'))
+    now = datetime.utcnow()
+    tasks = Task.query.filter_by(status='review').all()
+    count = len(tasks)
+    for t in tasks:
+        t.status = TaskStatus.DONE
+        if not t.completed_at:
+            t.completed_at = now
+    db.session.commit()
+    flash(f'Переведено в «Готово»: {count} задач', 'success')
+    return redirect(url_for('admin.archive'))
 
 
 @admin_bp.route('/archive/export')

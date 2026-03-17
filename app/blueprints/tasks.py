@@ -217,18 +217,6 @@ def timer_pause(task_id):
     return jsonify({'success': True, 'task_status': task_status})
 
 
-@tasks_bp.route('/tasks/<int:task_id>/review', methods=['POST'])
-@login_required
-def send_to_review(task_id):
-    task = Task.query.get_or_404(task_id)
-    now = datetime.utcnow()
-    for log in task.active_timers:
-        log.ended_at = now
-    task.status = TaskStatus.REVIEW
-    db.session.commit()
-    flash('Задача отправлена на проверку', 'success')
-    return redirect(url_for('tasks.detail', task_id=task_id))
-
 
 @tasks_bp.route('/tasks/<int:task_id>/done', methods=['POST'])
 @login_required

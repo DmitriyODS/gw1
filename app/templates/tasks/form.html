@@ -28,20 +28,16 @@
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Подразделение</span></label>
-          <select name="department_id" class="select select-bordered w-full">
+          <select name="department_id" id="dept_select" class="select select-bordered w-full"
+                  data-current="{{ task.department_id if task else '' }}">
             <option value="">— не выбрано —</option>
-            {% for d in departments %}
-            <option value="{{ d.id }}" {% if task and task.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
-            {% endfor %}
           </select>
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
-          <select name="task_type" class="select select-bordered w-full" id="task_type" onchange="showDynamic()">
+          <select name="task_type" class="select select-bordered w-full" id="task_type" onchange="showDynamic()"
+                  data-current="{{ task.task_type if task else '' }}">
             <option value="">— выберите —</option>
-            {% for val, label in task_types %}
-            <option value="{{ val }}" {% if task and task.task_type == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
           </select>
         </div>
       </div>
@@ -166,6 +162,30 @@
 {% block scripts %}
 <script>
 const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+// ── Dynamic select loading ──
+async function loadSelect(sel, url, blankLabel) {
+  const current = sel.dataset.current;
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    sel.innerHTML = `<option value="">${blankLabel}</option>` +
+      data.map(d => {
+        const v = d.id ?? d.value;
+        const l = d.name ?? d.label;
+        return `<option value="${v}" ${String(v) === String(current) ? 'selected' : ''}>${l}</option>`;
+      }).join('');
+  } catch (_) {}
+}
+
+const deptSel = document.getElementById('dept_select');
+const typeSel = document.getElementById('task_type');
+// Load immediately so preselected value is shown on edit
+loadSelect(deptSel, '/api/departments', '— не выбрано —');
+loadSelect(typeSel, '/api/task-types', '— выберите —').then(() => showDynamic());
+// Refresh on every open to get latest server data
+deptSel.addEventListener('mousedown', () => loadSelect(deptSel, '/api/departments', '— не выбрано —'));
+typeSel.addEventListener('mousedown', () => loadSelect(typeSel, '/api/task-types', '— выберите —').then(() => showDynamic()));
 
 function showDynamic() {
   const t = document.getElementById('task_type').value;

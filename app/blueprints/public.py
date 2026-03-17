@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, jsonify
 from extensions import db
 from models import Task, Department, TaskAttachment
 
@@ -25,6 +25,19 @@ TASK_TYPES = [
     ('other', 'Другое'),
 ]
 PUB_SUBTYPES = [('news', 'Новость'), ('event', 'Мероприятие')]
+
+
+@public_bp.route('/api/departments')
+def api_departments():
+    """Returns active departments as JSON — used by forms to populate selects dynamically."""
+    depts = Department.query.order_by(Department.name).all()
+    return jsonify([{'id': d.id, 'name': d.name} for d in depts])
+
+
+@public_bp.route('/api/task-types')
+def api_task_types():
+    """Returns task type list as JSON — used by internal form to populate select dynamically."""
+    return jsonify([{'value': v, 'label': l} for v, l in TASK_TYPES])
 
 
 @public_bp.route('/submit', methods=['GET', 'POST'])

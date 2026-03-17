@@ -4,7 +4,7 @@
 <script>(function(){var t=localStorage.getItem('tt-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TV — TaskTime</title>
+<title>TV — Groove Work</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -243,7 +243,7 @@ body:hover .dots { opacity: 1; }
 <div class="topbar">
   <div class="topbar-logo">
     <div class="logo-dot">⏱</div>
-    TaskTime
+    Groove Work <span style="font-size:0.6rem; opacity:0.4; font-weight:400">0.1</span>
   </div>
   <div class="period-btns">
     <button class="period-btn" data-p="week"  onclick="setPeriod('week')">Неделя</button>
@@ -283,9 +283,34 @@ body:hover .dots { opacity: 1; }
         <div class="stat-sub">Переведено в «Готово»</div>
       </div>
     </div>
-    <div class="chart-card" style="flex:1; min-height:0;">
-      <div class="chart-title">Динамика задач — Создано vs Закрыто</div>
-      <div class="chart-wrap"><canvas id="chart-burnup"></canvas></div>
+    <div style="flex:1; min-height:0; display:flex; gap:12px;">
+      <!-- Today stats -->
+      <div class="chart-card" style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:14px;">
+        <div class="chart-title">Сегодня</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; flex:1; align-items:center;">
+          <div style="text-align:center;">
+            <div id="td-created" style="font-size:2.6rem; font-weight:800; color:#3b82f6; line-height:1;">—</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">Создано задач</div>
+          </div>
+          <div style="text-align:center;">
+            <div id="td-done" style="font-size:2.6rem; font-weight:800; color:#22c55e; line-height:1;">—</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">Закрыто</div>
+          </div>
+          <div style="text-align:center;">
+            <div id="td-inprogress" style="font-size:2.6rem; font-weight:800; color:#a855f7; line-height:1;">—</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">В работе сейчас</div>
+          </div>
+          <div style="text-align:center;">
+            <div id="td-overdue" style="font-size:2.6rem; font-weight:800; line-height:1;">—</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">Просрочено</div>
+          </div>
+        </div>
+      </div>
+      <!-- Overdue list -->
+      <div class="chart-card" style="flex:1.4; display:flex; flex-direction:column; min-height:0;">
+        <div class="chart-title">Просроченные задачи</div>
+        <div id="overdue-list" style="flex:1; overflow:hidden; display:flex; flex-direction:column; gap:6px; justify-content:center;"></div>
+      </div>
     </div>
   </div>
 
@@ -445,54 +470,29 @@ function renderSlide0(p) {
   document.getElementById('s1-open').textContent = (bs.in_progress||0) + (bs.paused||0) + (bs.review||0);
   document.getElementById('s1-done').textContent  = bs.done || 0;
 
-  // Burn-up chart (sample if too many points)
-  destroyChart('burnup');
-  let { dates, created, done } = p.burn_up;
-  if (dates.length > 60) {
-    const step = Math.ceil(dates.length / 60);
-    dates   = dates.filter((_,i)   => i % step === 0 || i === dates.length - 1);
-    created = created.filter((_,i) => i % step === 0 || i === created.length - 1);
-    done    = done.filter((_,i)    => i % step === 0 || i === done.length - 1);
+  // Today stats
+  const td = p.today;
+  document.getElementById('td-created').textContent   = td.created;
+  document.getElementById('td-done').textContent      = td.done;
+  document.getElementById('td-inprogress').textContent = td.in_progress;
+  const overdueEl = document.getElementById('td-overdue');
+  overdueEl.textContent = td.overdue;
+  overdueEl.style.color = td.overdue > 0 ? '#ef4444' : '#22c55e';
+
+  // Overdue task list
+  const listEl = document.getElementById('overdue-list');
+  if (!p.overdue_tasks.length) {
+    listEl.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:0.9rem;">Просроченных задач нет 🎉</div>';
+  } else {
+    const urgencyColor = { urgent: '#ef4444', important: '#f97316', normal: '#3b82f6', slow: '#64748b' };
+    listEl.innerHTML = p.overdue_tasks.map(t => `
+      <div style="display:flex; align-items:center; gap:10px; background:var(--surface);
+                  border-radius:8px; padding:8px 12px; border-left:3px solid ${urgencyColor[t.urgency]||'#64748b'};">
+        <div style="flex:1; font-size:0.82rem; color:var(--text); overflow:hidden;
+                    white-space:nowrap; text-overflow:ellipsis;">${t.title}</div>
+        <div style="font-size:0.75rem; color:#ef4444; font-weight:700; flex-shrink:0;">+${t.days} д.</div>
+      </div>`).join('');
   }
-  const cc = chartC();
-  const canvas = document.getElementById('chart-burnup');
-  charts.burnup = new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels: dates,
-      datasets: [
-        {
-          label: 'Создано', data: created,
-          borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.12)',
-          fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2,
-        },
-        {
-          label: 'Закрыто', data: done,
-          borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)',
-          fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2,
-        },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 400 },
-      plugins: {
-        legend: { position: 'top', labels: { color: cc.muted, padding: 14, font: { size: 11 } } },
-        tooltip: { mode: 'index', intersect: false },
-      },
-      scales: {
-        x: {
-          ticks: { color: cc.muted, maxTicksLimit: 10, font: { size: 10 } },
-          grid: { color: cc.grid },
-        },
-        y: {
-          ticks: { color: cc.muted, font: { size: 10 } },
-          grid: { color: cc.grid },
-          beginAtZero: true,
-        },
-      },
-    },
-  });
 }
 
 function renderSlide1(p) {
@@ -553,7 +553,7 @@ function renderSlide2(p) {
 function render() {
   if (!data || !data[period]) return;
   const p = data[period];
-  destroyChart('burnup'); destroyChart('donut');
+  destroyChart('donut');
   renderSlide0(p);
   renderSlide1(p);
   renderSlide2(p);

@@ -324,6 +324,30 @@ def tv_data():
             func.extract('epoch', TimeLog.ended_at - TimeLog.started_at).desc()
         ).first()
 
+        # Today stats
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_created = Task.query.filter(Task.created_at >= today_start).count()
+        today_done = Task.query.filter(
+            Task.completed_at >= today_start,
+            Task.completed_at.isnot(None)
+        ).count()
+        in_progress_count = Task.query.filter(
+            Task.status == TaskStatus.IN_PROGRESS,
+            Task.is_archived == False
+        ).count()
+
+        # Overdue tasks (deadline passed, not done, not archived)
+        overdue_q = Task.query.filter(
+            Task.deadline < now,
+            Task.status != TaskStatus.DONE,
+            Task.is_archived == False
+        ).order_by(Task.deadline.asc()).limit(6).all()
+        overdue_count = Task.query.filter(
+            Task.deadline < now,
+            Task.status != TaskStatus.DONE,
+            Task.is_archived == False
+        ).count()
+
         result[p] = {
             'by_status': s['by_status'],
             'dept_labels': [r[0] for r in s['dept_stats']],
@@ -331,7 +355,20 @@ def tv_data():
             'type_labels': [TYPE_LABELS.get(r[0], r[0] or 'Другое') for r in s['type_stats']],
             'type_values': [r[1] for r in s['type_stats']],
             'total_secs': total_secs,
-            'burn_up': {'dates': dates, 'created': c_series, 'done': d_series},
+            'today': {
+                'created': today_created,
+                'done': today_done,
+                'in_progress': in_progress_count,
+                'overdue': overdue_count,
+            },
+            'overdue_tasks': [
+                {
+                    'title': t.title,
+                    'days': (now.date() - t.deadline.date()).days,
+                    'urgency': t.urgency,
+                }
+                for t in overdue_q
+            ],
             'top_by_tasks': [{'name': r[0], 'cnt': r[1]} for r in top_tasks_q],
             'top_by_time': [{'name': r[0], 'secs': int(r[1])} for r in top_time_q],
             'focus': {

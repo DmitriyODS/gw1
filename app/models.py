@@ -10,12 +10,14 @@ class Role:
     MANAGER = 'manager'
     ADMIN = 'admin'
     STAFF = 'staff'
-    ALL = ['super_admin', 'manager', 'admin', 'staff']
+    TV = 'tv'
+    ALL = ['super_admin', 'manager', 'admin', 'staff', 'tv']
     LABELS = {
         'super_admin': 'Super Admin',
         'manager': 'Руководитель',
         'admin': 'Администратор',
         'staff': 'Сотрудник',
+        'tv': 'ТВ-экран',
     }
 
 
@@ -91,6 +93,10 @@ class User(UserMixin, db.Model):
         return self.role in (Role.SUPER_ADMIN, Role.MANAGER, Role.ADMIN)
 
     @property
+    def is_tv(self):
+        return self.role == Role.TV
+
+    @property
     def active_timer(self):
         return TimeLog.query.filter_by(user_id=self.id, ended_at=None).first()
 
@@ -123,12 +129,15 @@ class Task(db.Model):
     dynamic_fields = db.Column(db.JSON, default=dict)
     is_archived = db.Column(db.Boolean, default=False)
     archived_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     department = db.relationship('Department', backref='tasks')
     created_by = db.relationship('User', backref='created_tasks', foreign_keys=[created_by_id])
     attachments = db.relationship('TaskAttachment', backref='task', lazy='dynamic')
     time_logs = db.relationship('TimeLog', backref='task', lazy='dynamic')
+    comments = db.relationship('TaskComment', backref='task', lazy='dynamic',
+                               order_by='TaskComment.created_at')
 
     @property
     def total_seconds(self):
@@ -160,6 +169,18 @@ class TaskAttachment(db.Model):
     filename = db.Column(db.String(255))
     original_name = db.Column(db.String(255))
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TaskComment(db.Model):
+    __tablename__ = 'task_comments'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    text = db.Column(db.Text)
+    filename = db.Column(db.String(255))
+    original_name = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='comments')
 
 
 class TimeLog(db.Model):

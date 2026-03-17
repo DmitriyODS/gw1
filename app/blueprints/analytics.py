@@ -15,7 +15,14 @@ TYPE_LABELS = {
     'merch': 'Разработка сувенирной продукции',
     'poster': 'Разработка плаката/афиши',
     'presentation': 'Разработка презентации',
+    'presentation_update': 'Доработка презентации',
     'design_verify': 'Верификация дизайна',
+    'mail_check': 'Проверка почты',
+    'newsletter': 'Рассылки',
+    'postcard': 'Открытки',
+    'video_edit': 'Монтаж видео',
+    'photo_edit': 'Обработка фото',
+    'photo_video': 'Фото/видео сопровождение',
     'other': 'Другое',
     None: 'Не указан',
 }
@@ -199,13 +206,41 @@ def time_report():
         user_summary=user_summary)
 
 
+def build_burnup(period):
+    from collections import defaultdict
+    start, _ = get_range(period)
+    now = datetime.utcnow()
+    days_data = defaultdict(lambda: {'created': 0, 'done': 0})
+    for t in Task.query.filter(Task.created_at >= start).all():
+        days_data[t.created_at.date()]['created'] += 1
+    for t in Task.query.filter(
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at.isnot(None)
+    ).all():
+        days_data[t.completed_at.date()]['done'] += 1
+    dates, c_series, d_series = [], [], []
+    c_c = c_d = 0
+    cur = start.date()
+    while cur <= now.date():
+        c_c += days_data[cur]['created']
+        c_d += days_data[cur]['done']
+        dates.append(cur.strftime('%d.%m'))
+        c_series.append(c_c)
+        d_series.append(c_d)
+        cur += timedelta(days=1)
+    return {'dates': dates, 'created': c_series, 'done': d_series}
+
+
 @analytics_bp.route('/analytics')
 @login_required
 def dashboard():
     period = request.args.get('period', 'week')
     stats = build_stats(period)
+    burnup = build_burnup(period)
     return render_template('analytics/dashboard.html', period=period,
-                           TaskStatus=TaskStatus, Urgency=Urgency, **stats)
+                           TaskStatus=TaskStatus, Urgency=Urgency,
+                           burnup=burnup, **stats)
 
 
 @analytics_bp.route('/analytics/tv')
@@ -235,8 +270,13 @@ def tv_data():
         for t in Task.query.filter(Task.created_at >= start).all():
             d = t.created_at.date()
             days_data[d]['created'] += 1
-            if t.status == TaskStatus.DONE:
-                days_data[d]['done'] += 1
+        for t in Task.query.filter(
+            Task.status == TaskStatus.DONE,
+            Task.completed_at >= start,
+            Task.completed_at.isnot(None)
+        ).all():
+            d = t.completed_at.date()
+            days_data[d]['done'] += 1
 
         dates, c_series, d_series = [], [], []
         c_c = c_d = 0

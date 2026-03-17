@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Медиаплан — TaskTime{% endblock %}
+
+{% block head %}
+<style>
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-header { text-align: center; font-size: 0.75rem; font-weight: 700;
+    padding: 6px 4px; color: color-mix(in oklch, var(--color-base-content) 45%, transparent);
+    text-transform: uppercase; letter-spacing: 0.04em; }
+  .cal-cell {
+    min-height: 90px; border-radius: 10px; padding: 6px;
+    background: var(--color-base-100);
+    border: 1px solid var(--color-base-300);
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .cal-cell.today { border-color: var(--color-primary); background: color-mix(in oklch, var(--color-primary) 4%, var(--color-base-100)); }
+  .cal-cell.empty { background: transparent; border-color: transparent; }
+  .cal-day-num { font-size: 0.78rem; font-weight: 700; color: color-mix(in oklch, var(--color-base-content) 50%, transparent); }
+  .cal-cell.today .cal-day-num { color: var(--color-primary); }
+  .pub-chip {
+    display: block; border-radius: 6px; padding: 3px 6px;
+    font-size: 0.7rem; line-height: 1.35; text-decoration: none;
+    transition: opacity 0.15s; overflow: hidden;
+  }
+  .pub-chip:hover { opacity: 0.8; }
+  .pub-chip-new       { background: color-mix(in oklch, var(--color-neutral) 15%, var(--color-base-100)); color: var(--color-base-content); }
+  .pub-chip-in_progress { background: color-mix(in oklch, var(--color-primary) 15%, var(--color-base-100)); color: var(--color-primary); }
+  .pub-chip-paused    { background: color-mix(in oklch, var(--color-warning) 18%, var(--color-base-100)); color: color-mix(in oklch, var(--color-warning) 80%, var(--color-base-content)); }
+  .pub-chip-review    { background: color-mix(in oklch, var(--color-info) 15%, var(--color-base-100)); color: var(--color-info); }
+  .pub-chip-done      { background: color-mix(in oklch, var(--color-success) 15%, var(--color-base-100)); color: var(--color-success); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+  <div class="flex items-center gap-3">
+    <h1 class="text-lg font-bold flex items-center gap-2">
+      <i class="bi bi-calendar3 opacity-60"></i> Медиаплан
+    </h1>
+    <div class="flex items-center gap-1">
+      <a href="{{ url_for('media_plan.index', month=prev_month) }}" class="btn btn-ghost btn-sm btn-circle">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+      <span class="font-semibold text-sm min-w-32 text-center">{{ month_label }}</span>
+      <a href="{{ url_for('media_plan.index', month=next_month) }}" class="btn btn-ghost btn-sm btn-circle">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </div>
+  </div>
+  <a href="{{ url_for('tasks.create') }}?type=publication" class="btn btn-primary btn-sm gap-1">
+    <i class="bi bi-plus-lg"></i> Создать публикацию
+  </a>
+</div>
+
+<!-- Calendar -->
+<div class="cal-grid mb-2">
+  {% for day_name in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] %}
+  <div class="cal-header">{{ day_name }}</div>
+  {% endfor %}
+</div>
+
+<div class="cal-grid mb-4">
+  {% for week in cal %}
+  {% for day in week %}
+  {% if day == 0 %}
+  <div class="cal-cell empty"></div>
+  {% else %}
+  {% set is_today = (today.day == day and today.month == current_month.month and today.year == current_month.year) %}
+  <div class="cal-cell {% if is_today %}today{% endif %}">
+    <div class="cal-day-num">{{ day }}</div>
+    {% for task in by_day.get(day, []) %}
+    <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+       class="pub-chip pub-chip-{{ task.status }}" title="{{ task.title }}">
+      {% set subtype = task.dynamic_fields.get('subtype') if task.dynamic_fields else None %}
+      {% if subtype %}<span class="opacity-60">{{ PUB_SUBTYPE_LABELS.get(subtype, subtype) }} · </span>{% endif %}
+      {{ task.title | truncate(40, true, '…') }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+  {% endfor %}
+</div>
+
+<!-- Tasks without deadline -->
+{% if tasks_no_deadline %}
+<div class="card bg-base-100 shadow-sm">
+  <div class="px-4 py-2 border-b border-base-300">
+    <span class="font-semibold text-sm"><i class="bi bi-calendar-x"></i> Без даты публикации ({{ tasks_no_deadline|length }})</span>
+  </div>
+  <div class="divide-y divide-base-300">
+    {% for task in tasks_no_deadline %}
+    <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+       class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-200 transition-colors">
+      <span class="badge badge-{{ TaskStatus.COLORS[task.status] }} badge-sm shrink-0">
+        {{ TaskStatus.LABELS[task.status] }}
+      </span>
+      <span class="text-sm flex-1 truncate">{{ task.title }}</span>
+      {% set platforms = task.dynamic_fields.get('platforms', []) if task.dynamic_fields else [] %}
+      {% for p in platforms %}
+      <i class="bi {{ PLATFORM_ICONS.get(p, 'bi-dot') }} text-base-content/40 text-sm" title="{{ p }}"></i>
+      {% endfor %}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Legend -->
+<div class="flex flex-wrap gap-3 mt-4 text-xs text-base-content/50">
+  {% for status, label in [('new','Новая'),('in_progress','В работе'),('paused','На паузе'),('review','Проверка'),('done','Готово')] %}
+  <span class="flex items-center gap-1.5">
+    <span class="inline-block w-3 h-3 rounded" style="background: color-mix(in oklch, var(--color-{{ TaskStatus.COLORS[status] }}) 18%, var(--color-base-100)); border: 1px solid color-mix(in oklch, var(--color-{{ TaskStatus.COLORS[status] }}) 40%, transparent)"></span>
+    {{ label }}
+  </span>
+  {% endfor %}
+</div>
+{% endblock %}

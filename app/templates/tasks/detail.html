@@ -16,10 +16,10 @@
         </div>
       </div>
       <div class="flex gap-2 shrink-0">
-        {% if current_user.can_admin %}
         <a href="{{ url_for('tasks.edit', task_id=task.id) }}" class="btn btn-outline btn-sm">
           <i class="bi bi-pencil"></i>
         </a>
+        {% if current_user.can_admin %}
         <button onclick="document.getElementById('deleteModal').showModal()" class="btn btn-outline btn-error btn-sm">
           <i class="bi bi-trash"></i>
         </button>
@@ -119,7 +119,7 @@
           {% if task.task_type %}
           <div>
             <div class="text-xs text-base-content/60">Тип</div>
-            <div>{{ {'publication':'Публикация','handout':'Разработка раздатки','banner':'Разработка баннера','merch':'Разработка сувенирной продукции','poster':'Разработка плаката/афиши','presentation':'Разработка презентации','design_verify':'Верификация дизайна','other':'Другое'}.get(task.task_type, task.task_type) }}</div>
+            <div>{{ {'publication':'Публикация','handout':'Разработка раздатки','banner':'Разработка баннера','merch':'Разработка сувенирной продукции','poster':'Разработка плаката/афиши','presentation':'Разработка презентации','presentation_update':'Доработка презентации','design_verify':'Верификация дизайна','mail_check':'Проверка почты','newsletter':'Рассылки','postcard':'Открытки','video_edit':'Монтаж видео','photo_edit':'Обработка фото','photo_video':'Фото/видео сопровождение','other':'Другое'}.get(task.task_type, task.task_type) }}</div>
           </div>
           {% endif %}
           {% if task.created_by %}
@@ -184,6 +184,61 @@
       </ul>
     </div>
     {% endif %}
+    <!-- Comments -->
+    <div class="card bg-base-100 shadow-sm mb-4">
+      <div class="px-4 py-2 border-b border-base-300">
+        <span class="font-semibold text-sm"><i class="bi bi-chat-left-text"></i> Комментарии
+          {% set ccount = task.comments.count() %}
+          {% if ccount %}<span class="badge badge-neutral badge-sm ml-1">{{ ccount }}</span>{% endif %}
+        </span>
+      </div>
+      <div class="divide-y divide-base-300">
+        {% for comment in task.comments.all() %}
+        <div class="px-4 py-3 flex gap-3" id="comment-{{ comment.id }}">
+          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+            {{ comment.user.full_name[:1] }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold">{{ comment.user.full_name }}</span>
+              <span class="text-xs text-base-content/50">{{ comment.created_at | timeformat }}</span>
+            </div>
+            {% if comment.text %}<p class="text-sm whitespace-pre-wrap">{{ comment.text }}</p>{% endif %}
+            {% if comment.filename %}
+            <a href="{{ url_for('tasks.uploaded_file', filename=comment.filename) }}" target="_blank"
+               class="inline-flex items-center gap-1 text-xs text-primary mt-1 hover:underline">
+              <i class="bi bi-paperclip"></i> {{ comment.original_name }}
+            </a>
+            {% endif %}
+          </div>
+          {% if comment.user_id == current_user.id or current_user.can_admin %}
+          <button type="button" class="btn btn-ghost btn-xs text-error self-start"
+                  onclick="deleteComment({{ comment.id }}, {{ task.id }})">
+            <i class="bi bi-x"></i>
+          </button>
+          {% endif %}
+        </div>
+        {% else %}
+        <p class="text-base-content/50 text-center py-4 text-sm">Нет комментариев</p>
+        {% endfor %}
+      </div>
+      <div class="px-4 py-3 border-t border-base-300">
+        <form method="post" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
+              enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <textarea name="text" class="textarea textarea-bordered w-full text-sm mb-2" rows="2"
+                    placeholder="Написать комментарий..."></textarea>
+          <div class="flex items-center gap-2">
+            <label class="btn btn-ghost btn-sm gap-1 cursor-pointer">
+              <i class="bi bi-paperclip"></i> Файл
+              <input type="file" name="file" class="hidden">
+            </label>
+            <span id="comment-file-name" class="text-xs text-base-content/50 flex-1 truncate"></span>
+            <button type="submit" class="btn btn-primary btn-sm">Отправить</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <!-- Time Logs -->
@@ -326,5 +381,20 @@ function deleteAtt(attId, taskId) {
     if (d.success) document.getElementById('att-' + attId).remove();
   });
 }
+
+function deleteComment(commentId, taskId) {
+  if (!confirm('Удалить комментарий?')) return;
+  fetch(`/tasks/${taskId}/comments/${commentId}/delete`, {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}
+  }).then(r => r.json()).then(d => {
+    if (d.success) document.getElementById('comment-' + commentId).remove();
+  });
+}
+
+// Show selected file name in comment form
+document.querySelector('input[name="file"]')?.addEventListener('change', function() {
+  const label = document.getElementById('comment-file-name');
+  if (label) label.textContent = this.files[0]?.name || '';
+});
 </script>
 {% endblock %}

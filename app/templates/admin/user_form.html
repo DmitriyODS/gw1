@@ -36,7 +36,7 @@
       <div>
         <label class="label pb-1"><span class="label-text font-medium">Роль</span></label>
         <select name="role" class="select select-bordered w-full">
-          {% for val in ['manager','admin','staff'] %}
+          {% for val in ['manager','admin','staff','tv'] %}
           <option value="{{ val }}" {% if user and user.role == val %}selected{% elif not user and val == 'staff' %}selected{% endif %}>
             {{ Role.LABELS.get(val, val) }}
           </option>

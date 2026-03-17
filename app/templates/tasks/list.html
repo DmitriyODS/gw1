@@ -170,11 +170,9 @@
   <h1 class="text-lg font-bold flex items-center gap-2">
     <i class="bi bi-kanban opacity-60"></i> Задачи
   </h1>
-  {% if current_user.can_admin %}
   <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm rounded-xl gap-1.5">
     <i class="bi bi-plus-lg"></i> Создать
   </a>
-  {% endif %}
 </div>
 
 <!-- Mobile column tabs (hidden on desktop) -->
@@ -218,7 +216,8 @@
       <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
          class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %}"
          data-id="{{ task.id }}" data-status="{{ task.status }}"
-         {% if current_user.can_manage %}draggable="true"{% endif %}>
+         draggable="true"
+         >
 
         <!-- Top row: urgency + id -->
         <div class="flex items-center justify-between">
@@ -404,7 +403,6 @@ function updateCount(body) {
 }
 
 // ── Drag & drop ──
-{% if current_user.can_manage %}
 document.querySelectorAll('.task-card[draggable]').forEach(card => {
   card.addEventListener('dragstart', e => {
     dragCard = card; originBody = card.closest('.kanban-body');
@@ -454,6 +452,5 @@ document.querySelectorAll('.kanban-body').forEach(body => {
     });
   });
 });
-{% endif %}
 </script>
 {% endblock %}

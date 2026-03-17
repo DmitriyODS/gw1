@@ -22,12 +22,16 @@ def create_app():
     from blueprints.tasks import tasks_bp
     from blueprints.analytics import analytics_bp
     from blueprints.admin_bp import admin_bp
+    from blueprints.profile import profile_bp
+    from blueprints.media_plan import media_plan_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(tasks_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(profile_bp)
+    app.register_blueprint(media_plan_bp)
 
     @app.route('/')
     def index():
@@ -52,6 +56,21 @@ def create_app():
         if not dt:
             return ''
         return dt.strftime('%d.%m.%Y %H:%M')
+
+    @app.cli.command('migrate-db')
+    def migrate_db():
+        """Add new columns to existing tables without dropping data."""
+        with db.engine.connect() as conn:
+            # Add completed_at to tasks if not exists
+            try:
+                conn.execute(db.text('ALTER TABLE tasks ADD COLUMN completed_at TIMESTAMP'))
+                conn.commit()
+                print('Added tasks.completed_at')
+            except Exception:
+                print('tasks.completed_at already exists')
+        # Create new tables
+        db.create_all()
+        print('Migration complete')
 
     @app.cli.command('init-db')
     def init_db():

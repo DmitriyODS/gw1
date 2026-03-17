@@ -1,11 +1,12 @@
 import io
 import os
+import uuid
 import zipfile
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file, current_app
 from flask_login import login_required, current_user
 from extensions import db
-from models import Task, Department, TaskStatus, Urgency, TimeLog
+from models import Task, Department, TaskStatus, Urgency, TimeLog, TaskComment
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES
 
 tasks_bp = Blueprint('tasks', __name__)
@@ -52,9 +53,6 @@ def detail(task_id):
 @tasks_bp.route('/tasks/create', methods=['GET', 'POST'])
 @login_required
 def create():
-    if not current_user.can_admin:
-        flash('Недостаточно прав для создания задач', 'danger')
-        return redirect(url_for('tasks.list_tasks'))
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
         task = _task_from_form(request.form, created_by_id=current_user.id)
@@ -73,9 +71,6 @@ def create():
 @login_required
 def edit(task_id):
     task = Task.query.get_or_404(task_id)
-    if not current_user.can_admin:
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('tasks.detail', task_id=task_id))
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
         updated = _task_from_form(request.form, task=task)
@@ -122,8 +117,6 @@ def _task_from_form(form, task=None, created_by_id=None):
 @tasks_bp.route('/tasks/<int:task_id>/move', methods=['POST'])
 @login_required
 def move_task(task_id):
-    if not current_user.can_manage:
-        return jsonify({'error': 'Нет прав'}), 403
     task = Task.query.get_or_404(task_id)
     status = request.json.get('status')
     if status not in TaskStatus.LABELS:
@@ -242,6 +235,7 @@ def mark_done(task_id):
     for log in task.active_timers:
         log.ended_at = now
     task.status = TaskStatus.DONE
+    task.completed_at = now
     db.session.commit()
     flash('Задача закрыта', 'success')
     return redirect(url_for('tasks.detail', task_id=task_id))
@@ -282,6 +276,42 @@ def delete_attachment(task_id, att_id):
     if os.path.exists(path):
         os.remove(path)
     db.session.delete(att)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@tasks_bp.route('/tasks/<int:task_id>/comments', methods=['POST'])
+@login_required
+def add_comment(task_id):
+    task = Task.query.get_or_404(task_id)
+    text = request.form.get('text', '').strip()
+    f = request.files.get('file')
+    if not text and (not f or not f.filename):
+        flash('Комментарий не может быть пустым', 'warning')
+        return redirect(url_for('tasks.detail', task_id=task_id))
+    comment = TaskComment(task_id=task_id, user_id=current_user.id, text=text or None)
+    if f and f.filename:
+        ext = os.path.splitext(f.filename)[1].lower()
+        fname = f'{uuid.uuid4().hex}{ext}'
+        f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
+        comment.filename = fname
+        comment.original_name = f.filename
+    db.session.add(comment)
+    db.session.commit()
+    return redirect(url_for('tasks.detail', task_id=task_id))
+
+
+@tasks_bp.route('/tasks/<int:task_id>/comments/<int:comment_id>/delete', methods=['POST'])
+@login_required
+def delete_comment(task_id, comment_id):
+    comment = TaskComment.query.filter_by(id=comment_id, task_id=task_id).first_or_404()
+    if comment.user_id != current_user.id and not current_user.can_admin:
+        return jsonify({'error': 'Нет прав'}), 403
+    if comment.filename:
+        path = os.path.join(current_app.config['UPLOAD_FOLDER'], comment.filename)
+        if os.path.exists(path):
+            os.remove(path)
+    db.session.delete(comment)
     db.session.commit()
     return jsonify({'success': True})
 

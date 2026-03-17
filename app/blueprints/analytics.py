@@ -176,9 +176,10 @@ def time_report():
         q = q.filter(TimeLog.user_id == current_user.id)
     logs = q.order_by(TimeLog.started_at.desc()).all()
 
-    # Group logs by date then by user
+    # Group logs by date and by task
     from collections import defaultdict
     by_date = defaultdict(list)
+    by_task = {}  # task_id -> {task_id, task_title, secs, status}
     for log, task, user in logs:
         date_key = log.started_at.date()
         end = log.ended_at or now
@@ -189,6 +190,11 @@ def time_report():
             'started': log.started_at, 'ended': log.ended_at,
             'secs': secs, 'active': log.ended_at is None,
         })
+        if task.id not in by_task:
+            by_task[task.id] = {'task_id': task.id, 'task_title': task.title,
+                                'status': task.status, 'secs': 0}
+        by_task[task.id]['secs'] += secs
+    by_task_list = sorted(by_task.values(), key=lambda x: x['secs'], reverse=True)
 
     # Per-user summary for managers (when no specific user selected)
     user_summary = []
@@ -203,7 +209,7 @@ def time_report():
         period=period, target_uid=target_uid,
         all_users=all_users, can_see_all=can_see_all,
         totals=totals, by_date=dict(sorted(by_date.items(), reverse=True)),
-        user_summary=user_summary)
+        user_summary=user_summary, by_task_list=by_task_list)
 
 
 def build_burnup(period):

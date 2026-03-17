@@ -1,0 +1,65 @@
+{% set active = task.active_timers %}
+<a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+   class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %}"
+   data-id="{{ task.id }}" data-status="{{ task.status }}"
+   draggable="true">
+
+  <div class="flex items-center justify-between">
+    <span class="badge badge-{{ Urgency.COLORS[task.urgency] }} badge-sm text-xs">
+      {{ Urgency.LABELS[task.urgency] }}
+    </span>
+    <span class="text-xs opacity-30 font-mono">#{{ task.id }}</span>
+  </div>
+
+  <div class="task-title">{{ task.title }}</div>
+
+  <div class="task-meta">
+    {% if task.is_overdue %}
+    <span class="task-meta-item font-semibold" style="color: var(--color-error)">
+      <i class="bi bi-exclamation-triangle-fill"></i> Просрочено
+    </span>
+    {% endif %}
+    {% if task.department %}
+    <span class="task-meta-item">
+      <i class="bi bi-building"></i> {{ task.department.name }}
+    </span>
+    {% endif %}
+    {% if task.customer_name %}
+    <span class="task-meta-item">
+      <i class="bi bi-person"></i> {{ task.customer_name }}
+    </span>
+    {% endif %}
+    {% if task.deadline %}
+    <span class="task-meta-item {% if task.is_overdue %}text-error font-semibold{% endif %}">
+      <i class="bi bi-calendar-event"></i> {{ task.deadline.strftime('%d.%m %H:%M') }}
+    </span>
+    {% endif %}
+  </div>
+
+  <div class="card-footer">
+    <div class="flex items-center gap-2">
+      {% if task.total_seconds > 0 %}
+      <span class="task-meta-item task-meta">
+        <i class="bi bi-clock"></i> {{ task.total_seconds | duration }}
+      </span>
+      {% endif %}
+      {% if active %}
+      <span class="badge badge-success badge-sm text-xs"
+            title="{{ active | map(attribute='user') | map(attribute='full_name') | join(', ') }}">
+        <i class="bi bi-play-fill"></i> {{ active | length }}
+      </span>
+      {% endif %}
+    </div>
+
+    {% if task.id in my_active_task_ids %}
+    <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}">
+      <i class="bi bi-pause-fill"></i> Пауза
+    </button>
+    {% elif task.status != 'done' %}
+    <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}">
+      <i class="bi bi-play-fill"></i> В работу
+    </button>
+    {% endif %}
+  </div>
+
+</a>

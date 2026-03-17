@@ -87,6 +87,45 @@
 </div>
 {% endif %}
 
+<!-- Tasks worked on -->
+{% if by_task_list %}
+<div class="card bg-base-100 shadow-sm mb-4">
+  <div class="px-4 py-2 border-b border-base-300 font-semibold text-sm">
+    <i class="bi bi-card-checklist"></i> Задачи за период
+    <span class="badge badge-neutral badge-sm ml-1">{{ by_task_list | length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Задача</th>
+          <th style="width:100px">Статус</th>
+          <th class="text-right" style="width:110px">Время</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in by_task_list %}
+        <tr class="hover">
+          <td>
+            <a href="{{ url_for('tasks.detail', task_id=t.task_id) }}"
+               class="no-underline hover:underline text-sm">
+              #{{ t.task_id }} {{ t.task_title }}
+            </a>
+          </td>
+          <td>
+            {% set sc = {'new':'neutral','in_progress':'primary','paused':'warning','review':'info','done':'success'} %}
+            {% set sl = {'new':'Новая','in_progress':'В работе','paused':'На паузе','review':'Проверка','done':'Готово'} %}
+            <span class="badge badge-{{ sc.get(t.status, 'neutral') }} badge-sm">{{ sl.get(t.status, t.status) }}</span>
+          </td>
+          <td class="text-right font-semibold secs-cell">{{ fmt(t.secs) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Detailed log table -->
 {% if by_date %}
 <div class="card bg-base-100 shadow-sm">

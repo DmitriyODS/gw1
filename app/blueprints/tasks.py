@@ -144,8 +144,8 @@ def move_task(task_id):
 @login_required
 def timer_start(task_id):
     task = Task.query.get_or_404(task_id)
-    if task.status in (TaskStatus.DONE, TaskStatus.REVIEW):
-        return jsonify({'error': 'Нельзя запустить таймер в текущем статусе'}), 400
+    if task.status == TaskStatus.DONE:
+        return jsonify({'error': 'Нельзя запустить таймер для завершённой задачи'}), 400
 
     # Already running on this task for this user
     my_active_here = TimeLog.query.filter_by(
@@ -233,9 +233,6 @@ def send_to_review(task_id):
 @tasks_bp.route('/tasks/<int:task_id>/done', methods=['POST'])
 @login_required
 def mark_done(task_id):
-    if not current_user.can_manage:
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('tasks.detail', task_id=task_id))
     task = Task.query.get_or_404(task_id)
     now = datetime.utcnow()
     for log in task.active_timers:
@@ -320,6 +317,42 @@ def delete_comment(task_id, comment_id):
     db.session.delete(comment)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@tasks_bp.route('/tasks/<int:task_id>/card')
+@login_required
+def task_card(task_id):
+    """Returns the rendered HTML for a single kanban card."""
+    task = Task.query.get_or_404(task_id)
+    my_active_task_ids = {
+        log.task_id for log in
+        TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
+    }
+    return render_template('tasks/_card.html', task=task,
+                           Urgency=Urgency, TaskStatus=TaskStatus,
+                           my_active_task_ids=my_active_task_ids)
+
+
+@tasks_bp.route('/tasks/my-timer')
+@login_required
+def my_timer():
+    """Returns current user's active timer, if any."""
+    active = current_user.active_timer
+    if not active:
+        return jsonify({'active': False})
+    return jsonify({
+        'active': True,
+        'task_id': active.task_id,
+        'started_at': active.started_at.isoformat(),
+    })
+
+
+@tasks_bp.route('/tasks/poll')
+@login_required
+def poll_tasks():
+    """Lightweight endpoint: returns {task_id: status} for all active tasks."""
+    tasks = Task.query.filter_by(is_archived=False).with_entities(Task.id, Task.status).all()
+    return jsonify({str(t.id): t.status for t in tasks})
 
 
 @tasks_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])

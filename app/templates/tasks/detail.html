@@ -54,15 +54,8 @@
             <button class="btn btn-warning btn-sm" onclick="handlePause({{ task.id }})">
               <i class="bi bi-pause-fill"></i> Пауза
             </button>
-            <button class="btn btn-info btn-sm" onclick="submitReview({{ task.id }})">
-              <i class="bi bi-check2"></i> На проверку
-            </button>
-            {% elif task.status == TaskStatus.IN_PROGRESS %}
-            <button class="btn btn-info btn-sm" onclick="submitReview({{ task.id }})">
-              <i class="bi bi-check2"></i> На проверку
-            </button>
             {% endif %}
-            {% if task.status == TaskStatus.REVIEW and current_user.can_manage %}
+            {% if task.status != TaskStatus.DONE %}
             <form method="post" action="{{ url_for('tasks.mark_done', task_id=task.id) }}" class="inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-success btn-sm">
@@ -377,16 +370,6 @@ function handlePause(taskId) {
   post(`/tasks/${taskId}/timer/pause`).then(() => location.reload());
 }
 
-function submitReview(taskId) {
-  if (confirm('Отправить задачу на проверку?')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/tasks/${taskId}/review`;
-    form.innerHTML = `<input name="csrf_token" value="${CSRF}">`;
-    document.body.appendChild(form);
-    form.submit();
-  }
-}
 
 function deleteAtt(attId, taskId) {
   if (!confirm('Удалить файл?')) return;

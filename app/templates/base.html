@@ -207,12 +207,14 @@
   <button id="sidebar-toggle" onclick="openSidebar()"><i class="bi bi-list"></i></button>
   <div class="flex-1"></div>
   {% set at = current_user.active_timer %}
-  {% if at %}
-  <a class="timer-badge" href="{{ url_for('tasks.detail', task_id=at.task_id) }}">
+  <a id="topbar-timer"
+     class="timer-badge"
+     href="{{ url_for('tasks.detail', task_id=at.task_id) if at else '#' }}"
+     style="{{ '' if at else 'display:none' }}">
     <span class="timer-dot"></span>
-    <span id="nav-active-timer" data-started="{{ at.started_at.isoformat() }}">00:00:00</span>
+    <span id="nav-active-timer"
+          data-started="{{ at.started_at.isoformat() if at else '' }}">00:00:00</span>
   </a>
-  {% endif %}
   <button class="icon-btn" onclick="toggleTheme()">
     <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
   </button>
@@ -275,17 +277,62 @@ function closeSidebar() {
   document.body.style.overflow = '';
 }
 
-const navTimer = document.getElementById('nav-active-timer');
-if (navTimer) {
-  const started = new Date(navTimer.dataset.started + 'Z');
-  function updateTimer() {
-    const secs = Math.floor((Date.now() - started) / 1000);
-    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
-    navTimer.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  }
-  updateTimer();
-  setInterval(updateTimer, 1000);
+let _topbarTimerInterval = null;
+
+function _tickTopbar(startedDate) {
+  const el = document.getElementById('nav-active-timer');
+  if (!el) return;
+  const secs = Math.floor((Date.now() - startedDate) / 1000);
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
+
+function _applyTopbarTimer(taskId, startedAtISO) {
+  const badge = document.getElementById('topbar-timer');
+  const el = document.getElementById('nav-active-timer');
+  if (!badge || !el) return;
+  const iso = startedAtISO + (startedAtISO.includes('Z') ? '' : 'Z');
+  const started = new Date(iso);
+  // Only restart interval if start time changed
+  if (badge.dataset.activeStart !== iso) {
+    badge.dataset.activeStart = iso;
+    badge.href = `/tasks/${taskId}`;
+    badge.style.display = '';
+    clearInterval(_topbarTimerInterval);
+    _tickTopbar(started);
+    _topbarTimerInterval = setInterval(() => _tickTopbar(started), 1000);
+  }
+}
+
+function _clearTopbarTimer() {
+  clearInterval(_topbarTimerInterval);
+  _topbarTimerInterval = null;
+  const badge = document.getElementById('topbar-timer');
+  if (badge) { badge.style.display = 'none'; badge.dataset.activeStart = ''; }
+}
+
+// Fetch server state and sync topbar — call after any timer-related action
+async function syncTopbarTimer() {
+  try {
+    const r = await fetch('/tasks/my-timer');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.active) _applyTopbarTimer(d.task_id, d.started_at);
+    else _clearTopbarTimer();
+  } catch (_) {}
+}
+
+// Auto-start if timer was already running on page load
+(function() {
+  const el = document.getElementById('nav-active-timer');
+  const badge = document.getElementById('topbar-timer');
+  if (el && badge && el.dataset.started) {
+    _applyTopbarTimer(
+      badge.href.match(/\/tasks\/(\d+)/)?.[1] || 0,
+      el.dataset.started
+    );
+  }
+})();
 </script>
 {% block scripts %}{% endblock %}
 </body>

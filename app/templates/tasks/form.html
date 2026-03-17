@@ -28,17 +28,35 @@
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Подразделение</span></label>
-          <select name="department_id" id="dept_select" class="select select-bordered w-full"
-                  data-current="{{ task.department_id if task else '' }}">
-            <option value="">— не выбрано —</option>
-          </select>
+          <div class="ss-wrap relative" id="dept_wrap" data-blank="— не выбрано —">
+            <div class="ss-trigger input input-bordered w-full flex items-center gap-2 cursor-pointer select-none" tabindex="0">
+              <span class="ss-label flex-1 text-sm opacity-50">— не выбрано —</span>
+              <i class="bi bi-chevron-down text-xs opacity-40"></i>
+            </div>
+            <input type="hidden" name="department_id" class="ss-value" data-current="{{ task.department_id if task else '' }}">
+            <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg overflow-hidden">
+              <div class="p-2 border-b border-base-200">
+                <input type="text" class="ss-search input input-sm input-bordered w-full" placeholder="Поиск…" autocomplete="off">
+              </div>
+              <div class="ss-list max-h-44 overflow-y-auto py-1"></div>
+            </div>
+          </div>
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
-          <select name="task_type" class="select select-bordered w-full" id="task_type" onchange="showDynamic()"
-                  data-current="{{ task.task_type if task else '' }}">
-            <option value="">— выберите —</option>
-          </select>
+          <div class="ss-wrap relative" id="type_wrap" data-blank="— выберите —">
+            <div class="ss-trigger input input-bordered w-full flex items-center gap-2 cursor-pointer select-none" tabindex="0">
+              <span class="ss-label flex-1 text-sm opacity-50">— выберите —</span>
+              <i class="bi bi-chevron-down text-xs opacity-40"></i>
+            </div>
+            <input type="hidden" name="task_type" id="task_type_hidden" class="ss-value" data-current="{{ task.task_type if task else '' }}">
+            <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg overflow-hidden">
+              <div class="p-2 border-b border-base-200">
+                <input type="text" class="ss-search input input-sm input-bordered w-full" placeholder="Поиск…" autocomplete="off">
+              </div>
+              <div class="ss-list max-h-44 overflow-y-auto py-1"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -87,6 +105,14 @@
         <label class="label pb-1"><span class="label-text">Уточнение</span></label>
         <input type="text" name="clarification" class="input input-bordered w-full"
                value="{{ task.dynamic_fields.get('clarification','') if task else '' }}">
+      </div>
+
+      <!-- Revision block -->
+      <div id="block-revision" style="display:none">
+        <label class="label pb-1"><span class="label-text">Задача, по которой нужны правки</span></label>
+        <input type="text" name="revision_ref" class="input input-bordered w-full"
+               placeholder="Номер или название задачи"
+               value="{{ task.dynamic_fields.get('revision_ref','') if task else '' }}">
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -163,34 +189,78 @@
 <script>
 const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
-// ── Dynamic select loading ──
-async function loadSelect(sel, url, blankLabel) {
-  const current = sel.dataset.current;
-  try {
-    const r = await fetch(url);
-    const data = await r.json();
-    sel.innerHTML = `<option value="">${blankLabel}</option>` +
-      data.map(d => {
-        const v = d.id ?? d.value;
-        const l = d.name ?? d.label;
-        return `<option value="${v}" ${String(v) === String(current) ? 'selected' : ''}>${l}</option>`;
-      }).join('');
-  } catch (_) {}
+// ── Searchable select component ──
+function initSS(wrapId, data, onChange) {
+  const wrap = document.getElementById(wrapId);
+  const trigger = wrap.querySelector('.ss-trigger');
+  const valueEl = wrap.querySelector('.ss-value');
+  const dropdown = wrap.querySelector('.ss-dropdown');
+  const searchEl = wrap.querySelector('.ss-search');
+  const listEl = wrap.querySelector('.ss-list');
+  const labelEl = wrap.querySelector('.ss-label');
+  const blank = wrap.dataset.blank || '— выберите —';
+
+  // Restore pre-selected value (edit mode)
+  const initVal = valueEl.dataset.current;
+  if (initVal) {
+    const found = data.find(d => String(d.value) === String(initVal));
+    if (found) { labelEl.textContent = found.label; labelEl.classList.remove('opacity-50'); valueEl.value = found.value; }
+  }
+
+  function renderList(q) {
+    const items = data.filter(d => !q || d.label.toLowerCase().includes(q.toLowerCase()));
+    listEl.innerHTML = items.length
+      ? items.map(d => `<div class="ss-item px-3 py-1.5 text-sm cursor-pointer hover:bg-base-200 rounded-lg mx-1 transition-colors" data-value="${d.value}">${d.label}</div>`).join('')
+      : '<div class="px-3 py-2 text-sm opacity-40">Ничего не найдено</div>';
+  }
+
+  function open() {
+    dropdown.classList.remove('hidden');
+    searchEl.value = ''; renderList('');
+    requestAnimationFrame(() => searchEl.focus());
+  }
+  function close() { dropdown.classList.add('hidden'); }
+
+  trigger.addEventListener('click', e => { e.stopPropagation(); dropdown.classList.contains('hidden') ? open() : close(); });
+  trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  searchEl.addEventListener('input', () => renderList(searchEl.value));
+  searchEl.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+
+  listEl.addEventListener('click', e => {
+    const item = e.target.closest('.ss-item');
+    if (!item) return;
+    valueEl.value = item.dataset.value;
+    labelEl.textContent = item.textContent;
+    labelEl.classList.remove('opacity-50');
+    close();
+    if (onChange) onChange(item.dataset.value);
+  });
+
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
 }
 
-const deptSel = document.getElementById('dept_select');
-const typeSel = document.getElementById('task_type');
-// Load immediately so preselected value is shown on edit
-loadSelect(deptSel, '/api/departments', '— не выбрано —');
-loadSelect(typeSel, '/api/task-types', '— выберите —').then(() => showDynamic());
-// Refresh on every open to get latest server data
-deptSel.addEventListener('mousedown', () => loadSelect(deptSel, '/api/departments', '— не выбрано —'));
-typeSel.addEventListener('mousedown', () => loadSelect(typeSel, '/api/task-types', '— выберите —').then(() => showDynamic()));
+async function fetchJson(url) {
+  const r = await fetch(url); return r.json();
+}
 
-function showDynamic() {
-  const t = document.getElementById('task_type').value;
+// Load data and initialise both searchable selects
+Promise.all([
+  fetchJson('/api/departments'),
+  fetchJson('/api/task-types'),
+]).then(([depts, types]) => {
+  const deptData = depts.map(d => ({ value: d.id, label: d.name }));
+  const typeData = types.map(d => ({ value: d.value, label: d.label }));
+  initSS('dept_wrap', deptData);
+  initSS('type_wrap', typeData, val => showDynamic(val));
+  showDynamic(document.getElementById('task_type_hidden').value);
+});
+
+function showDynamic(t) {
+  if (t === undefined) t = document.getElementById('task_type_hidden').value;
   document.getElementById('block-publication').style.display = t === 'publication' ? '' : 'none';
-  document.getElementById('block-clarification').style.display = (t && t !== 'publication') ? '' : 'none';
+  document.getElementById('block-revision').style.display = t === 'revision' ? '' : 'none';
+  document.getElementById('block-clarification').style.display =
+    (t && t !== 'publication' && t !== 'revision') ? '' : 'none';
 }
 showDynamic();
 

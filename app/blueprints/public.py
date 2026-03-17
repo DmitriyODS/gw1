@@ -16,6 +16,7 @@ TASK_TYPES = [
     ('presentation', 'Разработка презентации'),
     ('presentation_update', 'Доработка презентации'),
     ('design_verify', 'Верификация дизайна'),
+    ('revision', 'Правки по задаче'),
     ('mail_check', 'Проверка почты'),
     ('newsletter', 'Рассылки'),
     ('postcard', 'Открытки'),
@@ -24,6 +25,10 @@ TASK_TYPES = [
     ('photo_video', 'Фото/видео сопровождение'),
     ('other', 'Другое'),
 ]
+
+# Types only available in the internal form — hidden from the public submit form
+_INTERNAL_ONLY = {'mail_check', 'video_edit', 'photo_edit', 'photo_video', 'revision'}
+EXTERNAL_TASK_TYPES = [(v, l) for v, l in TASK_TYPES if v not in _INTERNAL_ONLY]
 PUB_SUBTYPES = [('news', 'Новость'), ('event', 'Мероприятие')]
 
 
@@ -72,7 +77,7 @@ def submit():
         return redirect(url_for('public.submit'))
 
     return render_template('public/submit.html', departments=departments,
-                           task_types=TASK_TYPES, pub_subtypes=PUB_SUBTYPES,
+                           task_types=EXTERNAL_TASK_TYPES, pub_subtypes=PUB_SUBTYPES,
                            platforms=PLATFORMS)
 
 

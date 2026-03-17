@@ -4,7 +4,7 @@
 {% block content %}
 <div class="flex justify-between items-center mb-4">
   <h5 class="text-lg font-bold flex items-center gap-2"><i class="bi bi-people"></i> Пользователи</h5>
-  {% if current_user.is_super_admin %}
+  {% if current_user.can_admin %}
   <a href="{{ url_for('admin.create_user') }}" class="btn btn-primary btn-sm">
     <i class="bi bi-person-plus"></i> Добавить
   </a>
@@ -17,7 +17,7 @@
       <thead>
         <tr class="bg-neutral text-neutral-content">
           <th>ФИО</th><th>Логин</th><th>Email</th><th>Роль</th><th>Статус</th>
-          {% if current_user.is_super_admin %}<th></th>{% endif %}
+          {% if current_user.can_admin %}<th></th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -37,13 +37,13 @@
           <span class="badge badge-neutral badge-sm">Отключён</span>
           {% endif %}
         </td>
-        {% if current_user.is_super_admin %}
+        {% if current_user.can_admin %}
         <td class="text-right">
           <div class="flex gap-1 justify-end">
             <a href="{{ url_for('admin.edit_user', user_id=u.id) }}" class="btn btn-ghost btn-xs">
               <i class="bi bi-pencil"></i>
             </a>
-            {% if not u.is_super_admin %}
+            {% if current_user.is_super_admin and not u.is_super_admin %}
             <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}" class="inline"
                   onsubmit="return confirm('Удалить пользователя {{ u.full_name }}?')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -95,6 +95,10 @@ def _task_from_form(form, task=None, created_by_id=None):
         pub_url = form.get('pub_url', '').strip()
         if pub_url:
             dynamic['pub_url'] = pub_url
+    elif task_type == 'revision':
+        revision_ref = form.get('revision_ref', '').strip()
+        if revision_ref:
+            dynamic['revision_ref'] = revision_ref
     else:
         clarification = form.get('clarification', '').strip()
         if clarification:

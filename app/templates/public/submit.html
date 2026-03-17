@@ -69,7 +69,6 @@
         <!-- Page title -->
         <div class="mb-7 text-center">
             <h1 class="text-2xl font-bold mb-1">Новая заявка</h1>
-            <p class="text-sm opacity-50">Заполните форму — мы свяжемся по указанному номеру</p>
         </div>
 
         <!-- Card -->
@@ -124,9 +123,19 @@
 
                     <div>
                         <div class="field-label">Подразделение</div>
-                        <select name="department_id" id="dept_select" class="select select-bordered w-full rounded-xl">
-                            <option value="">— выберите —</option>
-                        </select>
+                        <div class="ss-wrap relative" id="dept_wrap" data-blank="— выберите —">
+                            <div class="ss-trigger input input-bordered w-full rounded-xl flex items-center gap-2 cursor-pointer select-none" tabindex="0">
+                                <span class="ss-label flex-1 text-sm opacity-50">— выберите —</span>
+                                <i class="bi bi-chevron-down text-xs opacity-40"></i>
+                            </div>
+                            <input type="hidden" name="department_id" class="ss-value">
+                            <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-base-300 rounded-xl shadow-lg overflow-hidden">
+                                <div class="p-2 border-b border-base-200">
+                                    <input type="text" class="ss-search input input-sm input-bordered w-full rounded-xl" placeholder="Поиск…" autocomplete="off">
+                                </div>
+                                <div class="ss-list max-h-44 overflow-y-auto py-1"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -217,19 +226,52 @@
 </main>
 
 <script>
-    // Load departments dynamically from server
-    async function loadDepts() {
-        try {
-            const r = await fetch('/api/departments');
-            const data = await r.json();
-            const sel = document.getElementById('dept_select');
-            const cur = sel.value;
-            sel.innerHTML = '<option value="">— выберите —</option>' +
-                data.map(d => `<option value="${d.id}" ${d.id == cur ? 'selected' : ''}>${d.name}</option>`).join('');
-        } catch (_) {}
+    // Searchable select component
+    function initSS(wrapId, data) {
+        const wrap = document.getElementById(wrapId);
+        const trigger = wrap.querySelector('.ss-trigger');
+        const valueEl = wrap.querySelector('.ss-value');
+        const dropdown = wrap.querySelector('.ss-dropdown');
+        const searchEl = wrap.querySelector('.ss-search');
+        const listEl = wrap.querySelector('.ss-list');
+        const labelEl = wrap.querySelector('.ss-label');
+        const blank = wrap.dataset.blank || '— выберите —';
+
+        function renderList(q) {
+            const items = data.filter(d => !q || d.label.toLowerCase().includes(q.toLowerCase()));
+            listEl.innerHTML = items.length
+                ? items.map(d => `<div class="ss-item px-3 py-1.5 text-sm cursor-pointer hover:bg-base-200 rounded-lg mx-1 transition-colors" data-value="${d.value}">${d.label}</div>`).join('')
+                : '<div class="px-3 py-2 text-sm opacity-40">Ничего не найдено</div>';
+        }
+
+        function open() {
+            dropdown.classList.remove('hidden');
+            searchEl.value = ''; renderList('');
+            requestAnimationFrame(() => searchEl.focus());
+        }
+        function close() { dropdown.classList.add('hidden'); }
+
+        trigger.addEventListener('click', e => { e.stopPropagation(); dropdown.classList.contains('hidden') ? open() : close(); });
+        trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        searchEl.addEventListener('input', () => renderList(searchEl.value));
+        searchEl.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+
+        listEl.addEventListener('click', e => {
+            const item = e.target.closest('.ss-item');
+            if (!item) return;
+            valueEl.value = item.dataset.value;
+            labelEl.textContent = item.textContent;
+            labelEl.classList.remove('opacity-50');
+            close();
+        });
+
+        document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
     }
-    loadDepts();
-    document.getElementById('dept_select').addEventListener('mousedown', loadDepts);
+
+    fetch('/api/departments')
+        .then(r => r.json())
+        .then(data => initSS('dept_wrap', data.map(d => ({ value: d.id, label: d.name }))))
+        .catch(() => {});
 
     function selectType(type) {
         document.getElementById('task_type_hidden').value = type;

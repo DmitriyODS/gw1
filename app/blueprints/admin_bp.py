@@ -22,10 +22,14 @@ def users():
 @admin_bp.route('/users/create', methods=['GET', 'POST'])
 @login_required
 def create_user():
-    if not current_user.is_super_admin:
+    if not current_user.can_admin:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     if request.method == 'POST':
+        new_role = request.form.get('role', Role.STAFF)
+        if new_role == Role.SUPER_ADMIN and not current_user.is_super_admin:
+            flash('Недостаточно прав для назначения роли Super Admin', 'danger')
+            return redirect(url_for('admin.users'))
         if User.query.filter_by(username=request.form['username']).first():
             flash('Пользователь с таким логином уже существует', 'danger')
         else:
@@ -33,7 +37,7 @@ def create_user():
                 username=request.form['username'].strip(),
                 email=request.form['email'].strip(),
                 full_name=request.form['full_name'].strip(),
-                role=request.form['role'],
+                role=new_role,
             )
             user.set_password(request.form['password'])
             db.session.add(user)
@@ -46,16 +50,20 @@ def create_user():
 @admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_user(user_id):
-    if not current_user.is_super_admin:
+    if not current_user.can_admin:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     user = User.query.get_or_404(user_id)
     if request.method == 'POST':
+        new_role = request.form.get('role', user.role)
+        if new_role == Role.SUPER_ADMIN and not current_user.is_super_admin:
+            flash('Недостаточно прав для назначения роли Super Admin', 'danger')
+            return redirect(url_for('admin.users'))
         user.username = request.form['username'].strip()
         user.email = request.form['email'].strip()
         user.full_name = request.form['full_name'].strip()
         if not user.is_super_admin:
-            user.role = request.form['role']
+            user.role = new_role
         user.is_active = 'is_active' in request.form
         if request.form.get('password'):
             user.set_password(request.form['password'])
@@ -68,7 +76,7 @@ def edit_user(user_id):
 @admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 def delete_user(user_id):
-    if not current_user.is_super_admin:
+    if not current_user.can_admin:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     user = User.query.get_or_404(user_id)

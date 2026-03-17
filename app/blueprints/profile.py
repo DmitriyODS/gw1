@@ -43,11 +43,16 @@ def profile():
     tasks_done = Task.query.filter_by(created_by_id=current_user.id, status=TaskStatus.DONE).count()
 
     # Last 5 tasks the user worked on
-    recent_logs = db.session.query(Task).join(
-        TimeLog, TimeLog.task_id == Task.id
+    subq = db.session.query(
+        TimeLog.task_id,
+        func.max(TimeLog.started_at).label('last_worked')
     ).filter(
         TimeLog.user_id == current_user.id
-    ).order_by(TimeLog.started_at.desc()).distinct().limit(5).all()
+    ).group_by(TimeLog.task_id).subquery()
+
+    recent_logs = db.session.query(Task).join(
+        subq, Task.id == subq.c.task_id
+    ).order_by(subq.c.last_worked.desc()).limit(5).all()
 
     return render_template('profile.html',
         tasks_created=tasks_created,

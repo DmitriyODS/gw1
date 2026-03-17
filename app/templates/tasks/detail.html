@@ -1,9 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}#{{ task.id }} {{ task.title }}{% endblock %}
 
+{% block head %}
+<style>
+  .task-tag-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .task-tag-дизайн      { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
+  .task-tag-текст       { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+  .task-tag-публикация  { background: #dcfce7; color: #15803d; border-color: #86efac; }
+  .task-tag-фото-видео  { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+  .task-tag-внутреннее  { background: var(--color-base-200); color: color-mix(in oklch,var(--color-base-content) 70%,transparent); border-color: var(--color-base-300); }
+  .task-tag-внешнее     { background: #cffafe; color: #0e7490; border-color: #67e8f9; }
+</style>
+{% endblock %}
+
 {% block content %}
+{% set is_mine = task.assigned_to_id == current_user.id %}
+{% set is_taken = task.assigned_to_id is not none and not is_mine %}
+{% set is_free = task.assigned_to_id is none %}
+
 <div class="flex flex-col lg:flex-row gap-4">
   <div class="flex-1 min-w-0">
+
     <!-- Header -->
     <div class="flex justify-between items-start mb-3">
       <div>
@@ -13,6 +34,9 @@
           <span class="badge badge-{{ TaskStatus.COLORS[task.status] }}">{{ TaskStatus.LABELS[task.status] }}</span>
           <span class="badge badge-{{ Urgency.COLORS[task.urgency] }}">{{ Urgency.LABELS[task.urgency] }}</span>
           {% if task.is_overdue %}<span class="badge badge-error">Просрочено</span>{% endif %}
+          {% for tag in (task.tags or []) %}
+          <span class="task-tag-badge task-tag-{{ tag | replace('/', '-') | replace(' ', '-') }}">{{ tag }}</span>
+          {% endfor %}
         </div>
       </div>
       <div class="flex gap-2 shrink-0">
@@ -24,6 +48,86 @@
           <i class="bi bi-trash"></i>
         </button>
         {% endif %}
+      </div>
+    </div>
+
+    <!-- Parent task / subtask indicator -->
+    {% if parent_task %}
+    <div class="flex items-center gap-2 py-2 px-3 mb-3 rounded-xl text-sm"
+         style="background:#f3e8ff; color:#6d28d9; border:1px solid #ddd6fe;">
+      <i class="bi bi-diagram-2"></i>
+      Подзадача →
+      <a href="{{ url_for('tasks.detail', task_id=parent_task.id) }}"
+         class="font-semibold underline" style="color:#6d28d9;">
+        #{{ parent_task.id }} {{ parent_task.title }}
+      </a>
+    </div>
+    {% endif %}
+
+    {% if subtasks %}
+    <div class="card bg-base-100 border border-base-300 mb-4">
+      <div class="px-4 py-2 border-b border-base-300">
+        <span class="font-semibold text-sm"><i class="bi bi-diagram-3"></i> Подзадачи</span>
+        {% set open_count = task.open_subtasks_count %}
+        {% if open_count > 0 %}
+        <span class="badge badge-warning badge-sm ml-1">{{ open_count }} открыто</span>
+        {% else %}
+        <span class="badge badge-success badge-sm ml-1">Все выполнены</span>
+        {% endif %}
+      </div>
+      <ul class="divide-y divide-base-300">
+        {% for sub in subtasks %}
+        <li class="flex items-center gap-3 px-4 py-2">
+          {% if sub.status == 'done' %}
+          <i class="bi bi-check-circle-fill text-success"></i>
+          {% elif sub.status == 'in_progress' %}
+          <i class="bi bi-play-circle-fill text-primary"></i>
+          {% else %}
+          <i class="bi bi-circle text-base-content/30"></i>
+          {% endif %}
+          <a href="{{ url_for('tasks.detail', task_id=sub.id) }}" class="flex-1 text-sm hover:underline">
+            {{ sub.title }}
+          </a>
+          {% for tag in (sub.tags or []) %}
+          <span class="task-tag-badge task-tag-{{ tag | replace('/', '-') | replace(' ', '-') }}">{{ tag }}</span>
+          {% endfor %}
+          <span class="badge badge-{{ TaskStatus.COLORS[sub.status] }} badge-sm">{{ TaskStatus.LABELS[sub.status] }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- Ownership / Assignment block -->
+    <div class="card bg-base-100 border border-base-300 mb-4">
+      <div class="card-body py-3 px-4">
+        <div class="flex items-center gap-4 flex-wrap">
+          <div>
+            <div class="text-xs text-base-content/60">Исполнитель</div>
+            {% if task.assigned_to %}
+            <div class="font-semibold text-sm flex items-center gap-2">
+              <i class="bi bi-person-fill text-primary"></i>
+              {{ task.assigned_to.full_name }}
+              {% if is_mine %}<span class="badge badge-primary badge-sm">Вы</span>{% endif %}
+            </div>
+            {% else %}
+            <div class="text-sm text-base-content/50 italic">Не назначен — задача свободна</div>
+            {% endif %}
+          </div>
+
+          <div class="ml-auto flex gap-2 flex-wrap items-center">
+            <!-- Delegation: only current assignee or admin -->
+            {% if (is_mine or current_user.can_admin) and task.status != 'done' and task.assigned_to_id %}
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('delegateModal').showModal()">
+              <i class="bi bi-person-arrows"></i> Делегировать
+            </button>
+            <button class="btn btn-ghost btn-sm text-warning"
+                    onclick="document.getElementById('unassignModal').showModal()">
+              <i class="bi bi-x-circle"></i> Вернуть в пул
+            </button>
+            {% endif %}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -45,23 +149,28 @@
           </div>
           {% endif %}
           <div class="ml-auto flex gap-2 flex-wrap">
-            {% if task.status in (TaskStatus.NEW, TaskStatus.PAUSED) and not my_active %}
-            <button class="btn btn-success btn-sm" onclick="handleStart({{ task.id }})">
-              <i class="bi bi-play-fill"></i> Старт
-            </button>
-            {% endif %}
-            {% if my_active %}
-            <button class="btn btn-warning btn-sm" onclick="handlePause({{ task.id }})">
-              <i class="bi bi-pause-fill"></i> Пауза
-            </button>
-            {% endif %}
-            {% if task.status != TaskStatus.DONE %}
-            <form method="post" action="{{ url_for('tasks.mark_done', task_id=task.id) }}" class="inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-success btn-sm">
+            {% if is_taken %}
+            <span class="text-sm text-base-content/50 italic">
+              Задача у <strong>{{ task.assigned_to.full_name }}</strong>
+            </span>
+            {% else %}
+              {% if (is_free or is_mine) and not my_active %}
+              <button class="btn btn-success btn-sm" onclick="handleStart({{ task.id }})">
+                <i class="bi bi-play-fill"></i> {% if is_mine %}Продолжить{% else %}Старт{% endif %}
+              </button>
+              {% endif %}
+              {% if my_active %}
+              <button class="btn btn-warning btn-sm" onclick="handlePause({{ task.id }})">
+                <i class="bi bi-pause-fill"></i> Пауза
+              </button>
+              {% endif %}
+              {% if task.status != TaskStatus.DONE %}
+              <button class="btn btn-success btn-sm"
+                      {% if not task.can_close %}disabled title="Не все подзадачи выполнены"{% endif %}
+                      onclick="document.getElementById('doneModal').showModal()">
                 <i class="bi bi-check-circle"></i> Закрыть задачу
               </button>
-            </form>
+              {% endif %}
             {% endif %}
           </div>
         </div>
@@ -112,7 +221,7 @@
           {% if task.task_type %}
           <div>
             <div class="text-xs text-base-content/60">Тип</div>
-            <div>{{ {'publication':'Публикация','handout':'Разработка раздатки','banner':'Разработка баннера','merch':'Разработка сувенирной продукции','poster':'Разработка плаката/афиши','presentation':'Разработка презентации','presentation_update':'Доработка презентации','design_verify':'Верификация дизайна','mail_check':'Проверка почты','newsletter':'Рассылки','postcard':'Открытки','video_edit':'Монтаж видео','photo_edit':'Обработка фото','photo_video':'Фото/видео сопровождение','other':'Другое'}.get(task.task_type, task.task_type) }}</div>
+            <div>{{ {'publication':'Публикация','handout':'Разработка раздатки','banner':'Разработка баннера','merch':'Сувенирная продукция','poster':'Плакат/афиша','presentation':'Презентация','presentation_update':'Доработка презентации','design_verify':'Верификация дизайна','mail_check':'Проверка почты','newsletter':'Рассылки','postcard':'Открытки','video_edit':'Монтаж видео','photo_edit':'Обработка фото','photo_video':'Фото/видео','other':'Другое'}.get(task.task_type, task.task_type) }}</div>
           </div>
           {% endif %}
           {% if task.created_by %}
@@ -183,7 +292,7 @@
           </a>
           {% if current_user.can_admin %}
           <button type="button" class="btn btn-ghost btn-xs text-error"
-                  onclick="deleteAtt({{ att.id }}, {{ task.id }})">
+                  onclick="confirmDeleteAtt({{ att.id }}, {{ task.id }})">
             <i class="bi bi-x"></i>
           </button>
           {% endif %}
@@ -192,6 +301,7 @@
       </ul>
     </div>
     {% endif %}
+
     <!-- Comments -->
     <div class="card bg-base-100 shadow-sm mb-4">
       <div class="px-4 py-2 border-b border-base-300">
@@ -221,7 +331,7 @@
           </div>
           {% if comment.user_id == current_user.id or current_user.can_admin %}
           <button type="button" class="btn btn-ghost btn-xs text-error self-start"
-                  onclick="deleteComment({{ comment.id }}, {{ task.id }})">
+                  onclick="confirmDeleteComment({{ comment.id }}, {{ task.id }})">
             <i class="bi bi-x"></i>
           </button>
           {% endif %}
@@ -239,7 +349,7 @@
           <div class="flex items-center gap-2">
             <label class="btn btn-ghost btn-sm gap-1 cursor-pointer">
               <i class="bi bi-paperclip"></i> Файл
-              <input type="file" name="file" class="hidden">
+              <input type="file" name="file" class="hidden" id="comment-file-input">
             </label>
             <span id="comment-file-name" class="text-xs text-base-content/50 flex-1 truncate"></span>
             <button type="submit" class="btn btn-primary btn-sm">Отправить</button>
@@ -285,7 +395,21 @@
   </div>
 </div>
 
-<!-- Conflict Modal (DaisyUI dialog) -->
+<!-- ── Modals ── -->
+
+<!-- Taken modal (task already claimed by someone else) -->
+<dialog id="takenModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Задача занята</h3>
+    <p class="py-4">Эта задача уже взята сотрудником: <strong id="takenByName"></strong></p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn">Закрыть</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Conflict modal -->
 <dialog id="conflictModal" class="modal">
   <div class="modal-box">
     <h3 class="font-bold text-lg">Активный таймер</h3>
@@ -294,51 +418,126 @@
       Поставить ту задачу на паузу и запустить эту?
     </p>
     <div class="modal-action">
-      <form method="dialog">
-        <button class="btn btn-ghost">Отмена</button>
-      </form>
-      <button class="btn btn-warning" onclick="forceStart({{ task.id }})">Поставить на паузу и запустить</button>
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-warning" id="conflictConfirmBtn">Переключить</button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
-<!-- Delete Confirmation Modal -->
-{% if current_user.can_admin %}
-<dialog id="deleteModal" class="modal">
+<!-- Close task confirmation -->
+<dialog id="doneModal" class="modal">
   <div class="modal-box">
-    <h3 class="font-bold text-lg text-error">Удалить задачу?</h3>
-    <p class="py-4">
-      Вы уверены, что хотите удалить задачу <strong>#{{ task.id }} — {{ task.title }}</strong>?<br>
-      <span class="text-base-content/60 text-sm">Это действие нельзя отменить. Все вложения и лог времени будут удалены.</span>
-    </p>
+    <h3 class="font-bold text-lg">Закрыть задачу?</h3>
+    <p class="py-4">Задача будет отмечена как выполненная. Таймер будет остановлен.</p>
     <div class="modal-action">
-      <form method="dialog">
-        <button class="btn btn-ghost">Отмена</button>
-      </form>
-      <form method="post" action="{{ url_for('tasks.delete_task', task_id=task.id) }}">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <form method="post" action="{{ url_for('tasks.mark_done', task_id=task.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-error">
-          <i class="bi bi-trash"></i> Удалить
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check-circle"></i> Закрыть
         </button>
       </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
+
+<!-- Delete task confirmation -->
+{% if current_user.can_admin %}
+<dialog id="deleteModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg text-error">Удалить задачу?</h3>
+    <p class="py-4">
+      <strong>#{{ task.id }} — {{ task.title }}</strong><br>
+      <span class="text-base-content/60 text-sm">Все вложения и лог времени будут удалены. Это необратимо.</span>
+    </p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <form method="post" action="{{ url_for('tasks.delete_task', task_id=task.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-error"><i class="bi bi-trash"></i> Удалить</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endif %}
+
+<!-- Delete attachment confirmation -->
+<dialog id="deleteAttModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Удалить файл?</h3>
+    <p class="py-4">Файл будет удалён без возможности восстановления.</p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-error" id="deleteAttConfirmBtn">Удалить</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Delete comment confirmation -->
+<dialog id="deleteCommentModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Удалить комментарий?</h3>
+    <p class="py-4">Комментарий будет удалён.</p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-error" id="deleteCommentConfirmBtn">Удалить</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Delegation modal -->
+{% if (is_mine or current_user.can_admin) and task.assigned_to_id %}
+<dialog id="delegateModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Делегировать задачу</h3>
+    <p class="text-sm text-base-content/60 mb-3">Выберите сотрудника, которому передать задачу</p>
+    <select id="delegateSelect" class="select select-bordered w-full mb-4">
+      <option value="">— выберите сотрудника —</option>
+      {% for u in users %}
+      {% if u.id != task.assigned_to_id %}
+      <option value="{{ u.id }}">{{ u.full_name }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+    <div id="delegateError" class="text-error text-sm hidden"></div>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-primary" onclick="doDelegate({{ task.id }})">Делегировать</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+
+<!-- Unassign (return to pool) confirmation -->
+<dialog id="unassignModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Вернуть в пул?</h3>
+    <p class="py-4">Задача станет свободной — любой сотрудник сможет её взять.</p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-warning" onclick="doUnassign({{ task.id }})">Вернуть в пул</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
+// ── Session timer ──
 {% if my_active %}
 const sessionEl = document.getElementById('session-display');
 const started = new Date(sessionEl.dataset.started + 'Z');
-const totalBase = parseInt(sessionEl.dataset.total);
 let sessionBase = Math.floor((Date.now() - started) / 1000);
-
 setInterval(() => {
   sessionBase++;
   const h = Math.floor(sessionBase / 3600), m = Math.floor((sessionBase % 3600) / 60), s = sessionBase % 60;
@@ -347,13 +546,18 @@ setInterval(() => {
 {% endif %}
 
 function post(url) {
-  return fetch(url, {method: 'POST', headers: {'X-CSRFToken': CSRF}}).then(r => r.json());
+  return fetch(url, {method:'POST', headers:{'X-CSRFToken':CSRF}}).then(r => r.json());
 }
 
+// ── Timer handlers ──
 function handleStart(taskId) {
   post(`/tasks/${taskId}/timer/start`).then(data => {
-    if (data.conflict) {
+    if (data.taken) {
+      document.getElementById('takenByName').textContent = data.by;
+      document.getElementById('takenModal').showModal();
+    } else if (data.conflict) {
       document.getElementById('conflictTitle').textContent = data.active_task_title;
+      window._pendingForceTaskId = taskId;
       document.getElementById('conflictModal').showModal();
     } else {
       location.reload();
@@ -361,36 +565,81 @@ function handleStart(taskId) {
   });
 }
 
-function forceStart(taskId) {
+let _pendingForceTaskId = null;
+document.getElementById('conflictConfirmBtn')?.addEventListener('click', () => {
   document.getElementById('conflictModal').close();
+  if (!_pendingForceTaskId) return;
+  const taskId = _pendingForceTaskId;
+  _pendingForceTaskId = null;
   post(`/tasks/${taskId}/timer/force_start`).then(() => location.reload());
-}
+});
 
 function handlePause(taskId) {
   post(`/tasks/${taskId}/timer/pause`).then(() => location.reload());
 }
 
+// ── Delete attachment ──
+let _pendingDelAttId = null, _pendingDelAttTaskId = null;
 
-function deleteAtt(attId, taskId) {
-  if (!confirm('Удалить файл?')) return;
-  fetch(`/tasks/${taskId}/attachments/${attId}/delete`, {
+function confirmDeleteAtt(attId, taskId) {
+  _pendingDelAttId = attId; _pendingDelAttTaskId = taskId;
+  document.getElementById('deleteAttModal').showModal();
+}
+document.getElementById('deleteAttConfirmBtn')?.addEventListener('click', () => {
+  document.getElementById('deleteAttModal').close();
+  if (!_pendingDelAttId) return;
+  fetch(`/tasks/${_pendingDelAttTaskId}/attachments/${_pendingDelAttId}/delete`, {
     method: 'POST', headers: {'X-CSRFToken': CSRF}
   }).then(r => r.json()).then(d => {
-    if (d.success) document.getElementById('att-' + attId).remove();
+    if (d.success) document.getElementById('att-' + _pendingDelAttId)?.remove();
+  });
+});
+
+// ── Delete comment ──
+let _pendingDelCommentId = null, _pendingDelCommentTaskId = null;
+
+function confirmDeleteComment(commentId, taskId) {
+  _pendingDelCommentId = commentId; _pendingDelCommentTaskId = taskId;
+  document.getElementById('deleteCommentModal').showModal();
+}
+document.getElementById('deleteCommentConfirmBtn')?.addEventListener('click', () => {
+  document.getElementById('deleteCommentModal').close();
+  if (!_pendingDelCommentId) return;
+  fetch(`/tasks/${_pendingDelCommentTaskId}/comments/${_pendingDelCommentId}/delete`, {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}
+  }).then(r => r.json()).then(d => {
+    if (d.success) document.getElementById('comment-' + _pendingDelCommentId)?.remove();
+  });
+});
+
+// ── Delegation ──
+function doDelegate(taskId) {
+  const sel = document.getElementById('delegateSelect');
+  const err = document.getElementById('delegateError');
+  if (!sel.value) { err.textContent = 'Выберите сотрудника'; err.classList.remove('hidden'); return; }
+  err.classList.add('hidden');
+  fetch(`/tasks/${taskId}/delegate`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({user_id: parseInt(sel.value)})
+  }).then(r => r.json()).then(d => {
+    if (d.success) location.reload();
+    else { err.textContent = d.error || 'Ошибка'; err.classList.remove('hidden'); }
   });
 }
 
-function deleteComment(commentId, taskId) {
-  if (!confirm('Удалить комментарий?')) return;
-  fetch(`/tasks/${taskId}/comments/${commentId}/delete`, {
+// ── Unassign ──
+function doUnassign(taskId) {
+  document.getElementById('unassignModal').close();
+  fetch(`/tasks/${taskId}/unassign`, {
     method: 'POST', headers: {'X-CSRFToken': CSRF}
   }).then(r => r.json()).then(d => {
-    if (d.success) document.getElementById('comment-' + commentId).remove();
+    if (d.success) location.reload();
   });
 }
 
-// Show selected file name in comment form
-document.querySelector('input[name="file"]')?.addEventListener('change', function() {
+// Show file name in comment form
+document.getElementById('comment-file-input')?.addEventListener('change', function() {
   const label = document.getElementById('comment-file-name');
   if (label) label.textContent = this.files[0]?.name || '';
 });

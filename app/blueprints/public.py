@@ -2,7 +2,7 @@ import os
 import uuid
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, jsonify
 from extensions import db
-from models import Task, Department, TaskAttachment
+from models import Task, TaskStatus, TaskTag, Urgency, Department, TaskAttachment
 
 public_bp = Blueprint('public', __name__)
 
@@ -30,6 +30,24 @@ TASK_TYPES = [
 _INTERNAL_ONLY = {'mail_check', 'video_edit', 'photo_edit', 'photo_video', 'revision'}
 EXTERNAL_TASK_TYPES = [(v, l) for v, l in TASK_TYPES if v not in _INTERNAL_ONLY]
 PUB_SUBTYPES = [('news', 'Новость'), ('event', 'Мероприятие')]
+
+# Auto-tags suggested/assigned by task type
+AUTO_TAGS = {
+    'publication':          ['публикация'],
+    'banner':               ['дизайн'],
+    'handout':              ['дизайн'],
+    'merch':                ['дизайн'],
+    'poster':               ['дизайн'],
+    'presentation':         ['дизайн'],
+    'presentation_update':  ['дизайн'],
+    'design_verify':        ['дизайн'],
+    'postcard':             ['дизайн', 'текст'],
+    'newsletter':           ['текст'],
+    'video_edit':           ['фото/видео'],
+    'photo_edit':           ['фото/видео'],
+    'photo_video':          ['фото/видео'],
+    'mail_check':           ['внутреннее'],
+}
 
 
 @public_bp.route('/api/departments')
@@ -59,6 +77,8 @@ def submit():
             if clarification:
                 dynamic['clarification'] = clarification
 
+        auto_tags = list(AUTO_TAGS.get(task_type, []))
+
         task = Task(
             title=request.form.get('title', '').strip(),
             description=request.form.get('description', '').strip(),
@@ -66,12 +86,37 @@ def submit():
             customer_phone=request.form.get('customer_phone', '').strip(),
             department_id=request.form.get('department_id') or None,
             task_type=task_type,
+            tags=auto_tags,
             dynamic_fields=dynamic,
         )
         db.session.add(task)
         db.session.flush()
 
         _save_attachments(request.files.getlist('attachments'), task.id)
+
+        # For publication tasks create child design + text subtasks
+        if task_type == 'publication':
+            db.session.add(Task(
+                title=f'[Дизайн] {task.title}',
+                task_type='publication',
+                tags=[TaskTag.DESIGN],
+                urgency=Urgency.NORMAL,
+                department_id=task.department_id,
+                parent_task_id=task.id,
+                status=TaskStatus.NEW,
+                dynamic_fields={},
+            ))
+            db.session.add(Task(
+                title=f'[Текст] {task.title}',
+                task_type='publication',
+                tags=[TaskTag.TEXT],
+                urgency=Urgency.NORMAL,
+                department_id=task.department_id,
+                parent_task_id=task.id,
+                status=TaskStatus.NEW,
+                dynamic_fields={},
+            ))
+
         db.session.commit()
         flash('Заявка успешно отправлена! Ожидайте обработки.', 'success')
         return redirect(url_for('public.submit'))

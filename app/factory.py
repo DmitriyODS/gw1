@@ -26,6 +26,8 @@ def create_app():
     from blueprints.admin_bp import admin_bp
     from blueprints.profile import profile_bp
     from blueprints.media_plan import media_plan_bp
+    from blueprints.rhythms import rhythms_bp
+    from blueprints.plans import plans_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(public_bp)
@@ -34,6 +36,8 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(media_plan_bp)
+    app.register_blueprint(rhythms_bp)
+    app.register_blueprint(plans_bp)
 
     @app.context_processor
     def inject_avatar_v():
@@ -75,15 +79,22 @@ def create_app():
     @app.cli.command('migrate-db')
     def migrate_db():
         """Add new columns to existing tables without dropping data."""
-        with db.engine.connect() as conn:
-            # Add completed_at to tasks if not exists
+        cols = [
+            ('tasks', 'completed_at',    'TIMESTAMP'),
+            ('tasks', 'assigned_to_id',  'INTEGER REFERENCES users(id)'),
+            ('tasks', 'parent_task_id',  'INTEGER REFERENCES tasks(id)'),
+            ('tasks', 'tags',            'JSON'),
+            ('plans', 'release_date',    'TIMESTAMP'),
+        ]
+        for table, col, col_type in cols:
             try:
-                conn.execute(db.text('ALTER TABLE tasks ADD COLUMN completed_at TIMESTAMP'))
-                conn.commit()
-                print('Added tasks.completed_at')
-            except Exception:
-                print('tasks.completed_at already exists')
-        # Create new tables
+                with db.engine.connect() as conn:
+                    conn.execute(db.text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}'))
+                    conn.commit()
+                print(f'Added {table}.{col}')
+            except Exception as e:
+                print(f'Skipped {table}.{col}: {e}')
+        # Create new tables (rhythms etc.)
         db.create_all()
         print('Migration complete')
 

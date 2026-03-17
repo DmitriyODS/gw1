@@ -1,21 +1,35 @@
 {% set active = task.active_timers %}
-<a href="{{ url_for('tasks.detail', task_id=task.id) }}"
-   class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %}"
-   data-id="{{ task.id }}" data-status="{{ task.status }}"
-   draggable="true">
+{% set is_mine = task.assigned_to_id == current_user.id %}
+{% set is_taken = task.assigned_to_id is not none and not is_mine %}
+{% set is_free = task.assigned_to_id is none %}
+{% set timer_running = task.id in my_active_task_ids %}
 
-  <div class="flex items-center justify-between">
-    <span class="badge badge-{{ Urgency.COLORS[task.urgency] }} badge-sm text-xs">
-      {{ Urgency.LABELS[task.urgency] }}
-    </span>
-    <span class="text-xs opacity-30 font-mono">#{{ task.id }}</span>
+<a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+   class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %} {% if is_taken %}task-taken{% endif %}"
+   data-id="{{ task.id }}"
+   data-status="{{ task.status }}"
+   data-tags="{{ (task.tags or []) | join(',') }}"
+   data-assigned="{{ task.assigned_to_id or '' }}"
+   {% if not is_taken %}draggable="true"{% endif %}>
+
+  <!-- Top row: urgency badge + tags + id -->
+  <div class="flex items-start justify-between gap-1 mb-1">
+    <div class="flex items-center gap-1 flex-wrap min-w-0">
+      <span class="badge badge-{{ Urgency.COLORS[task.urgency] }} badge-sm text-xs shrink-0">
+        {{ Urgency.LABELS[task.urgency] }}
+      </span>
+      {% for tag in (task.tags or []) %}
+      <span class="task-tag-badge task-tag-{{ tag | replace('/', '-') | replace(' ', '-') }}">{{ tag }}</span>
+      {% endfor %}
+    </div>
+    <span class="text-xs opacity-30 font-mono shrink-0">#{{ task.id }}</span>
   </div>
 
-  <div class="task-title">{{ task.title }}</div>
+  <div class="task-title {% if is_taken %}opacity-50{% endif %}">{{ task.title }}</div>
 
   <div class="task-meta">
     {% if task.is_overdue %}
-    <span class="task-meta-item font-semibold" style="color: var(--color-error)">
+    <span class="task-meta-item font-semibold" style="color:var(--color-error)">
       <i class="bi bi-exclamation-triangle-fill"></i> Просрочено
     </span>
     {% endif %}
@@ -24,26 +38,38 @@
       <i class="bi bi-building"></i> {{ task.department.name }}
     </span>
     {% endif %}
-    {% if task.customer_name %}
-    <span class="task-meta-item">
-      <i class="bi bi-person"></i> {{ task.customer_name }}
-    </span>
-    {% endif %}
     {% if task.deadline %}
     <span class="task-meta-item {% if task.is_overdue %}text-error font-semibold{% endif %}">
       <i class="bi bi-calendar-event"></i> {{ task.deadline.strftime('%d.%m %H:%M') }}
     </span>
     {% endif %}
+    {% if task.parent_task_id %}
+    <span class="task-meta-item" style="color:#8b5cf6">
+      <i class="bi bi-diagram-2"></i> Подзадача
+    </span>
+    {% endif %}
   </div>
 
   <div class="card-footer">
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-wrap">
       {% if task.total_seconds > 0 %}
       <span class="task-meta-item task-meta">
         <i class="bi bi-clock"></i> {{ task.total_seconds | duration }}
       </span>
       {% endif %}
-      {% if active %}
+      {% if is_taken %}
+      <span class="badge badge-neutral badge-sm text-xs">
+        <i class="bi bi-lock-fill"></i> {{ task.assigned_to.full_name.split()[0] }}
+      </span>
+      {% elif timer_running %}
+      <span class="badge badge-success badge-sm text-xs">
+        <i class="bi bi-play-fill"></i> В работе
+      </span>
+      {% elif is_mine %}
+      <span class="badge badge-primary badge-sm text-xs">
+        <i class="bi bi-person-check-fill"></i> Моя
+      </span>
+      {% elif active %}
       <span class="badge badge-success badge-sm text-xs"
             title="{{ active | map(attribute='user') | map(attribute='full_name') | join(', ') }}">
         <i class="bi bi-play-fill"></i> {{ active | length }}
@@ -51,14 +77,18 @@
       {% endif %}
     </div>
 
-    {% if task.id in my_active_task_ids %}
-    <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}">
-      <i class="bi bi-pause-fill"></i> Пауза
-    </button>
-    {% elif task.status != 'done' %}
-    <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}">
-      <i class="bi bi-play-fill"></i> В работу
-    </button>
+    {% if task.status != 'done' %}
+      {% if is_taken %}
+        {# no button — task belongs to someone else #}
+      {% elif timer_running %}
+      <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}">
+        <i class="bi bi-pause-fill"></i> Пауза
+      </button>
+      {% elif is_free or is_mine %}
+      <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}">
+        <i class="bi bi-play-fill"></i> {% if is_mine %}Продолжить{% else %}В работу{% endif %}
+      </button>
+      {% endif %}
     {% endif %}
   </div>
 

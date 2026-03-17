@@ -145,7 +145,7 @@
 <aside id="sidebar">
   <a href="{{ url_for('tasks.list_tasks') }}" class="sidebar-logo">
     <div class="logo-icon"><i class="bi bi-clock-history"></i></div>
-    Groove Work <span style="font-size:0.65rem; opacity:0.4; font-weight:500">0.1</span>
+    Groove Work <span style="font-size:0.65rem; opacity:0.4; font-weight:500">0.2</span>
   </a>
   <nav class="sidebar-nav">
     {% if current_user.is_tv %}
@@ -156,11 +156,14 @@
     <a href="{{ url_for('tasks.list_tasks') }}" class="nav-link">
       <i class="bi bi-kanban"></i> Задачи
     </a>
-    <a href="{{ url_for('tasks.create') }}" class="nav-link">
-      <i class="bi bi-plus-circle"></i> Создать задачу
+    <a href="{{ url_for('plans.index') }}" class="nav-link">
+      <i class="bi bi-calendar2-check"></i> Планы
     </a>
     <a href="{{ url_for('media_plan.index') }}" class="nav-link">
       <i class="bi bi-calendar3"></i> Медиаплан
+    </a>
+    <a href="{{ url_for('rhythms.index') }}" class="nav-link">
+      <i class="bi bi-arrow-repeat"></i> Ритмы
     </a>
     <div class="nav-section-label">Аналитика</div>
     <a href="{{ url_for('analytics.dashboard') }}" class="nav-link">

@@ -61,6 +61,37 @@ class Urgency:
     }
 
 
+class TaskTag:
+    DESIGN = 'дизайн'
+    TEXT = 'текст'
+    PUBLICATION = 'публикация'
+    PHOTO_VIDEO = 'фото/видео'
+    INTERNAL = 'внутреннее'
+    EXTERNAL = 'внешнее'
+    ALL = ['дизайн', 'текст', 'публикация', 'фото/видео', 'внутреннее', 'внешнее']
+    # CSS badge color suffix for each tag
+    BADGE_CLASS = {
+        'дизайн':     'badge-tag-design',
+        'текст':      'badge-tag-text',
+        'публикация': 'badge-tag-pub',
+        'фото/видео': 'badge-tag-photo',
+        'внутреннее': 'badge-tag-internal',
+        'внешнее':    'badge-tag-external',
+    }
+
+
+class RhythmFrequency:
+    DAILY = 'daily'
+    WEEKLY = 'weekly'
+    MONTHLY = 'monthly'
+    LABELS = {
+        'daily': 'Ежедневно',
+        'weekly': 'Еженедельно',
+        'monthly': 'Ежемесячно',
+    }
+    WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -124,6 +155,9 @@ class Task(db.Model):
     status = db.Column(db.String(20), default=TaskStatus.NEW)
     deadline = db.Column(db.DateTime)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    parent_task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=True)
+    tags = db.Column(db.JSON, default=list)
     dynamic_fields = db.Column(db.JSON, default=dict)
     is_archived = db.Column(db.Boolean, default=False)
     archived_at = db.Column(db.DateTime)
@@ -132,6 +166,7 @@ class Task(db.Model):
 
     department = db.relationship('Department', backref='tasks')
     created_by = db.relationship('User', backref='created_tasks', foreign_keys=[created_by_id])
+    assigned_to = db.relationship('User', backref='assigned_tasks', foreign_keys=[assigned_to_id])
     attachments = db.relationship('TaskAttachment', backref='task', lazy='dynamic')
     time_logs = db.relationship('TimeLog', backref='task', lazy='dynamic')
     comments = db.relationship('TaskComment', backref='task', lazy='dynamic',
@@ -158,6 +193,28 @@ class Task(db.Model):
     @property
     def active_timers(self):
         return self.time_logs.filter_by(ended_at=None).all()
+
+    @property
+    def subtasks(self):
+        return Task.query.filter_by(parent_task_id=self.id, is_archived=False).all()
+
+    @property
+    def parent_task(self):
+        if self.parent_task_id:
+            return Task.query.get(self.parent_task_id)
+        return None
+
+    @property
+    def open_subtasks_count(self):
+        return Task.query.filter(
+            Task.parent_task_id == self.id,
+            Task.status != TaskStatus.DONE,
+            Task.is_archived == False
+        ).count()
+
+    @property
+    def can_close(self):
+        return self.open_subtasks_count == 0
 
 
 class TaskAttachment(db.Model):
@@ -195,6 +252,94 @@ class TimeLog(db.Model):
     def duration_seconds(self):
         end = self.ended_at or datetime.utcnow()
         return int((end - self.started_at).total_seconds())
+
+
+class Rhythm(db.Model):
+    __tablename__ = 'rhythms'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    frequency = db.Column(db.String(20), nullable=False, default=RhythmFrequency.DAILY)
+    day_of_week = db.Column(db.Integer)    # 0-6 (Mon-Sun) for weekly
+    day_of_month = db.Column(db.Integer)   # 1-31 for monthly
+    task_title = db.Column(db.String(500), nullable=False)
+    task_description = db.Column(db.Text)
+    task_tags = db.Column(db.JSON, default=list)
+    task_urgency = db.Column(db.String(20), default=Urgency.NORMAL)
+    task_type = db.Column(db.String(50))
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    last_run_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    department = db.relationship('Department', backref='rhythms')
+    created_by = db.relationship('User', backref='created_rhythms', foreign_keys=[created_by_id])
+
+    @property
+    def is_due(self):
+        """True if this rhythm should fire today but hasn't yet."""
+        if not self.is_active:
+            return False
+        from datetime import date as date_type
+        today = datetime.utcnow().date()
+        if self.last_run_at and self.last_run_at.date() == today:
+            return False
+        if self.frequency == RhythmFrequency.DAILY:
+            return True
+        if self.frequency == RhythmFrequency.WEEKLY:
+            return today.weekday() == (self.day_of_week or 0)
+        if self.frequency == RhythmFrequency.MONTHLY:
+            return today.day == (self.day_of_month or 1)
+        return False
+
+    @property
+    def schedule_label(self):
+        if self.frequency == RhythmFrequency.DAILY:
+            return 'Ежедневно'
+        if self.frequency == RhythmFrequency.WEEKLY:
+            day = RhythmFrequency.WEEKDAYS[self.day_of_week or 0]
+            return f'Еженедельно ({day})'
+        if self.frequency == RhythmFrequency.MONTHLY:
+            return f'Ежемесячно ({self.day_of_month or 1}-го)'
+        return self.frequency
+
+
+class PlanGroup(db.Model):
+    __tablename__ = 'plan_groups'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_by = db.relationship('User', backref='created_plan_groups', foreign_keys=[created_by_id])
+
+
+class Plan(db.Model):
+    __tablename__ = 'plans'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(500), nullable=False)
+    description = db.Column(db.Text)
+    customer_name = db.Column(db.String(200))
+    customer_phone = db.Column(db.String(50))
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
+    task_type = db.Column(db.String(50))
+    urgency = db.Column(db.String(20), default=Urgency.NORMAL)
+    tags = db.Column(db.JSON, default=list)
+    dynamic_fields = db.Column(db.JSON, default=dict)
+    group_id = db.Column(db.Integer, db.ForeignKey('plan_groups.id'), nullable=True)
+    release_date = db.Column(db.DateTime, nullable=True)
+    is_converted = db.Column(db.Boolean, default=False)
+    converted_task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    department = db.relationship('Department', backref='plans')
+    group = db.relationship('PlanGroup', backref='plans')
+    created_by = db.relationship('User', backref='created_plans', foreign_keys=[created_by_id])
+
+    @property
+    def is_due(self):
+        return bool(self.release_date and self.release_date <= datetime.utcnow() and not self.is_converted)
 
 
 @login_manager.user_loader

@@ -8,13 +8,12 @@
     display: flex; gap: 12px;
     overflow-x: auto; padding-bottom: 12px;
     align-items: flex-start;
-    /* let it breathe on desktop */
-    min-height: calc(100vh - 160px);
+    min-height: calc(100vh - 200px);
   }
   .kanban-col {
     flex: 0 0 272px;
     display: flex; flex-direction: column;
-    max-height: calc(100vh - 160px);
+    max-height: calc(100vh - 200px);
     border-radius: 16px;
     background: var(--color-base-100);
     border: 1px solid var(--color-base-300);
@@ -30,9 +29,7 @@
     display: flex; align-items: center; gap: 7px;
     font-size: 0.82rem; font-weight: 700;
   }
-  .col-dot {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  }
+  .col-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .kanban-count {
     background: var(--color-base-100);
     border: 1px solid var(--color-base-200);
@@ -71,6 +68,13 @@
   .task-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1); transform: translateY(-1px); color: inherit; }
   .task-card.overdue { background: color-mix(in oklch, var(--color-error) 7%, var(--color-base-100)); border-left-color: var(--color-error) !important; }
   .task-card.dragging { opacity: 0.35; cursor: grabbing; transform: scale(0.97); }
+  .task-card.task-taken {
+    opacity: 0.55;
+    border-left-color: var(--color-base-300) !important;
+    cursor: default;
+    filter: grayscale(30%);
+  }
+  .task-card.task-taken:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.07); transform: none; }
 
   .urgency-urgent    { border-left-color: var(--color-error) !important; }
   .urgency-important { border-left-color: #f97316 !important; }
@@ -104,14 +108,43 @@
 
   /* ── Column accent colors ── */
   .col-in_progress .kanban-header { background: color-mix(in oklch, var(--color-primary) 8%, var(--color-base-100)); }
-  .col-review .kanban-header      { background: color-mix(in oklch, var(--color-info) 8%, var(--color-base-100)); }
   .col-done .kanban-header        { background: color-mix(in oklch, var(--color-success) 8%, var(--color-base-100)); }
   .col-paused .kanban-header      { background: color-mix(in oklch, var(--color-warning) 8%, var(--color-base-100)); }
   .col-in_progress .col-dot       { background: var(--color-primary); }
-  .col-review .col-dot            { background: var(--color-info); }
   .col-done .col-dot              { background: var(--color-success); }
   .col-paused .col-dot            { background: var(--color-warning); }
   .col-new .col-dot               { background: #94a3b8; }
+
+  /* ── Tag badges ── */
+  .task-tag-badge {
+    display: inline-block; font-size: 0.65rem; font-weight: 600;
+    padding: 1px 6px; border-radius: 20px; white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .task-tag-дизайн      { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
+  .task-tag-текст       { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+  .task-tag-публикация  { background: #dcfce7; color: #15803d; border-color: #86efac; }
+  .task-tag-фото-видео  { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+  .task-tag-внутреннее  { background: var(--color-base-200); color: color-mix(in oklch,var(--color-base-content) 70%,transparent); border-color: var(--color-base-300); }
+  .task-tag-внешнее     { background: #cffafe; color: #0e7490; border-color: #67e8f9; }
+
+  /* ── Filter bar ── */
+  .filter-bar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    padding: 10px 12px; margin-bottom: 12px;
+    background: var(--color-base-100);
+    border: 1px solid var(--color-base-300);
+    border-radius: 14px;
+  }
+  .tag-filter-btn {
+    font-size: 0.75rem; font-weight: 600; padding: 3px 10px;
+    border-radius: 20px; border: 1.5px solid var(--color-base-300);
+    background: var(--color-base-100); cursor: pointer;
+    transition: all 0.12s; color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+    white-space: nowrap;
+  }
+  .tag-filter-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .tag-filter-btn.active { border-color: var(--color-primary); background: var(--color-primary); color: white; }
 
   /* ── Mobile tabs ── */
   .mobile-col-tabs {
@@ -125,22 +158,17 @@
     padding: 6px 13px; border-radius: 20px; flex-shrink: 0;
     font-size: 0.8rem; font-weight: 600; cursor: pointer;
     border: 1.5px solid var(--color-base-300);
-    background: var(--color-base-100); color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+    background: var(--color-base-100);
+    color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
     transition: all 0.15s;
   }
-  .mobile-tab.active {
-    background: var(--color-primary); border-color: var(--color-primary);
-    color: white;
-  }
+  .mobile-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
   .mobile-tab .tab-count {
     background: rgba(255,255,255,0.25); border-radius: 10px;
     padding: 0 6px; font-size: 0.7rem; min-width: 18px; text-align: center;
   }
-  .mobile-tab:not(.active) .tab-count {
-    background: var(--color-base-200); color: var(--color-base-content);
-  }
+  .mobile-tab:not(.active) .tab-count { background: var(--color-base-200); color: var(--color-base-content); }
 
-  /* Mobile: hide all cols, show active only */
   @media (max-width: 1023px) {
     .kanban-wrap { overflow-x: visible; }
     .kanban-col { flex: 0 0 100%; max-height: none; display: none; }
@@ -165,13 +193,30 @@
 {% endfor %}
 
 <!-- Page header -->
-<div class="flex items-center mb-4">
+<div class="flex items-center justify-between mb-3">
   <h1 class="text-lg font-bold flex items-center gap-2">
     <i class="bi bi-kanban opacity-60"></i> Задачи
   </h1>
+  <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> Создать задачу
+  </a>
 </div>
 
-<!-- Mobile column tabs (hidden on desktop) -->
+<!-- Filter bar -->
+<div class="filter-bar">
+  <span class="text-xs font-semibold opacity-50 shrink-0">Теги:</span>
+  {% for tag in TaskTag.ALL %}
+  <button class="tag-filter-btn" data-tag="{{ tag }}" onclick="toggleTagFilter('{{ tag }}')">{{ tag }}</button>
+  {% endfor %}
+
+  <div class="flex items-center gap-2 ml-auto shrink-0">
+    <span class="text-xs font-semibold opacity-60">Только свои / свободные</span>
+    <input type="checkbox" id="filter-free-mine" class="toggle toggle-primary toggle-sm"
+           onchange="applyFilters()">
+  </div>
+</div>
+
+<!-- Mobile column tabs -->
 <div class="lg:hidden mb-3">
   <div class="mobile-col-tabs" id="mobile-tabs">
     {% for status, label, icon in columns %}
@@ -215,28 +260,72 @@
   </div>
   {% endfor %}
 </div>
+
+<!-- "Taken" info modal (replaces browser alert) -->
+<dialog id="takenModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Задача занята</h3>
+    <p class="py-4">Эта задача уже взята сотрудником: <strong id="takenByName"></strong></p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn">Закрыть</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Conflict modal (switch task) -->
+<dialog id="conflictModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Активный таймер</h3>
+    <p class="py-4">
+      Сейчас работаете над: <strong id="conflictTitle"></strong><br>
+      Поставить на паузу и переключиться?
+    </p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-warning" id="conflictConfirmBtn">Переключить</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Generic error modal -->
+<dialog id="errorModal" class="modal">
+  <div class="modal-box">
+    <p class="py-4" id="errorModalMsg"></p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn">OK</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+const CURRENT_USER_ID = {{ current_user.id }};
 let dragCard = null, originBody = null, isDragging = false;
 
 // ── Helpers ──
 function emptyHtml() {
   return '<div class="empty-col"><i class="bi bi-inbox block text-xl mb-1 opacity-30"></i>Пусто</div>';
 }
+function showError(msg) {
+  document.getElementById('errorModalMsg').textContent = msg;
+  document.getElementById('errorModal').showModal();
+}
 function updateCount(body) {
   if (!body) return;
-  const cnt = body.querySelectorAll('.task-card').length;
   const status = body.dataset.status;
   const badge = document.getElementById('cnt-' + status);
-  if (badge) badge.textContent = cnt;
   const tabCount = document.querySelector(`.mobile-tab[data-status="${status}"] .tab-count`);
-  if (tabCount) tabCount.textContent = cnt;
+  const visible = [...body.querySelectorAll('.task-card')].filter(c => c.style.display !== 'none').length;
+  if (badge) badge.textContent = visible;
+  if (tabCount) tabCount.textContent = visible;
 }
 
-// Move card DOM element to a different column (no button updates — refreshCard handles that)
 function moveCard(card, newStatus) {
   const origin = card.closest('.kanban-body');
   const targetBody = document.querySelector(`.kanban-body[data-status="${newStatus}"]`);
@@ -250,7 +339,6 @@ function moveCard(card, newStatus) {
   }
 }
 
-// Fetch fresh card HTML from server and replace in DOM (correct buttons, badges, timers)
 async function refreshCard(taskId) {
   try {
     const r = await fetch(`/tasks/${taskId}/card`);
@@ -261,8 +349,51 @@ async function refreshCard(taskId) {
     const newCard = tmp.firstElementChild;
     if (!newCard) return;
     const old = document.querySelector(`.task-card[data-id="${taskId}"]`);
-    if (old) old.replaceWith(newCard);
+    if (old) {
+      old.replaceWith(newCard);
+      applyFilters(); // re-apply filters after refresh
+    }
   } catch (_) {}
+}
+
+// ── Filters ──
+const activeTagFilters = new Set();
+
+function toggleTagFilter(tag) {
+  if (activeTagFilters.has(tag)) {
+    activeTagFilters.delete(tag);
+  } else {
+    activeTagFilters.add(tag);
+  }
+  document.querySelectorAll('.tag-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', activeTagFilters.has(btn.dataset.tag));
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  const freeOnly = document.getElementById('filter-free-mine').checked;
+
+  document.querySelectorAll('.task-card').forEach(card => {
+    const cardTags = card.dataset.tags ? card.dataset.tags.split(',').filter(Boolean) : [];
+    const assignedTo = card.dataset.assigned;
+    let show = true;
+
+    if (activeTagFilters.size > 0) {
+      const hasTag = [...activeTagFilters].some(t => cardTags.includes(t));
+      if (!hasTag) show = false;
+    }
+
+    if (freeOnly) {
+      const isFree = !assignedTo;
+      const isMine = assignedTo && String(assignedTo) === String(CURRENT_USER_ID);
+      if (!isFree && !isMine) show = false;
+    }
+
+    card.style.display = show ? '' : 'none';
+  });
+
+  document.querySelectorAll('.kanban-body').forEach(body => updateCount(body));
 }
 
 // ── Mobile tabs ──
@@ -273,9 +404,8 @@ function switchMobileTab(status) {
   document.querySelector(`.mobile-tab[data-status="${status}"]`)?.classList.add('active');
 }
 
-// ── Timer buttons — event delegation on kanban-wrap (works for refreshed cards too) ──
+// ── Timer buttons ──
 document.getElementById('kanban-wrap').addEventListener('click', e => {
-  // Prevent navigation on cards that were just dragged
   const card = e.target.closest('.task-card');
   if (card?.classList.contains('was-dragged')) {
     e.preventDefault(); card.classList.remove('was-dragged'); return;
@@ -288,42 +418,61 @@ document.getElementById('kanban-wrap').addEventListener('click', e => {
   if (action === 'pause') timerPause(taskId);
 });
 
+let _pendingConflictTaskId = null;
+
 async function timerStart(taskId) {
   const r = await fetch(`/tasks/${taskId}/timer/start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
   const d = await r.json();
+
+  if (d.taken) {
+    document.getElementById('takenByName').textContent = d.by;
+    document.getElementById('takenModal').showModal();
+    return;
+  }
   if (d.conflict) {
-    if (!confirm(`Сейчас работаете над «${d.active_task_title}». Остановить и переключиться?`)) return;
-    const r2 = await fetch(`/tasks/${taskId}/timer/force_start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
-    const d2 = await r2.json();
-    if (!d2.success) return;
-    // Move previous task back and refresh it
-    if (d.active_task_id) {
-      const prevCard = document.querySelector(`.task-card[data-id="${d.active_task_id}"]`);
-      if (prevCard && d2.prev_task_status === 'paused') moveCard(prevCard, 'paused');
-      refreshCard(d.active_task_id);
-    }
-    syncTopbarTimer();
-  } else if (!d.success) return;
-  else { syncTopbarTimer(); }
-  // Move current task to in_progress, then refresh its card HTML
+    document.getElementById('conflictTitle').textContent = d.active_task_title;
+    _pendingConflictTaskId = {newId: taskId, prevId: d.active_task_id};
+    document.getElementById('conflictModal').showModal();
+    return;
+  }
+  if (!d.success) { showError(d.error || 'Ошибка'); return; }
+  syncTopbarTimer();
   const card = document.querySelector(`.task-card[data-id="${taskId}"]`);
   if (card) moveCard(card, 'in_progress');
   refreshCard(taskId);
 }
+
+document.getElementById('conflictConfirmBtn').addEventListener('click', async () => {
+  document.getElementById('conflictModal').close();
+  if (!_pendingConflictTaskId) return;
+  const {newId, prevId} = _pendingConflictTaskId;
+  _pendingConflictTaskId = null;
+  const r2 = await fetch(`/tasks/${newId}/timer/force_start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
+  const d2 = await r2.json();
+  if (!d2.success) return;
+  if (prevId) {
+    const prevCard = document.querySelector(`.task-card[data-id="${prevId}"]`);
+    if (prevCard && d2.prev_task_status === 'paused') moveCard(prevCard, 'paused');
+    refreshCard(prevId);
+  }
+  const card = document.querySelector(`.task-card[data-id="${newId}"]`);
+  if (card) moveCard(card, 'in_progress');
+  refreshCard(newId);
+  syncTopbarTimer();
+});
 
 async function timerPause(taskId) {
   const r = await fetch(`/tasks/${taskId}/timer/pause`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
   const d = await r.json();
   if (!d.success) return;
   syncTopbarTimer();
-  // Move to correct column, then refresh card HTML
   const card = document.querySelector(`.task-card[data-id="${taskId}"]`);
   const newStatus = d.task_status === 'in_progress' ? 'in_progress' : 'paused';
   if (card && newStatus === 'paused') moveCard(card, 'paused');
   refreshCard(taskId);
 }
 
-// ── Drag & drop — dragstart/dragend via event delegation ──
+// ── Drag & drop ──
 const wrap = document.getElementById('kanban-wrap');
 
 wrap.addEventListener('dragstart', e => {
@@ -358,7 +507,7 @@ document.querySelectorAll('.kanban-body').forEach(body => {
     if (!dragCard || body === originBody || blocked) return;
     const newStatus = body.dataset.status;
     const taskId = dragCard.dataset.id;
-    const savedCard = dragCard; // keep reference before reset
+    const savedCard = dragCard;
     const savedOrigin = originBody;
     dragCard = null;
     const r = await fetch(`/tasks/${taskId}/move`, {
@@ -367,28 +516,25 @@ document.querySelectorAll('.kanban-body').forEach(body => {
       body: JSON.stringify({status: newStatus})
     });
     const d = await r.json();
-    if (!d.ok) { alert(d.error || 'Ошибка'); return; }
-    // Optimistic move: put card in new column immediately
+    if (!d.ok) { showError(d.error || 'Ошибка'); return; }
     body.querySelectorAll('.empty-col').forEach(el => el.remove());
     savedCard.classList.add('was-dragged');
     body.appendChild(savedCard);
     if (!savedOrigin.querySelector('.task-card')) savedOrigin.innerHTML = emptyHtml();
     updateCount(savedOrigin); updateCount(body);
-    // Refresh card HTML and sync topbar (timer may have stopped if moved to done)
     refreshCard(taskId);
     syncTopbarTimer();
   });
 });
 
-// ── Live sync: poll every 20s for changes from other users ──
+// ── Live poll every 20s ──
 async function pollSync() {
   if (isDragging) return;
   try {
     const r = await fetch('/tasks/poll');
     if (!r.ok) return;
-    const snapshot = await r.json();
+    const snapshot = await r.json(); // {id: {status, assigned_to}}
 
-    // New task appeared → reload page (need full card HTML)
     const domIds = new Set([...document.querySelectorAll('.task-card[data-id]')].map(c => c.dataset.id));
     for (const id of Object.keys(snapshot)) {
       if (!domIds.has(id)) { location.reload(); return; }
@@ -396,19 +542,25 @@ async function pollSync() {
 
     const changed = [];
     document.querySelectorAll('.task-card[data-id]').forEach(card => {
-      const newStatus = snapshot[card.dataset.id];
-      if (newStatus === undefined) {
-        // Archived/deleted
+      const data = snapshot[card.dataset.id];
+      if (data === undefined) {
         const body = card.closest('.kanban-body');
         card.remove();
         if (body && !body.querySelector('.task-card')) body.innerHTML = emptyHtml();
         updateCount(body);
-      } else if (card.dataset.status !== newStatus) {
-        moveCard(card, newStatus);
-        changed.push(card.dataset.id);
+      } else {
+        const newStatus = data.status;
+        const newAssigned = data.assigned_to != null ? String(data.assigned_to) : '';
+        const statusChanged = card.dataset.status !== newStatus;
+        const assignedChanged = card.dataset.assigned !== newAssigned;
+        if (statusChanged) {
+          moveCard(card, newStatus);
+          changed.push(card.dataset.id);
+        } else if (assignedChanged) {
+          changed.push(card.dataset.id);
+        }
       }
     });
-    // Refresh HTML for moved cards
     changed.forEach(id => refreshCard(id));
   } catch (_) {}
 }

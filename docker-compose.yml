@@ -1,3 +1,9 @@
+# DEV: только база в докере.
+# init.sql выполняется автоматически при первом создании volume.
+# Бэк и фронт запускаются вручную:
+#   backend: cd backend && go run ./cmd/api
+#   frontend: cd frontend && npm run dev
+
 services:
   db:
     image: postgres:15-alpine
@@ -7,26 +13,15 @@ services:
       POSTGRES_PASSWORD: tasktime
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # init.sql выполняется один раз при первом старте (пустой volume)
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
-
-  web:
-    build: ./app
-    command: flask run --host=0.0.0.0 --port=5000 --debug
-    volumes:
-      - ./app:/app
-      - uploads:/app/uploads
-    ports:
-      - "5001:5000"
-    environment:
-      FLASK_APP: factory:create_app
-      FLASK_ENV: development
-      DATABASE_URL: postgresql://tasktime:tasktime@db:5432/tasktime
-      SECRET_KEY: dev-secret-key
-      UPLOAD_FOLDER: /app/uploads
-    depends_on:
-      - db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasktime -d tasktime"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
-  uploads:

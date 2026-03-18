@@ -1,4 +1,10 @@
-version: '3.9'
+# PROD: три контейнера — db, backend, frontend (nginx).
+# Наружу торчит только порт 80 (frontend/nginx).
+# Все остальные контейнеры общаются через внутреннюю сеть Docker.
+#
+# Запуск:
+#   cp .env.example .env  # заполнить переменные
+#   docker compose -f docker-compose.prod.yml up -d --build
 
 services:
   db:
@@ -9,32 +15,53 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    restart: always
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  web:
-    build: ./app
-    command: gunicorn -w 4 -b 0.0.0.0:5000 "factory:create_app()"
-    volumes:
-      - uploads:/app/uploads
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      SECRET_KEY: ${SECRET_KEY}
-      UPLOAD_FOLDER: /app/uploads
-    depends_on:
-      - db
-    restart: always
-
-  nginx:
-    image: nginx:alpine
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      UPLOAD_DIR: /app/uploads
+      AVATAR_DIR: /app/avatars
+      PORT: 8080
     volumes:
-      - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - uploads:/app/uploads
+      - avatars:/app/avatars
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "80:80"
+    networks:
+      - internal
     depends_on:
-      - web
-    restart: always
+      - backend
+    restart: unless-stopped
+
+networks:
+  internal:
+    driver: bridge
 
 volumes:
   pgdata:
   uploads:
+  avatars:

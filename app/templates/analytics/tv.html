@@ -409,12 +409,12 @@ setInterval(tickClock, 1000); tickClock();
 
 // ─────────────── Helpers ───────────────
 function fmt(secs) {
-  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
-  return h > 0 ? `${h}ч ${m}м` : `${m}м`;
+  const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
+  return d > 0 ? `${d}д ${h}ч ${m}м` : h > 0 ? `${h}ч ${m}м` : `${m}м`;
 }
 function fmtLong(secs) {
-  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
-  return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
+  const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
+  return d > 0 ? `${d}д ${h} ч ${m} мин` : h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
 }
 function chartC() {
   const dark = document.documentElement.getAttribute('data-theme') !== 'light';

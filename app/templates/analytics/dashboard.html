@@ -26,10 +26,10 @@
 </div>
 
 <!-- Status cards -->
-<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-  {% set border_colors = {'new':'neutral','in_progress':'primary','paused':'warning','review':'info','done':'success'} %}
-  {% set text_colors   = {'new':'base-content','in_progress':'primary','paused':'warning','review':'info','done':'success'} %}
-  {% for s, label in [('new','Новые'),('in_progress','В работе'),('paused','На паузе'),('review','Проверка'),('done','Готово')] %}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+  {% set border_colors = {'new':'neutral','in_progress':'primary','paused':'warning','done':'success'} %}
+  {% set text_colors   = {'new':'base-content','in_progress':'primary','paused':'warning','done':'success'} %}
+  {% for s, label in [('new','Новые'),('in_progress','В работе'),('paused','На паузе'),('done','Готово')] %}
   <div class="card bg-base-100 border border-{{ border_colors[s] }}">
     <div class="card-body py-3 items-center text-center">
       <div class="text-3xl font-bold text-{{ text_colors[s] }}">{{ by_status[s] }}</div>

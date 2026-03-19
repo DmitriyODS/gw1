@@ -12,9 +12,10 @@
 {% endblock %}
 
 {% macro fmt(secs) %}
-  {%- set h = (secs // 3600) -%}
+  {%- set d = (secs // 86400) -%}
+  {%- set h = (secs % 86400) // 3600 -%}
   {%- set m = (secs % 3600) // 60 -%}
-  {%- if h > 0 %}{{ h }}ч {{ m }}мин{%- else %}{{ m }}мин{%- endif -%}
+  {%- if d > 0 %}{{ d }}д {{ h }}ч {{ m }}мин{%- elif h > 0 %}{{ h }}ч {{ m }}мин{%- else %}{{ m }}мин{%- endif -%}
 {% endmacro %}
 
 {% block content %}

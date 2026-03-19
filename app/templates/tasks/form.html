@@ -55,15 +55,15 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="label pb-1"><span class="label-text">ФИО заказчика</span></label>
-          <input type="text" name="customer_name" class="input input-bordered w-full" value="{{ task.customer_name if task else '' }}">
+          <input type="text" name="customer_name" class="input input-bordered w-full" value="{{ task.customer_name or '' if task else '' }}">
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Телефон</span></label>
-          <input type="tel" name="customer_phone" class="input input-bordered w-full" value="{{ task.customer_phone if task else '' }}">
+          <input type="tel" name="customer_phone" class="input input-bordered w-full" value="{{ task.customer_phone or '' if task else '' }}">
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Email</span></label>
-          <input type="email" name="customer_email" class="input input-bordered w-full" value="{{ task.customer_email if task else '' }}" placeholder="example@mail.ru">
+          <input type="email" name="customer_email" class="input input-bordered w-full" value="{{ task.customer_email or '' if task else '' }}" placeholder="example@mail.ru">
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Подразделение</span></label>

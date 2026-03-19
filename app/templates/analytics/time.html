@@ -175,8 +175,8 @@
               </a>
               {% if e.active %}<span class="badge badge-warning badge-sm ml-1">активен</span>{% endif %}
             </td>
-            <td class="text-base-content/60 text-xs secs-cell">{{ e.started.strftime('%H:%M') }}</td>
-            <td class="text-base-content/60 text-xs secs-cell">{% if e.ended %}{{ e.ended.strftime('%H:%M') }}{% else %}—{% endif %}</td>
+            <td class="text-base-content/60 text-xs secs-cell">{{ e.started | hhmm }}</td>
+            <td class="text-base-content/60 text-xs secs-cell">{% if e.ended %}{{ e.ended | hhmm }}{% else %}—{% endif %}</td>
             <td class="text-right font-semibold secs-cell text-sm">{{ fmt(e.secs) }}</td>
           </tr>
           {% endfor %}

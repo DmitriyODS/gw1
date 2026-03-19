@@ -375,7 +375,7 @@
           {% for log in logs %}
           <tr {% if not log.ended_at %}class="bg-success/10"{% endif %}>
             <td class="text-xs">{{ log.user.full_name.split()[0] }}</td>
-            <td class="text-xs">{{ log.started_at.strftime('%d.%m %H:%M') }}</td>
+            <td class="text-xs">{{ log.started_at | shorttime }}</td>
             <td class="text-xs">
               {% if log.ended_at %}
                 {{ log.duration_seconds | duration }}
@@ -557,7 +557,7 @@ function handleStart(taskId) {
       document.getElementById('takenModal').showModal();
     } else if (data.conflict) {
       document.getElementById('conflictTitle').textContent = data.active_task_title;
-      window._pendingForceTaskId = taskId;
+      _pendingForceTaskId = taskId;
       document.getElementById('conflictModal').showModal();
     } else {
       location.reload();

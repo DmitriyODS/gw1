@@ -11,3 +11,4 @@ class Config:
     ALLOWED_EXTENSIONS = None  # allow all file types
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
     WTF_CSRF_TIME_LIMIT = None
+    TZ_OFFSET_HOURS = int(os.environ.get('TZ_OFFSET_HOURS', 3))

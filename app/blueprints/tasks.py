@@ -81,32 +81,22 @@ def create():
 
         # For publication tasks create child design + text subtasks
         if task.task_type == 'publication':
-            design_task = Task(
-                title=f'[Дизайн] {task.title}',
+            shared = dict(
                 created_by_id=current_user.id,
                 task_type='publication',
-                tags=[TaskTag.DESIGN],
                 urgency=task.urgency,
                 deadline=task.deadline,
                 department_id=task.department_id,
+                customer_name=task.customer_name,
+                customer_phone=task.customer_phone,
+                customer_email=task.customer_email,
+                description=task.description,
                 parent_task_id=task.id,
                 status=TaskStatus.NEW,
-                dynamic_fields={},
+                dynamic_fields=task.dynamic_fields or {},
             )
-            text_task = Task(
-                title=f'[Текст] {task.title}',
-                created_by_id=current_user.id,
-                task_type='publication',
-                tags=[TaskTag.TEXT],
-                urgency=task.urgency,
-                deadline=task.deadline,
-                department_id=task.department_id,
-                parent_task_id=task.id,
-                status=TaskStatus.NEW,
-                dynamic_fields={},
-            )
-            db.session.add(design_task)
-            db.session.add(text_task)
+            db.session.add(Task(title=f'[Дизайн] {task.title}', tags=[TaskTag.DESIGN], **shared))
+            db.session.add(Task(title=f'[Текст] {task.title}', tags=[TaskTag.TEXT], **shared))
 
         db.session.commit()
         flash('Задача создана', 'success')
@@ -252,6 +242,7 @@ def timer_force_start(task_id):
         # Previous task stays assigned to current user (just paused)
         if not prev_task.active_timers:
             prev_task.status = TaskStatus.PAUSED
+            prev_task.assigned_to_id = current_user.id
             prev_task_status = TaskStatus.PAUSED
         else:
             prev_task_status = TaskStatus.IN_PROGRESS

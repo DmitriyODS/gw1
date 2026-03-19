@@ -1,6 +1,6 @@
 import io
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, send_file, request, jsonify
+from flask import Blueprint, render_template, send_file, request, jsonify, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from extensions import db
@@ -29,18 +29,22 @@ TYPE_LABELS = {
 
 
 def get_range(period):
-    now = datetime.utcnow()
+    from flask import current_app
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+    now_utc = datetime.utcnow()
+    now_local = now_utc + timedelta(hours=tz_hours)
     if period == 'day':
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'week':
-        start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_local = (now_local - timedelta(days=now_local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'month':
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_local = now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     elif period == 'year':
-        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_local = now_local.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     else:
-        start = now - timedelta(days=7)
-    return start, now
+        start_local = now_local - timedelta(days=7)
+    start = start_local - timedelta(hours=tz_hours)
+    return start, now_utc
 
 
 def build_stats(period):
@@ -56,13 +60,14 @@ def build_stats(period):
         Task, Task.department_id == Department.id
     ).filter(Task.created_at >= start).group_by(Department.name).order_by(func.count(Task.id).desc()).all()
 
-    type_stats = db.session.query(Task.task_type, func.count(Task.id)).filter(
+    raw_type_stats = db.session.query(Task.task_type, func.count(Task.id)).filter(
         Task.created_at >= start
     ).group_by(Task.task_type).all()
+    type_stats = [(TYPE_LABELS.get(t, t or 'Не указан'), count) for t, count in raw_type_stats]
 
     # Task types by status breakdown
     type_by_status = {}
-    for ttype, _ in type_stats:
+    for ttype, _ in raw_type_stats:
         label = TYPE_LABELS.get(ttype, ttype or 'Другое')
         type_by_status[label] = {}
         for s in TaskStatus.LABELS:
@@ -144,12 +149,14 @@ def time_report():
     # Period start
     start, _ = get_range(period)
 
-    # All-period totals for summary cards
+    # All-period totals for summary cards (using local-time boundaries → UTC)
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+    now_local = now + timedelta(hours=tz_hours)
     ranges = {
-        'day':   now.replace(hour=0, minute=0, second=0, microsecond=0),
-        'week':  (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0),
-        'month': now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
-        'year':  now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
+        'day':   now_local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
+        'week':  (now_local - timedelta(days=now_local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
+        'month': now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
+        'year':  now_local.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
     }
 
     def _secs(start_dt, uid=None):
@@ -181,7 +188,7 @@ def time_report():
     by_date = defaultdict(list)
     by_task = {}  # task_id -> {task_id, task_title, secs, status}
     for log, task, user in logs:
-        date_key = log.started_at.date()
+        date_key = (log.started_at + timedelta(hours=tz_hours)).date()
         end = log.ended_at or now
         secs = int((end - log.started_at).total_seconds())
         by_date[date_key].append({
@@ -214,21 +221,26 @@ def time_report():
 
 def build_burnup(period):
     from collections import defaultdict
+    from flask import current_app
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
     start, _ = get_range(period)
-    now = datetime.utcnow()
+    now_utc = datetime.utcnow()
+    now_local_date = (now_utc + timedelta(hours=tz_hours)).date()
     days_data = defaultdict(lambda: {'created': 0, 'done': 0})
     for t in Task.query.filter(Task.created_at >= start).all():
-        days_data[t.created_at.date()]['created'] += 1
+        local_date = (t.created_at + timedelta(hours=tz_hours)).date()
+        days_data[local_date]['created'] += 1
     for t in Task.query.filter(
         Task.status == TaskStatus.DONE,
         Task.completed_at >= start,
         Task.completed_at.isnot(None)
     ).all():
-        days_data[t.completed_at.date()]['done'] += 1
+        local_date = (t.completed_at + timedelta(hours=tz_hours)).date()
+        days_data[local_date]['done'] += 1
     dates, c_series, d_series = [], [], []
     c_c = c_d = 0
-    cur = start.date()
-    while cur <= now.date():
+    cur = (start + timedelta(hours=tz_hours)).date()
+    while cur <= now_local_date:
         c_c += days_data[cur]['created']
         c_d += days_data[cur]['done']
         dates.append(cur.strftime('%d.%m'))

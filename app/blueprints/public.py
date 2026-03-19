@@ -107,26 +107,21 @@ def submit():
 
         # For publication tasks create child design + text subtasks
         if task_type == 'publication':
-            db.session.add(Task(
-                title=f'[Дизайн] {task.title}',
+            shared = dict(
                 task_type='publication',
-                tags=[TaskTag.DESIGN],
-                urgency=Urgency.NORMAL,
+                urgency=task.urgency,
+                deadline=task.deadline,
                 department_id=task.department_id,
+                customer_name=task.customer_name,
+                customer_phone=task.customer_phone,
+                customer_email=task.customer_email,
+                description=task.description,
                 parent_task_id=task.id,
                 status=TaskStatus.NEW,
-                dynamic_fields={},
-            ))
-            db.session.add(Task(
-                title=f'[Текст] {task.title}',
-                task_type='publication',
-                tags=[TaskTag.TEXT],
-                urgency=Urgency.NORMAL,
-                department_id=task.department_id,
-                parent_task_id=task.id,
-                status=TaskStatus.NEW,
-                dynamic_fields={},
-            ))
+                dynamic_fields=task.dynamic_fields or {},
+            )
+            db.session.add(Task(title=f'[Дизайн] {task.title}', tags=[TaskTag.DESIGN], **shared))
+            db.session.add(Task(title=f'[Текст] {task.title}', tags=[TaskTag.TEXT], **shared))
 
         db.session.commit()
         flash('Заявка успешно отправлена! Ожидайте обработки.', 'success')

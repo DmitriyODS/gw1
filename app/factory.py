@@ -61,9 +61,12 @@ def create_app():
         if not seconds:
             return '0 мин'
         seconds = int(seconds)
-        h = seconds // 3600
+        d = seconds // 86400
+        h = (seconds % 86400) // 3600
         m = (seconds % 3600) // 60
         s = seconds % 60
+        if d:
+            return f'{d}д {h}ч {m}мин'
         if h:
             return f'{h}ч {m}мин'
         if m:
@@ -74,7 +77,35 @@ def create_app():
     def timeformat_filter(dt):
         if not dt:
             return ''
-        return dt.strftime('%d.%m.%Y %H:%M')
+        from datetime import timedelta
+        tz_offset = timedelta(hours=app.config.get('TZ_OFFSET_HOURS', 3))
+        return (dt + tz_offset).strftime('%d.%m.%Y %H:%M')
+
+    @app.template_filter('shorttime')
+    def shorttime_filter(dt):
+        if not dt:
+            return ''
+        from datetime import timedelta
+        tz_offset = timedelta(hours=app.config.get('TZ_OFFSET_HOURS', 3))
+        return (dt + tz_offset).strftime('%d.%m %H:%M')
+
+    @app.template_filter('localdate')
+    def localdate_filter(dt):
+        """Convert UTC datetime to local date object."""
+        if not dt:
+            return None
+        from datetime import timedelta
+        tz_offset = timedelta(hours=app.config.get('TZ_OFFSET_HOURS', 3))
+        return (dt + tz_offset).date()
+
+    @app.template_filter('hhmm')
+    def hhmm_filter(dt):
+        """Format UTC datetime as HH:MM in local time."""
+        if not dt:
+            return ''
+        from datetime import timedelta
+        tz_offset = timedelta(hours=app.config.get('TZ_OFFSET_HOURS', 3))
+        return (dt + tz_offset).strftime('%H:%M')
 
     @app.cli.command('migrate-db')
     def migrate_db():
@@ -137,6 +168,31 @@ def create_app():
                 t.completed_at = now
         db.session.commit()
         print(f'Done: {count} tasks moved from review → done')
+
+    @app.cli.command('fix-none-fields')
+    def fix_none_fields():
+        """Clear literal 'None' string values from customer fields."""
+        from models import Task
+        tasks = Task.query.filter(
+            db.or_(
+                Task.customer_name == 'None',
+                Task.customer_phone == 'None',
+                Task.customer_email == 'None',
+            )
+        ).all()
+        count = 0
+        for t in tasks:
+            if t.customer_name == 'None':
+                t.customer_name = None
+                count += 1
+            if t.customer_phone == 'None':
+                t.customer_phone = None
+                count += 1
+            if t.customer_email == 'None':
+                t.customer_email = None
+                count += 1
+        db.session.commit()
+        print(f'Fixed {count} fields in {len(tasks)} tasks')
 
     @app.cli.command('archive-old')
     def archive_old():

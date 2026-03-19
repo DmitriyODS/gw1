@@ -54,6 +54,51 @@ const (
 )
 
 // ----------------------------------------------------------------
+// Task types
+// ----------------------------------------------------------------
+
+type TaskTypeInfo struct {
+	Value      string `json:"value"`
+	Label      string `json:"label"`
+	IsExternal bool   `json:"is_external"`
+}
+
+// ExternalTaskTypes — 13 типов доступных во внешней форме.
+var ExternalTaskTypes = []TaskTypeInfo{
+	{"publication", "Публикация", true},
+	{"design_image", "Разработка картинки", true},
+	{"design_handout", "Разработка раздатки", true},
+	{"design_banner", "Разработка баннера", true},
+	{"design_poster", "Разработка плаката/афиши", true},
+	{"verify_presentation", "Верификация презентации", true},
+	{"design_presentation", "Разработка презентации", true},
+	{"verify_design", "Верификация дизайна", true},
+	{"design_merch", "Разработка сувенирной продукции", true},
+	{"design_cards", "Разработка открыток", true},
+	{"mailing", "Выполнение корпоративных рассылок", true},
+	{"photo_video", "Фото/видео сопровождение", true},
+	{"other", "Другое", true},
+}
+
+// InternalTaskTypes — 6 типов только для внутренних пользователей.
+var InternalTaskTypes = []TaskTypeInfo{
+	{"mail_check", "Проверка почты", false},
+	{"edits", "Правки по задаче", false},
+	{"video_edit", "Монтаж видео", false},
+	{"photo_edit", "Обработка фото", false},
+	{"internal_work", "Внутренняя работа отдела", false},
+	{"external_work", "Внешняя работа отдела", false},
+}
+
+// AllTaskTypes returns all 19 task types.
+func AllTaskTypes() []TaskTypeInfo {
+	all := make([]TaskTypeInfo, 0, len(ExternalTaskTypes)+len(InternalTaskTypes))
+	all = append(all, ExternalTaskTypes...)
+	all = append(all, InternalTaskTypes...)
+	return all
+}
+
+// ----------------------------------------------------------------
 // Frequency
 // ----------------------------------------------------------------
 

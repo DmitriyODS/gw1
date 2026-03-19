@@ -88,10 +88,35 @@ func (h *MediaPlanHandler) Calendar(c *fiber.Ctx) error {
 		entries = append(entries, e)
 	}
 
+	// Tasks without pub_date
+	ndRows, err := h.db.Query(`
+		SELECT id, title, status, urgency
+		FROM tasks
+		WHERE task_type = 'publication'
+		AND is_archived = false
+		AND (dynamic_fields->>'pub_date') IS NULL
+		ORDER BY created_at DESC`)
+	type noDateEntry struct {
+		ID      int    `json:"id"`
+		Title   string `json:"title"`
+		Status  string `json:"status"`
+		Urgency string `json:"urgency"`
+	}
+	var withoutDate []noDateEntry
+	if err == nil {
+		defer ndRows.Close()
+		for ndRows.Next() {
+			var e noDateEntry
+			ndRows.Scan(&e.ID, &e.Title, &e.Status, &e.Urgency)
+			withoutDate = append(withoutDate, e)
+		}
+	}
+
 	return c.JSON(fiber.Map{
-		"year":    year,
-		"month":   month,
-		"entries": entries,
+		"year":         year,
+		"month":        month,
+		"entries":      entries,
+		"without_date": withoutDate,
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 	"gw1/backend/internal/repository"
 )
 
+
 type PlanHandler struct {
 	plans *repository.PlanRepo
 	tasks *repository.TaskRepo
@@ -19,12 +20,38 @@ func NewPlanHandler(plans *repository.PlanRepo, tasks *repository.TaskRepo) *Pla
 }
 
 func (h *PlanHandler) List(c *fiber.Ctx) error {
+	claims := middleware.GetClaims(c)
+
+	// Auto-convert any due plans before returning the list
+	autoConverted := 0
+	due, err := h.plans.FindDue()
+	if err == nil {
+		for _, p := range due {
+			task, err := h.tasks.Create(&repository.CreateTaskInput{
+				Title:         p.Title,
+				Description:   p.Description,
+				Urgency:       p.Urgency,
+				TaskType:      p.TaskType,
+				Tags:          p.Tags,
+				DynamicFields: p.DynamicFields,
+				CustomerName:  p.CustomerName,
+				CustomerPhone: p.CustomerPhone,
+				CustomerEmail: p.CustomerEmail,
+				DepartmentID:  p.DepartmentID,
+			}, claims.UserID)
+			if err == nil {
+				h.plans.MarkConverted(p.ID, task.ID)
+				autoConverted++
+			}
+		}
+	}
+
 	plans, err := h.plans.FindAll()
 	if err != nil {
 		return err
 	}
 	groups, _ := h.plans.FindGroups()
-	return c.JSON(fiber.Map{"data": plans, "groups": groups})
+	return c.JSON(fiber.Map{"data": plans, "groups": groups, "auto_converted": autoConverted})
 }
 
 func (h *PlanHandler) Create(c *fiber.Ctx) error {

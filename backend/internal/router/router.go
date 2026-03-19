@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"gw1/backend/internal/config"
+	"gw1/backend/internal/domain"
 	"gw1/backend/internal/handler"
 	"gw1/backend/internal/middleware"
 	"gw1/backend/internal/repository"
@@ -53,7 +54,7 @@ func New(cfg *config.Config, db *sql.DB) *fiber.App {
 	planH    := handler.NewPlanHandler(planRepo, taskRepo)
 	mediaH   := handler.NewMediaPlanHandler(db)
 	profileH := handler.NewProfileHandler(userRepo, db, cfg.AvatarDir)
-	publicH  := handler.NewPublicHandler(taskRepo, deptRepo, db)
+	publicH  := handler.NewPublicHandler(taskRepo, deptRepo, db, cfg.UploadDir)
 	adminH   := handler.NewAdminHandler(db)
 	fileH    := handler.NewFileHandler(cfg.UploadDir)
 
@@ -88,6 +89,11 @@ func New(cfg *config.Config, db *sql.DB) *fiber.App {
 	api.Get("/profile", profileH.Get)
 	api.Put("/profile", profileH.Update)
 	api.Post("/profile/avatar", profileH.UploadAvatar)
+
+	// -- Task types (all 19 for internal users) --
+	api.Get("/task-types", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"data": domain.AllTaskTypes()})
+	})
 
 	// -- Tasks --
 	t := api.Group("/tasks")

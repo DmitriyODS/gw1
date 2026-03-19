@@ -28,8 +28,8 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     }
   }
 
-  async function fetchTV() {
-    const { data } = await api.analytics.tv()
+  async function fetchTV(params) {
+    const { data } = await api.analytics.tv(params)
     tvData.value = data
     return data
   }

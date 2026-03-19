@@ -108,6 +108,7 @@ export const api = {
     downloadZip: (id) => http.get(`/api/tasks/${id}/attachments/zip`, { responseType: 'blob' }),
     addComment: (id, data) => http.post(`/api/tasks/${id}/comments`, data),
     deleteComment: (id, commentId) => http.delete(`/api/tasks/${id}/comments/${commentId}`),
+    types: () => http.get('/api/task-types'),
   },
 
   users: {
@@ -128,7 +129,7 @@ export const api = {
   analytics: {
     dashboard: (params) => http.get('/api/analytics/', { params }),
     time: (params) => http.get('/api/analytics/time', { params }),
-    tv: () => http.get('/api/analytics/tv'),
+    tv: (params) => http.get('/api/analytics/tv', { params }),
     exportExcel: (params) =>
       http.get('/api/analytics/export/excel', { params, responseType: 'blob' }),
   },
@@ -168,6 +169,10 @@ export const api = {
     uploadAvatar: (formData) =>
       http.post('/api/profile/avatar', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    resetAvatar: () =>
+      http.post('/api/profile/avatar', new URLSearchParams({ reset: 'true' }), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }),
   },
 

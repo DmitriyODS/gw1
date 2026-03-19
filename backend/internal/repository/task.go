@@ -26,7 +26,9 @@ type TaskFilter struct {
 	DepartmentID *int
 	AssignedToID *int
 	Archived     *bool
-	ParentOnly   bool // only top-level tasks
+	ParentOnly   bool     // only top-level tasks
+	Tags         []string // filter tasks having ALL of these tags
+	Free         bool     // only unassigned tasks
 	Page         int
 	PerPage      int
 }
@@ -159,6 +161,14 @@ func (r *TaskRepo) FindAll(f TaskFilter) ([]domain.Task, int, error) {
 	}
 	if f.ParentOnly {
 		where = append(where, "t.parent_task_id IS NULL")
+	}
+	if len(f.Tags) > 0 {
+		where = append(where, fmt.Sprintf("t.tags @> $%d", i))
+		args = append(args, pq.Array(f.Tags))
+		i++
+	}
+	if f.Free {
+		where = append(where, "t.assigned_to_id IS NULL")
 	}
 
 	wClause := ""

@@ -5,11 +5,13 @@ import { api } from '../api/index.js'
 export const usePlanStore = defineStore('plans', () => {
   const plans = ref([])
   const groups = ref([])
+  const autoConverted = ref(0)
 
   async function fetchPlans(params) {
     const { data } = await api.plans.list(params)
     plans.value = data.data || []
     if (data.groups) groups.value = data.groups
+    autoConverted.value = data.auto_converted || 0
   }
 
   async function createPlan(payload) {
@@ -51,7 +53,7 @@ export const usePlanStore = defineStore('plans', () => {
   }
 
   return {
-    plans, groups,
+    plans, groups, autoConverted,
     fetchPlans, createPlan, updatePlan, deletePlan, pushPlan,
     fetchGroups, createGroup, deleteGroup,
   }

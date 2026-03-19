@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -32,20 +33,52 @@ func (h *ProfileHandler) Get(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Total seconds logged by user
-	var totalSec int64
-	h.db.QueryRow(`
-		SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at, NOW()) - started_at))::bigint), 0)
-		FROM time_logs WHERE user_id = $1`, claims.UserID).Scan(&totalSec)
+	now := time.Now()
+	weekStart := now.AddDate(0, 0, -7)
+	monthStart := now.AddDate(0, -1, 0)
 
-	// Tasks completed
-	var completedCount int
+	// Time stats
+	var totalSec, weekSec, monthSec int64
+	h.db.QueryRow(`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at, NOW()) - started_at))::bigint), 0) FROM time_logs WHERE user_id = $1`, claims.UserID).Scan(&totalSec)
+	h.db.QueryRow(`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at, NOW()) - started_at))::bigint), 0) FROM time_logs WHERE user_id = $1 AND started_at >= $2`, claims.UserID, weekStart).Scan(&weekSec)
+	h.db.QueryRow(`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at, NOW()) - started_at))::bigint), 0) FROM time_logs WHERE user_id = $1 AND started_at >= $2`, claims.UserID, monthStart).Scan(&monthSec)
+
+	// Tasks stats
+	var createdCount, completedCount int
+	h.db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE created_by_id = $1`, claims.UserID).Scan(&createdCount)
 	h.db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE assigned_to_id = $1 AND status = 'done'`, claims.UserID).Scan(&completedCount)
+
+	// Recent tasks worked on (5 latest via time_logs)
+	recentRows, _ := h.db.Query(`
+		SELECT DISTINCT ON (t.id) t.id, t.title, t.status, t.urgency, MAX(tl.started_at) as last_work
+		FROM time_logs tl
+		JOIN tasks t ON t.id = tl.task_id
+		WHERE tl.user_id = $1
+		GROUP BY t.id, t.title, t.status, t.urgency
+		ORDER BY t.id, last_work DESC
+		LIMIT 5`, claims.UserID)
+	recentTasks := []fiber.Map{}
+	if recentRows != nil {
+		defer recentRows.Close()
+		for recentRows.Next() {
+			var id int
+			var title, status, urgency string
+			var lastWork time.Time
+			recentRows.Scan(&id, &title, &status, &urgency, &lastWork)
+			recentTasks = append(recentTasks, fiber.Map{
+				"id": id, "title": title, "status": status, "urgency": urgency, "last_work": lastWork,
+			})
+		}
+	}
 
 	return c.JSON(fiber.Map{
 		"user":            user,
 		"total_seconds":   totalSec,
+		"week_seconds":    weekSec,
+		"month_seconds":   monthSec,
+		"created_tasks":   createdCount,
 		"completed_tasks": completedCount,
+		"recent_tasks":    recentTasks,
 	})
 }
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -50,6 +51,16 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 		f.Archived = &t
 	}
 	f.ParentOnly = c.QueryBool("parent_only", false)
+	f.Free = c.QueryBool("free", false)
+
+	// Tags: comma-separated or repeated params
+	if tags := c.Query("tags"); tags != "" {
+		for _, t := range strings.Split(tags, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				f.Tags = append(f.Tags, t)
+			}
+		}
+	}
 
 	tasks, total, err := h.tasks.FindAll(f)
 	if err != nil {
@@ -275,6 +286,14 @@ func (h *TaskHandler) TimerPause(c *fiber.Ctx) error {
 func (h *TaskHandler) Done(c *fiber.Ctx) error {
 	id, _ := strconv.Atoi(c.Params("id"))
 	claims := middleware.GetClaims(c)
+
+	// Block if there are open subtasks
+	subtasks, _ := h.tasks.FindSubtasks(id)
+	for _, st := range subtasks {
+		if st.Status != domain.StatusDone {
+			return fiber.NewError(fiber.StatusConflict, "has_open_subtasks")
+		}
+	}
 
 	// Stop timer if running
 	active, _ := h.timelogs.FindActive(claims.UserID)

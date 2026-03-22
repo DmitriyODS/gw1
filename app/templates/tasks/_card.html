@@ -85,7 +85,7 @@
         <i class="bi bi-pause-fill"></i> Пауза
       </button>
       {% elif is_free or is_mine %}
-      <button class="btn-timer btn-timer-start" data-action="start" data-id="{{ task.id }}">
+      <button class="btn-timer btn-timer-start btn-timer-start-highlight" data-action="start" data-id="{{ task.id }}">
         <i class="bi bi-play-fill"></i> {% if is_mine %}Продолжить{% else %}В работу{% endif %}
       </button>
       {% endif %}

@@ -118,6 +118,7 @@ def create_app():
             ('tasks', 'customer_email',  'VARCHAR(200)'),
             ('plans', 'release_date',    'TIMESTAMP'),
             ('plans', 'customer_email',  'VARCHAR(200)'),
+            ('tasks', 'updated_at',      'TIMESTAMP'),
         ]
         for table, col, col_type in cols:
             try:
@@ -193,6 +194,25 @@ def create_app():
                 count += 1
         db.session.commit()
         print(f'Fixed {count} fields in {len(tasks)} tasks')
+
+    @app.cli.command('auto-archive')
+    def auto_archive_cmd():
+        """Archive all done tasks older than 7 days. Run weekly via cron."""
+        from datetime import datetime, timedelta
+        from models import Task, TaskStatus
+        now = datetime.utcnow()
+        cutoff = now - timedelta(days=7)
+        tasks = Task.query.filter(
+            Task.status == TaskStatus.DONE,
+            Task.completed_at < cutoff,
+            Task.completed_at.isnot(None),
+            Task.is_archived == False,
+        ).all()
+        for t in tasks:
+            t.is_archived = True
+            t.archived_at = now
+        db.session.commit()
+        print(f'Archived {len(tasks)} tasks')
 
     @app.cli.command('archive-old')
     def archive_old():

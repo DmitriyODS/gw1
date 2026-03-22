@@ -1,4 +1,5 @@
 import io
+from collections import defaultdict
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, send_file, request, jsonify, current_app
 from flask_login import login_required, current_user
@@ -9,25 +10,33 @@ from models import Task, TimeLog, User, Department, TaskStatus, Urgency
 analytics_bp = Blueprint('analytics', __name__)
 
 TYPE_LABELS = {
-    'publication':          'Публикация',
-    'picture':              'Разработка картинки',
-    'handout':              'Разработка раздатки',
+    'pub_images':           'Картинки для публикаций',
     'banner':               'Разработка баннера',
-    'poster':               'Разработка плаката/афиши',
-    'presentation_verify':  'Верификация презентации',
+    'poster':               'Разработка афиши',
     'presentation':         'Разработка презентации',
     'presentation_update':  'Доработка презентации',
-    'design_verify':        'Верификация дизайна',
-    'merch':                'Разработка сувенирной продукции',
-    'postcard':             'Разработка открыток',
-    'newsletter':           'Выполнение корпоративных рассылок',
-    'photo_video':          'Фото/видео сопровождение',
-    'mail_check':           'Проверка почты',
-    'revision':             'Правки по задаче',
-    'video_edit':           'Монтаж видео',
+    'text_writing':         'Написание текста',
+    'handout':              'Разработка раздатки',
+    'placement':            'Размещение материалов',
+    'internal':             'Внутренняя работа',
+    'external':             'Внешняя работа',
+    'water_plants':         'Полить цветы',
+    'exports':              'Подготовка выгрузок',
+    'surveys':              'Создание опросов',
     'photo_edit':           'Обработка фото',
-    'dept_internal':        'Внутренняя работа отдела',
-    'dept_external':        'Внешняя работа отдела',
+    'video_edit':           'Монтаж ролика',
+    'video_shoot':          'Съёмка ролика',
+    'photo_shoot':          'Фотосъёмка',
+    'meeting':              'Планёрка',
+    'mail_work':            'Работа с почтой',
+    'cloud_work':           'Работа с облаками',
+    'stand_design':         'Разработка стендов',
+    'pub_design':           'Разработка дизайна для публикаций',
+    'branded':              'Разработка брендированной продукции',
+    # backward compat
+    'publication':          'Публикация (устар.)',
+    'picture':              'Разработка картинки (устар.)',
+    'merch':                'Сувенирная продукция (устар.)',
     'other':                'Другое',
     None:                   'Не указан',
 }
@@ -139,93 +148,156 @@ def build_stats(period):
     }
 
 
+def _period_bounds(mode, offset, tz_hours):
+    """Return (start_utc, end_utc, label) for given mode/offset."""
+    import calendar as cal_mod
+    now_utc = datetime.utcnow()
+    now_local = now_utc + timedelta(hours=tz_hours)
+
+    if mode == 'day':
+        day = (now_local + timedelta(days=offset)).date()
+        s = datetime(day.year, day.month, day.day, 0, 0, 0)
+        e = datetime(day.year, day.month, day.day, 23, 59, 59)
+        label = day.strftime('%d.%m.%Y')
+    elif mode == 'week':
+        monday = (now_local - timedelta(days=now_local.weekday())).date() + timedelta(weeks=offset)
+        sunday = monday + timedelta(days=6)
+        s = datetime(monday.year, monday.month, monday.day, 0, 0, 0)
+        e = datetime(sunday.year, sunday.month, sunday.day, 23, 59, 59)
+        label = f'{monday.strftime("%d.%m")} – {sunday.strftime("%d.%m.%Y")}'
+    else:  # month
+        year = now_local.year
+        month = now_local.month + offset
+        while month <= 0:
+            month += 12; year -= 1
+        while month > 12:
+            month -= 12; year += 1
+        last_day = cal_mod.monthrange(year, month)[1]
+        s = datetime(year, month, 1, 0, 0, 0)
+        e = datetime(year, month, last_day, 23, 59, 59)
+        label = s.strftime('%B %Y')
+
+    return s - timedelta(hours=tz_hours), e - timedelta(hours=tz_hours), label
+
+
 @analytics_bp.route('/analytics/time')
 @login_required
 def time_report():
-    now = datetime.utcnow()
-    period = request.args.get('period', 'week')
-    selected_uid = request.args.get('user_id', type=int)
-
-    # Who can see what
     can_see_all = current_user.can_admin
-    all_users = User.query.filter_by(is_active=True).order_by(User.full_name).all() if can_see_all else None
-    target_uid = (selected_uid if can_see_all else current_user.id)
-
-    # Period start
-    start, _ = get_range(period)
-
-    # All-period totals for summary cards (using local-time boundaries → UTC)
+    mode   = request.args.get('mode', 'week')
+    offset = request.args.get('offset', 0, type=int)
     tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
-    now_local = now + timedelta(hours=tz_hours)
-    ranges = {
-        'day':   now_local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
-        'week':  (now_local - timedelta(days=now_local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
-        'month': now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
-        'year':  now_local.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=tz_hours),
-    }
+    start, end, period_label = _period_bounds(mode, offset, tz_hours)
 
-    def _secs(start_dt, uid=None):
-        q = db.session.query(
+    all_users = (User.query
+                 .filter_by(is_active=True)
+                 .filter(User.role != 'tv')
+                 .order_by(User.full_name)
+                 .all()) if can_see_all else [current_user]
+
+    # Done tasks per user in period
+    rows = []
+    for u in all_users:
+        done_cnt = Task.query.filter(
+            Task.assigned_to_id == u.id,
+            Task.status == TaskStatus.DONE,
+            Task.completed_at >= start,
+            Task.completed_at <= end,
+            Task.completed_at.isnot(None),
+        ).count()
+        secs = int(db.session.query(
             func.coalesce(func.sum(
-                func.extract('epoch', func.coalesce(TimeLog.ended_at, now) - TimeLog.started_at)
+                func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
             ), 0)
-        ).filter(TimeLog.started_at >= start_dt)
-        if uid:
-            q = q.filter(TimeLog.user_id == uid)
-        elif not can_see_all:
-            q = q.filter(TimeLog.user_id == current_user.id)
-        return int(q.scalar() or 0)
+        ).filter(
+            TimeLog.user_id == u.id,
+            TimeLog.started_at >= start,
+            TimeLog.started_at <= end,
+            TimeLog.ended_at.isnot(None),
+        ).scalar() or 0)
+        rows.append({'id': u.id, 'name': u.full_name, 'done': done_cnt, 'secs': secs})
 
-    totals = {p: _secs(r, target_uid) for p, r in ranges.items()}
+    rows.sort(key=lambda r: (-r['done'], -r['secs']))
 
-    # Detailed logs for selected period
-    q = db.session.query(TimeLog, Task, User).join(
-        Task, TimeLog.task_id == Task.id
-    ).join(User, TimeLog.user_id == User.id).filter(TimeLog.started_at >= start)
-    if target_uid:
-        q = q.filter(TimeLog.user_id == target_uid)
-    elif not can_see_all:
-        q = q.filter(TimeLog.user_id == current_user.id)
-    logs = q.order_by(TimeLog.started_at.desc()).all()
-
-    # Group logs by date and by task
-    from collections import defaultdict
-    by_date = defaultdict(list)
-    by_task = {}  # task_id -> {task_id, task_title, secs, status}
-    for log, task, user in logs:
-        date_key = (log.started_at + timedelta(hours=tz_hours)).date()
-        end = log.ended_at or now
-        secs = int((end - log.started_at).total_seconds())
-        by_date[date_key].append({
-            'task_id': task.id, 'task_title': task.title,
-            'user_name': user.full_name,
-            'started': log.started_at, 'ended': log.ended_at,
-            'secs': secs, 'active': log.ended_at is None,
-        })
-        if task.id not in by_task:
-            by_task[task.id] = {'task_id': task.id, 'task_title': task.title,
-                                'status': task.status, 'secs': 0}
-        by_task[task.id]['secs'] += secs
-    by_task_list = sorted(by_task.values(), key=lambda x: x['secs'], reverse=True)
-
-    # Per-user summary for managers (when no specific user selected)
-    user_summary = []
-    if can_see_all and not target_uid:
-        for u in all_users:
-            s = _secs(start, u.id)
-            if s > 0:
-                user_summary.append({'name': u.full_name, 'id': u.id, 'secs': s})
-        user_summary.sort(key=lambda x: x['secs'], reverse=True)
-
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+    today_iso = (datetime.utcnow() + timedelta(hours=tz_hours)).strftime('%Y-%m-%d')
     return render_template('analytics/time.html',
-        period=period, target_uid=target_uid,
-        all_users=all_users, can_see_all=can_see_all,
-        totals=totals, by_date=dict(sorted(by_date.items(), reverse=True)),
-        user_summary=user_summary, by_task_list=by_task_list)
+        mode=mode, offset=offset, period_label=period_label,
+        can_see_all=can_see_all, rows=rows, today_iso=today_iso)
+
+
+@analytics_bp.route('/analytics/time/user-detail')
+@login_required
+def time_user_detail():
+    """Returns JSON detail for one user in a given period."""
+    can_see_all = current_user.can_admin
+    uid    = request.args.get('user_id', type=int)
+    mode   = request.args.get('mode', 'week')
+    offset = request.args.get('offset', 0, type=int)
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+
+    if not uid:
+        uid = current_user.id
+    if not can_see_all and uid != current_user.id:
+        return jsonify({'error': 'Нет прав'}), 403
+
+    start, end, period_label = _period_bounds(mode, offset, tz_hours)
+
+    # Done tasks assigned to user in period
+    done_tasks = Task.query.filter(
+        Task.assigned_to_id == uid,
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at <= end,
+        Task.completed_at.isnot(None),
+    ).order_by(Task.completed_at.desc()).all()
+
+    # Time per task in period
+    logs = TimeLog.query.filter(
+        TimeLog.user_id == uid,
+        TimeLog.started_at >= start,
+        TimeLog.started_at <= end,
+        TimeLog.ended_at.isnot(None),
+    ).all()
+    time_by_task = defaultdict(float)
+    for log in logs:
+        time_by_task[log.task_id] += (log.ended_at - log.started_at).total_seconds()
+
+    total_secs = int(sum(time_by_task.values()))
+
+    # Build task list
+    by_type = defaultdict(lambda: {'cnt': 0, 'secs': 0})
+    tasks_out = []
+    for t in done_tasks:
+        secs = int(time_by_task.get(t.id, 0))
+        type_label = TYPE_LABELS.get(t.task_type, t.task_type or 'Не указан')
+        by_type[type_label]['cnt'] += 1
+        by_type[type_label]['secs'] += secs
+        tasks_out.append({
+            'id': t.id,
+            'title': t.title,
+            'type': type_label,
+            'secs': secs,
+            'completed_at': (t.completed_at + timedelta(hours=tz_hours)).strftime('%d.%m %H:%M'),
+        })
+
+    type_list = sorted(
+        [{'label': k, 'cnt': v['cnt'], 'secs': v['secs']} for k, v in by_type.items()],
+        key=lambda x: x['cnt'], reverse=True
+    )
+
+    user = User.query.get(uid)
+    return jsonify({
+        'user_name': user.full_name if user else '',
+        'period_label': period_label,
+        'total_tasks': len(done_tasks),
+        'total_secs': total_secs,
+        'tasks': tasks_out,
+        'by_type': type_list,
+    })
 
 
 def build_burnup(period):
-    from collections import defaultdict
     from flask import current_app
     tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
     start, _ = get_range(period)
@@ -271,135 +343,140 @@ def tv_mode():
     return render_template('analytics/tv.html')
 
 
+def compute_staff_scores(start, end=None):
+    """Compute employee ranking using formula R_i = 0.5*(N_i/N_max) + 0.5*(T_i/T_max), scaled to 0-100."""
+    now = datetime.utcnow()
+    if end is None:
+        end = now
+
+    # N_i: done tasks assigned to user
+    user_tasks_q = db.session.query(
+        User.id, User.full_name, func.count(Task.id).label('cnt')
+    ).join(Task, Task.assigned_to_id == User.id).filter(
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at <= end,
+        Task.completed_at.isnot(None),
+    ).group_by(User.id, User.full_name).all()
+
+    # Total time per user in period
+    user_time_q = db.session.query(
+        TimeLog.user_id,
+        func.coalesce(func.sum(
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+        ), 0).label('secs')
+    ).filter(
+        TimeLog.started_at >= start,
+        TimeLog.started_at <= end,
+        TimeLog.ended_at.isnot(None),
+    ).group_by(TimeLog.user_id).all()
+
+    time_map = {u.user_id: float(u.secs) for u in user_time_q}
+
+    staff = []
+    for u in user_tasks_q:
+        n_i = u.cnt
+        total_secs = time_map.get(u.id, 0)
+        t_i = total_secs / n_i if n_i > 0 else 0
+        staff.append({'id': u.id, 'name': u.full_name, 'n': n_i, 't': t_i, 'secs': int(total_secs)})
+
+    if not staff:
+        return []
+
+    n_max = max(s['n'] for s in staff) or 1
+    t_max = max(s['t'] for s in staff) or 1
+
+    for s in staff:
+        s['score'] = round((0.5 * s['n'] / n_max + 0.5 * s['t'] / t_max) * 100)
+
+    return sorted(staff, key=lambda x: x['score'], reverse=True)[:5]
+
+
 @analytics_bp.route('/analytics/tv/data')
 def tv_data():
-    from collections import defaultdict
-    result = {}
+    now = datetime.utcnow()
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+    now_local = now + timedelta(hours=tz_hours)
 
-    for p in ['week', 'month', 'year']:
-        s = build_stats(p)
-        start, _ = get_range(p)
-        now = datetime.utcnow()
+    def period_data(start, end=None):
+        if end is None:
+            end = now
+        # Status counts
+        status = {}
+        for s in ['new', 'in_progress', 'paused', 'done']:
+            status[s] = Task.query.filter(
+                Task.created_at >= start,
+                Task.created_at <= end,
+                Task.status == s,
+                Task.is_archived == False,
+            ).count()
 
-        # Total time logged in period
+        # Types (created in period)
+        raw_types = db.session.query(Task.task_type, func.count(Task.id)).filter(
+            Task.created_at >= start, Task.created_at <= end
+        ).group_by(Task.task_type).order_by(func.count(Task.id).desc()).all()
+        types = [{'label': TYPE_LABELS.get(t, t or 'Другое'), 'cnt': c} for t, c in raw_types if c > 0]
+
+        # Total time
         total_secs = int(db.session.query(
             func.coalesce(func.sum(
                 func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
             ), 0)
-        ).filter(TimeLog.started_at >= start, TimeLog.ended_at.isnot(None)).scalar() or 0)
+        ).filter(TimeLog.started_at >= start, TimeLog.started_at <= end, TimeLog.ended_at.isnot(None)).scalar() or 0)
 
-        # Burn-up: cumulative created vs done tasks by day
-        days_data = defaultdict(lambda: {'created': 0, 'done': 0})
-        for t in Task.query.filter(Task.created_at >= start).all():
-            d = t.created_at.date()
-            days_data[d]['created'] += 1
-        for t in Task.query.filter(
-            Task.status == TaskStatus.DONE,
-            Task.completed_at >= start,
-            Task.completed_at.isnot(None)
-        ).all():
-            d = t.completed_at.date()
-            days_data[d]['done'] += 1
+        # Departments
+        dept_q = db.session.query(Department.name, func.count(Task.id)).join(
+            Task, Task.department_id == Department.id
+        ).filter(Task.created_at >= start, Task.created_at <= end
+        ).group_by(Department.name).order_by(func.count(Task.id).desc()).limit(8).all()
+        depts = [{'name': n, 'cnt': c} for n, c in dept_q]
 
-        dates, c_series, d_series = [], [], []
-        c_c = c_d = 0
-        cur = start.date()
-        while cur <= now.date():
-            c_c += days_data[cur]['created']
-            c_d += days_data[cur]['done']
-            dates.append(cur.strftime('%d.%m'))
-            c_series.append(c_c)
-            d_series.append(c_d)
-            cur += timedelta(days=1)
+        # Staff scores
+        staff = compute_staff_scores(start, end)
 
-        # Top by tasks: users with time logged on done tasks
-        top_tasks_q = db.session.query(
-            User.full_name, func.count(func.distinct(Task.id)).label('cnt')
-        ).join(TimeLog, TimeLog.user_id == User.id).join(
-            Task, TimeLog.task_id == Task.id
-        ).filter(
-            TimeLog.started_at >= start, Task.status == TaskStatus.DONE
-        ).group_by(User.full_name).order_by(
-            func.count(func.distinct(Task.id)).desc()
-        ).limit(5).all()
-
-        # Top by time logged
-        top_time_q = db.session.query(
-            User.full_name,
-            func.coalesce(func.sum(
-                func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
-            ), 0).label('secs')
-        ).join(TimeLog, TimeLog.user_id == User.id).filter(
-            TimeLog.started_at >= start, TimeLog.ended_at.isnot(None)
-        ).group_by(User.full_name).order_by(
-            func.sum(func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)).desc()
-        ).limit(5).all()
-
-        # Focus: longest single uninterrupted session
-        focus = db.session.query(
-            User.full_name, Task.title,
-            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at).label('secs')
-        ).join(User, TimeLog.user_id == User.id).join(
-            Task, TimeLog.task_id == Task.id
-        ).filter(
-            TimeLog.started_at >= start, TimeLog.ended_at.isnot(None)
-        ).order_by(
-            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at).desc()
-        ).first()
-
-        # Today stats
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_created = Task.query.filter(Task.created_at >= today_start).count()
-        today_done = Task.query.filter(
-            Task.completed_at >= today_start,
-            Task.completed_at.isnot(None)
-        ).count()
-        in_progress_count = Task.query.filter(
-            Task.status == TaskStatus.IN_PROGRESS,
-            Task.is_archived == False
-        ).count()
-
-        # Overdue tasks (deadline passed, not done, not archived)
-        overdue_q = Task.query.filter(
-            Task.deadline < now,
-            Task.status != TaskStatus.DONE,
-            Task.is_archived == False
-        ).order_by(Task.deadline.asc()).limit(6).all()
-        overdue_count = Task.query.filter(
-            Task.deadline < now,
-            Task.status != TaskStatus.DONE,
-            Task.is_archived == False
-        ).count()
-
-        result[p] = {
-            'by_status': s['by_status'],
-            'dept_labels': [r[0] for r in s['dept_stats']],
-            'dept_values': [r[1] for r in s['dept_stats']],
-            'type_labels': [TYPE_LABELS.get(r[0], r[0] or 'Другое') for r in s['type_stats']],
-            'type_values': [r[1] for r in s['type_stats']],
+        return {
+            'status': status,
+            'types': types,
             'total_secs': total_secs,
-            'today': {
-                'created': today_created,
-                'done': today_done,
-                'in_progress': in_progress_count,
-                'overdue': overdue_count,
-            },
-            'overdue_tasks': [
-                {
-                    'title': t.title,
-                    'days': (now.date() - t.deadline.date()).days,
-                    'urgency': t.urgency,
-                }
-                for t in overdue_q
-            ],
-            'top_by_tasks': [{'name': r[0], 'cnt': r[1]} for r in top_tasks_q],
-            'top_by_time': [{'name': r[0], 'secs': int(r[1])} for r in top_time_q],
-            'focus': {
-                'name': focus[0], 'task': focus[1], 'secs': int(focus[2])
-            } if focus else None,
+            'depts': depts,
+            'staff': [{'name': s['name'], 'score': s['score'], 'tasks': s['n'], 'secs': s['secs']} for s in staff],
         }
 
-    return jsonify(result)
+    # Today
+    today_start = datetime(now_local.year, now_local.month, now_local.day, 0, 0, 0) - timedelta(hours=tz_hours)
+    today_data = period_data(today_start)
+
+    # Current week
+    monday_local = (now_local - timedelta(days=now_local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = monday_local - timedelta(hours=tz_hours)
+    week_data = period_data(week_start)
+
+    # All time
+    alltime_new = Task.query.filter(Task.status == 'new', Task.is_archived == False).count()
+    alltime_ip  = Task.query.filter(Task.status.in_(['in_progress', 'paused']), Task.is_archived == False).count()
+    alltime_done = Task.query.filter(Task.status == 'done').count()
+    alltime_types_q = db.session.query(Task.task_type, func.count(Task.id)).group_by(Task.task_type).order_by(func.count(Task.id).desc()).all()
+    alltime_types = [{'label': TYPE_LABELS.get(t, t or 'Другое'), 'cnt': c} for t, c in alltime_types_q if c > 0]
+    alltime_depts_q = db.session.query(Department.name, func.count(Task.id)).join(
+        Task, Task.department_id == Department.id
+    ).group_by(Department.name).order_by(func.count(Task.id).desc()).limit(8).all()
+    alltime_depts = [{'name': n, 'cnt': c} for n, c in alltime_depts_q]
+    # alltime staff — use beginning of year as start
+    year_start = datetime(now_local.year, 1, 1, 0, 0, 0) - timedelta(hours=tz_hours)
+    alltime_staff = compute_staff_scores(year_start)
+
+    return jsonify({
+        'today': today_data,
+        'week': week_data,
+        'alltime': {
+            'new': alltime_new,
+            'in_progress': alltime_ip,
+            'done': alltime_done,
+            'types': alltime_types,
+            'depts': alltime_depts,
+            'staff': [{'name': s['name'], 'score': s['score'], 'tasks': s['n']} for s in alltime_staff],
+        },
+    })
 
 
 @analytics_bp.route('/analytics/export/excel')

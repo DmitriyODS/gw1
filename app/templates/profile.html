@@ -2,11 +2,10 @@
 {% block title %}Профиль — Groove Work{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto flex flex-col gap-4">
+<div class="max-w-3xl mx-auto flex flex-col gap-4">
 
   <!-- Header -->
   <div class="flex items-center gap-4">
-    <!-- Avatar with hover overlay -->
     <div class="relative group shrink-0 cursor-pointer" onclick="document.getElementById('avatar-upload').click()" title="Изменить фото">
       <img src="{{ url_for('profile.avatar', user_id=current_user.id) }}?v={{ avatar_v }}"
            id="avatar-preview"
@@ -16,7 +15,6 @@
         <i class="bi bi-camera text-white text-xl"></i>
       </div>
     </div>
-
     <div class="flex-1 min-w-0">
       <h1 class="text-xl font-bold">{{ current_user.full_name }}</h1>
       <div class="text-sm text-base-content/50">
@@ -39,7 +37,6 @@
     </div>
   </div>
 
-  <!-- Hidden file input for avatar -->
   <form action="{{ url_for('profile.update_avatar') }}" method="post"
         enctype="multipart/form-data" id="avatar-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -47,7 +44,7 @@
     <input type="file" id="avatar-upload" name="avatar" accept="image/*" class="hidden">
   </form>
 
-  <!-- Stats -->
+  <!-- Quick stats -->
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
     <div class="card bg-base-100 text-center py-4">
       <div class="text-2xl font-bold text-primary">{{ tasks_created }}</div>
@@ -64,6 +61,39 @@
     <div class="card bg-base-100 text-center py-4">
       <div class="text-2xl font-bold text-warning">{{ time_month | duration }}</div>
       <div class="text-xs text-base-content/50 mt-1">Время за месяц</div>
+    </div>
+  </div>
+
+  <!-- Type stats -->
+  <div class="card bg-base-100 shadow-sm">
+    <div class="px-4 py-3 border-b border-base-300 flex items-center gap-2 flex-wrap">
+      <span class="font-semibold text-sm flex-1"><i class="bi bi-bar-chart-steps"></i> Статистика по типам задач</span>
+      <div class="flex gap-1">
+        <button class="btn btn-xs mode-btn" data-mode="day" onclick="setMode('day')">День</button>
+        <button class="btn btn-xs btn-primary mode-btn" data-mode="week" onclick="setMode('week')">Неделя</button>
+        <button class="btn btn-xs mode-btn" data-mode="month" onclick="setMode('month')">Месяц</button>
+      </div>
+    </div>
+    <!-- Period nav -->
+    <div class="flex items-center gap-2 px-4 py-2 border-b border-base-300">
+      <button class="btn btn-ghost btn-xs" onclick="changeOffset(-1)"><i class="bi bi-chevron-left"></i></button>
+      <span id="period-label" class="text-sm font-medium flex-1 text-center">...</span>
+      <button class="btn btn-ghost btn-xs" id="next-btn" onclick="changeOffset(1)"><i class="bi bi-chevron-right"></i></button>
+    </div>
+    <!-- Summary -->
+    <div id="stats-summary" class="grid grid-cols-2 gap-4 px-4 py-3 border-b border-base-300">
+      <div>
+        <div id="stat-tasks" class="text-2xl font-bold text-success">—</div>
+        <div class="text-xs text-base-content/50">Закрыто задач</div>
+      </div>
+      <div>
+        <div id="stat-time" class="text-2xl font-bold text-primary">—</div>
+        <div class="text-xs text-base-content/50">Отработано времени</div>
+      </div>
+    </div>
+    <!-- Type table -->
+    <div id="type-table" class="divide-y divide-base-300">
+      <div class="px-4 py-8 text-center text-base-content/40 text-sm">Загрузка...</div>
     </div>
   </div>
 
@@ -88,7 +118,7 @@
   </div>
   {% endif %}
 
-  <!-- Edit profile form -->
+  <!-- Edit profile -->
   <div class="card bg-base-100 shadow-sm">
     <div class="px-4 py-2 border-b border-base-300">
       <span class="font-semibold text-sm"><i class="bi bi-pencil-square"></i> Редактировать профиль</span>
@@ -117,7 +147,6 @@
     </div>
   </div>
 
-  <!-- Total time -->
   <div class="text-xs text-base-content/40 text-center">
     Всего времени за всё время: {{ time_all | duration }}
   </div>
@@ -134,5 +163,69 @@ document.getElementById('avatar-upload').addEventListener('change', function() {
   reader.readAsDataURL(this.files[0]);
   document.getElementById('avatar-form').submit();
 });
+
+let currentMode = 'week';
+let currentOffset = 0;
+
+function setMode(mode) {
+  currentMode = mode;
+  currentOffset = 0;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('btn-primary', b.dataset.mode === mode);
+  });
+  loadStats();
+}
+
+function changeOffset(delta) {
+  currentOffset += delta;
+  document.getElementById('next-btn').disabled = currentOffset >= 0;
+  loadStats();
+}
+
+function fmtDur(s) {
+  if (!s) return '0 мин';
+  s = Math.floor(s);
+  const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+  if (d) return `${d}д ${h}ч ${m}м`;
+  if (h) return `${h}ч ${m}м`;
+  return `${m}м`;
+}
+
+async function loadStats() {
+  document.getElementById('type-table').innerHTML = '<div class="px-4 py-8 text-center text-base-content/40 text-sm">Загрузка...</div>';
+  try {
+    const r = await fetch(`/api/profile/stats?mode=${currentMode}&offset=${currentOffset}`);
+    const d = await r.json();
+
+    document.getElementById('period-label').textContent = d.label;
+    document.getElementById('stat-tasks').textContent = d.total_tasks;
+    document.getElementById('stat-time').textContent = fmtDur(d.total_secs);
+    document.getElementById('next-btn').disabled = currentOffset >= 0;
+
+    if (!d.by_type.length) {
+      document.getElementById('type-table').innerHTML = '<div class="px-4 py-8 text-center text-base-content/40 text-sm">Нет закрытых задач за период</div>';
+      return;
+    }
+
+    const maxCnt = Math.max(...d.by_type.map(t => t.cnt), 1);
+    document.getElementById('type-table').innerHTML = d.by_type.map(t => `
+      <div class="flex items-center gap-3 px-4 py-2.5">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium truncate">${t.label}</div>
+          <div class="h-1.5 rounded-full bg-base-200 mt-1 overflow-hidden">
+            <div class="h-full rounded-full bg-primary transition-all" style="width:${(t.cnt/maxCnt*100).toFixed(1)}%"></div>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="text-sm font-bold">${t.cnt} <span class="font-normal text-base-content/40">зад.</span></div>
+          <div class="text-xs text-base-content/40">${fmtDur(t.secs)}</div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('type-table').innerHTML = '<div class="px-4 py-4 text-center text-error text-sm">Ошибка загрузки</div>';
+  }
+}
+
+loadStats();
 </script>
 {% endblock %}

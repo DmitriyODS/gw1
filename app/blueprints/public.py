@@ -8,52 +8,52 @@ public_bp = Blueprint('public', __name__)
 
 PLATFORMS = ['Сайт', 'Внешние соц. сети', 'Внутренние соц. сети', 'Афиша']
 TASK_TYPES = [
-    ('publication',          'Публикация'),
-    ('picture',              'Разработка картинки'),
-    ('handout',              'Разработка раздатки'),
+    ('pub_images',           'Картинки для публикаций'),
     ('banner',               'Разработка баннера'),
-    ('poster',               'Разработка плаката/афиши'),
-    ('presentation_verify',  'Верификация презентации'),
+    ('poster',               'Разработка афиши'),
     ('presentation',         'Разработка презентации'),
-    ('design_verify',        'Верификация дизайна'),
-    ('merch',                'Разработка сувенирной продукции'),
-    ('postcard',             'Разработка открыток'),
-    ('newsletter',           'Выполнение корпоративных рассылок'),
-    ('photo_video',          'Фото/видео сопровождение'),
-    ('other',                'Другое'),
-    # Internal-only (not shown on public form):
-    ('mail_check',           'Проверка почты'),
-    ('revision',             'Правки по задаче'),
-    ('video_edit',           'Монтаж видео'),
+    ('presentation_update',  'Доработка презентации'),
+    ('text_writing',         'Написание текста'),
+    ('handout',              'Разработка раздатки'),
+    ('placement',            'Размещение материалов'),
+    ('internal',             'Внутренняя работа'),
+    ('external',             'Внешняя работа'),
+    ('water_plants',         'Полить цветы'),
+    ('exports',              'Подготовка выгрузок'),
+    ('surveys',              'Создание опросов'),
     ('photo_edit',           'Обработка фото'),
-    ('dept_internal',        'Внутренняя работа отдела'),
-    ('dept_external',        'Внешняя работа отдела'),
+    ('video_edit',           'Монтаж ролика'),
+    ('video_shoot',          'Съёмка ролика'),
+    ('photo_shoot',          'Фотосъёмка'),
+    ('meeting',              'Планёрка'),
+    ('mail_work',            'Работа с почтой'),
+    ('cloud_work',           'Работа с облаками'),
+    ('stand_design',         'Разработка стендов'),
+    ('pub_design',           'Разработка дизайна для публикаций'),
+    ('branded',              'Разработка брендированной продукции'),
 ]
-
-# Types only available in the internal form — hidden from the public submit form
-_INTERNAL_ONLY = {'mail_check', 'revision', 'video_edit', 'photo_edit', 'dept_internal', 'dept_external'}
-EXTERNAL_TASK_TYPES = [(v, l) for v, l in TASK_TYPES if v not in _INTERNAL_ONLY]
+EXTERNAL_TASK_TYPES = TASK_TYPES  # все типы видны везде
+_INTERNAL_ONLY = set()  # больше нет внутренних типов
 PUB_SUBTYPES = [('news', 'Новость'), ('event', 'Мероприятие')]
 
 # Auto-tags suggested/assigned by task type
 AUTO_TAGS = {
-    'publication':         ['публикация'],
-    'picture':             ['дизайн'],
-    'banner':              ['дизайн'],
-    'handout':             ['дизайн'],
-    'merch':               ['дизайн'],
-    'poster':              ['дизайн'],
-    'presentation':        ['дизайн'],
-    'presentation_verify': ['дизайн'],
-    'design_verify':       ['дизайн'],
-    'postcard':            ['дизайн', 'текст'],
-    'newsletter':          ['текст'],
-    'video_edit':          ['фото/видео'],
-    'photo_edit':          ['фото/видео'],
-    'photo_video':         ['фото/видео'],
-    'mail_check':          ['внутреннее'],
-    'dept_internal':       ['внутреннее'],
-    'dept_external':       ['внешнее'],
+    'pub_images':           ['дизайн'],
+    'banner':               ['дизайн'],
+    'poster':               ['дизайн'],
+    'presentation':         ['дизайн'],
+    'presentation_update':  ['дизайн'],
+    'text_writing':         ['текст'],
+    'handout':              ['дизайн'],
+    'stand_design':         ['дизайн'],
+    'pub_design':           ['дизайн'],
+    'branded':              ['дизайн'],
+    'photo_edit':           ['фото/видео'],
+    'video_edit':           ['фото/видео'],
+    'video_shoot':          ['фото/видео'],
+    'photo_shoot':          ['фото/видео'],
+    'internal':             ['внутреннее'],
+    'external':             ['внешнее'],
 }
 
 
@@ -76,13 +76,9 @@ def submit():
     if request.method == 'POST':
         task_type = request.form.get('task_type')
         dynamic = {}
-        if task_type == 'publication':
-            dynamic['subtype'] = request.form.get('subtype')
-            dynamic['platforms'] = request.form.getlist('platforms')
-        else:
-            clarification = request.form.get('clarification', '').strip()
-            if clarification:
-                dynamic['clarification'] = clarification
+        clarification = request.form.get('clarification', '').strip()
+        if clarification:
+            dynamic['clarification'] = clarification
         event_date = request.form.get('event_date', '').strip()
         if event_date:
             dynamic['event_date'] = event_date
@@ -105,31 +101,24 @@ def submit():
 
         _save_attachments(request.files.getlist('attachments'), task.id)
 
-        # For publication tasks create child design + text subtasks
-        if task_type == 'publication':
-            shared = dict(
-                task_type='publication',
-                urgency=task.urgency,
-                deadline=task.deadline,
-                department_id=task.department_id,
-                customer_name=task.customer_name,
-                customer_phone=task.customer_phone,
-                customer_email=task.customer_email,
-                description=task.description,
-                parent_task_id=task.id,
-                status=TaskStatus.NEW,
-                dynamic_fields=task.dynamic_fields or {},
-            )
-            db.session.add(Task(title=f'[Дизайн] {task.title}', tags=[TaskTag.DESIGN], **shared))
-            db.session.add(Task(title=f'[Текст] {task.title}', tags=[TaskTag.TEXT], **shared))
-
         db.session.commit()
         flash('Заявка успешно отправлена! Ожидайте обработки.', 'success')
-        return redirect(url_for('public.submit'))
+        return redirect(url_for('public.submit',
+            prefill_name=task.customer_name or '',
+            prefill_phone=task.customer_phone or '',
+            prefill_email=task.customer_email or '',
+            prefill_dept=str(task.department_id or ''),
+        ))
 
+    prefill = {
+        'name':  request.args.get('prefill_name', ''),
+        'phone': request.args.get('prefill_phone', ''),
+        'email': request.args.get('prefill_email', ''),
+        'dept':  request.args.get('prefill_dept', ''),
+    }
     return render_template('public/submit.html', departments=departments,
                            task_types=EXTERNAL_TASK_TYPES, pub_subtypes=PUB_SUBTYPES,
-                           platforms=PLATFORMS)
+                           platforms=PLATFORMS, prefill=prefill)
 
 
 def _save_attachments(files, task_id):

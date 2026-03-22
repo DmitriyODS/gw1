@@ -166,6 +166,7 @@ class Task(db.Model):
     archived_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     department = db.relationship('Department', backref='tasks')
     created_by = db.relationship('User', backref='created_tasks', foreign_keys=[created_by_id])

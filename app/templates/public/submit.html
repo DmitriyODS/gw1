@@ -74,8 +74,11 @@
                 </div>
                 <h2 class="text-xl font-bold mb-2">Заявка отправлена!</h2>
                 <p class="text-sm opacity-50 mb-6">Наши специалисты рассмотрят её и свяжутся с вами в ближайшее время.</p>
-                <button class="btn btn-primary rounded-xl px-8" onclick="location.reload()">
-                    Подать ещё одну
+                <button class="btn btn-primary rounded-xl px-8 mb-3" onclick="showFormAgain()">
+                    Добавить ещё задачу
+                </button>
+                <button class="btn btn-ghost rounded-xl px-8" onclick="location.href='/submit'">
+                    Новая заявка (очистить)
                 </button>
             </div>
 
@@ -104,17 +107,20 @@
                         <div>
                             <div class="field-label">ФИО <span class="text-error normal-case">*</span></div>
                             <input type="text" name="customer_name" class="input input-bordered w-full rounded-xl"
-                                   required placeholder="Иванов Иван Иванович">
+                                   required placeholder="Иванов Иван Иванович"
+                                   value="{{ prefill.name }}">
                         </div>
                         <div>
                             <div class="field-label">Телефон</div>
                             <input type="tel" name="customer_phone" class="input input-bordered w-full rounded-xl"
-                                   placeholder="+7 (900) 000-00-00">
+                                   placeholder="+7 (900) 000-00-00"
+                                   value="{{ prefill.phone }}">
                         </div>
                         <div class="sm:col-span-2">
                             <div class="field-label">Email</div>
                             <input type="email" name="customer_email" class="input input-bordered w-full rounded-xl"
-                                   placeholder="example@mail.ru">
+                                   placeholder="example@mail.ru"
+                                   value="{{ prefill.email }}">
                         </div>
                     </div>
 
@@ -280,9 +286,23 @@
         document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
     }
 
+    const PREFILL_DEPT = {{ prefill.dept | tojson }};
+
     fetch('/api/departments')
         .then(r => r.json())
-        .then(data => initSS('dept_wrap', data.map(d => ({ value: d.id, label: d.name }))))
+        .then(data => {
+            initSS('dept_wrap', data.map(d => ({ value: String(d.id), label: d.name })));
+            if (PREFILL_DEPT) {
+                const dept = data.find(d => String(d.id) === String(PREFILL_DEPT));
+                if (dept) {
+                    const wrap = document.getElementById('dept_wrap');
+                    wrap.querySelector('.ss-value').value = dept.id;
+                    const lbl = wrap.querySelector('.ss-label');
+                    lbl.textContent = dept.name;
+                    lbl.classList.remove('opacity-50');
+                }
+            }
+        })
         .catch(() => {});
 
     // Task type searchable select
@@ -376,6 +396,20 @@
     {% endif %}
     {% endfor %}
     {% endwith %}
+
+    function showFormAgain() {
+        document.getElementById('success-block').style.display = 'none';
+        document.getElementById('main-form').style.display = 'block';
+        document.querySelector('[name="title"]').value = '';
+        document.querySelector('[name="description"]').value = '';
+        document.getElementById('task_type_hidden').value = '';
+        // reset type select label
+        const typeWrap = document.getElementById('type_wrap');
+        if (typeWrap) {
+            typeWrap.querySelector('.ss-label').textContent = typeWrap.dataset.blank || '— выберите тип задачи —';
+            typeWrap.querySelector('.ss-label').classList.add('opacity-50');
+        }
+    }
 </script>
 </body>
 </html>

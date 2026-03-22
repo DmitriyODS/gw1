@@ -2,7 +2,7 @@ import os
 import random
 from datetime import datetime, timedelta
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, current_app, Response, send_from_directory)
+                   flash, current_app, Response, send_from_directory, jsonify)
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from extensions import db
@@ -121,6 +121,101 @@ def profile():
                            recent_tasks=recent_logs,
                            TaskStatus=TaskStatus,
                            has_custom_avatar=has_custom_avatar)
+
+
+# ── Profile stats API ─────────────────────────────────────────────────────────
+
+@profile_bp.route('/api/profile/stats')
+@login_required
+def profile_stats_api():
+    from models import Task, TimeLog, TaskStatus
+    from blueprints.analytics import TYPE_LABELS
+    from collections import defaultdict
+
+    mode = request.args.get('mode', 'day')  # day | week | month
+    offset = int(request.args.get('offset', 0))  # 0=current, -1=prev, etc.
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+
+    now_utc = datetime.utcnow()
+    now_local = now_utc + timedelta(hours=tz_hours)
+
+    if mode == 'day':
+        day = (now_local + timedelta(days=offset)).date()
+        start_local = datetime(day.year, day.month, day.day, 0, 0, 0)
+        end_local   = datetime(day.year, day.month, day.day, 23, 59, 59)
+        label = day.strftime('%d.%m.%Y')
+    elif mode == 'week':
+        cur_monday = (now_local - timedelta(days=now_local.weekday())).date()
+        monday = cur_monday + timedelta(weeks=offset)
+        sunday = monday + timedelta(days=6)
+        start_local = datetime(monday.year, monday.month, monday.day, 0, 0, 0)
+        end_local   = datetime(sunday.year, sunday.month, sunday.day, 23, 59, 59)
+        label = f'{monday.strftime("%d.%m")} – {sunday.strftime("%d.%m.%Y")}'
+    else:  # month
+        import calendar
+        year = now_local.year
+        month = now_local.month + offset
+        while month <= 0:
+            month += 12; year -= 1
+        while month > 12:
+            month -= 12; year += 1
+        last_day = calendar.monthrange(year, month)[1]
+        start_local = datetime(year, month, 1, 0, 0, 0)
+        end_local   = datetime(year, month, last_day, 23, 59, 59)
+        label = start_local.strftime('%B %Y')
+
+    start_utc = start_local - timedelta(hours=tz_hours)
+    end_utc   = end_local   - timedelta(hours=tz_hours)
+
+    # Done tasks in period assigned to current user
+    done_tasks = Task.query.filter(
+        Task.assigned_to_id == current_user.id,
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start_utc,
+        Task.completed_at <= end_utc,
+        Task.completed_at.isnot(None),
+    ).all()
+
+    # Time logs in period for current user
+    logs = TimeLog.query.filter(
+        TimeLog.user_id == current_user.id,
+        TimeLog.started_at >= start_utc,
+        TimeLog.started_at <= end_utc,
+        TimeLog.ended_at.isnot(None),
+    ).all()
+
+    # Group time by task_id
+    time_by_task = defaultdict(float)
+    for log in logs:
+        time_by_task[log.task_id] += (log.ended_at - log.started_at).total_seconds()
+
+    # Group by type
+    by_type = defaultdict(lambda: {'cnt': 0, 'secs': 0})
+    total_secs_from_tasks = 0
+    for task in done_tasks:
+        type_key = task.task_type or 'other'
+        type_label = TYPE_LABELS.get(type_key, type_key)
+        by_type[type_label]['cnt'] += 1
+        secs = time_by_task.get(task.id, 0)
+        by_type[type_label]['secs'] += secs
+        total_secs_from_tasks += secs
+
+    # Total time in period (all logs)
+    total_period_secs = int(sum(
+        (log.ended_at - log.started_at).total_seconds() for log in logs
+    ))
+
+    type_list = sorted(
+        [{'label': k, 'cnt': v['cnt'], 'secs': int(v['secs'])} for k, v in by_type.items()],
+        key=lambda x: x['cnt'], reverse=True
+    )
+
+    return jsonify({
+        'label': label,
+        'total_tasks': len(done_tasks),
+        'total_secs': total_period_secs,
+        'by_type': type_list,
+    })
 
 
 # ── Avatar upload / reset ─────────────────────────────────────────────────────

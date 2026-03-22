@@ -99,6 +99,23 @@
   .btn-timer:hover { opacity: 0.75; }
   .btn-timer-start { background: color-mix(in oklch, var(--color-success) 14%, var(--color-base-100)); color: var(--color-success); }
   .btn-timer-pause { background: color-mix(in oklch, var(--color-warning) 16%, var(--color-base-100)); color: color-mix(in oklch, var(--color-warning) 80%, var(--color-base-content)); }
+  .btn-timer-start-highlight {
+    background: color-mix(in oklch, var(--color-primary) 18%, var(--color-base-100));
+    color: var(--color-primary);
+    border: 1.5px solid color-mix(in oklch, var(--color-primary) 40%, transparent);
+    font-weight: 700;
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 40%, transparent);
+    animation: pulse-start 2s ease-in-out infinite;
+  }
+  .btn-timer-start-highlight:hover {
+    background: var(--color-primary);
+    color: white;
+    animation: none;
+  }
+  @keyframes pulse-start {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 40%, transparent); }
+    50% { box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-primary) 0%, transparent); }
+  }
 
   .empty-col {
     text-align: center; padding: 24px 0;
@@ -193,17 +210,31 @@
 {% endfor %}
 
 <!-- Page header -->
-<div class="flex items-center justify-between mb-3">
+<div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
   <h1 class="text-lg font-bold flex items-center gap-2">
     <i class="bi bi-kanban opacity-60"></i> Задачи
   </h1>
-  <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-lg"></i> Создать задачу
-  </a>
+  <div class="flex items-center gap-2">
+    <a href="{{ url_for('tasks.list_tasks', sort_new='0' if sort_new else '1') }}"
+       class="btn btn-sm gap-1 {% if sort_new %}btn-warning{% else %}btn-ghost border border-base-300{% endif %}"
+       title="Сортировка колонки «Новые» по последнему изменению">
+      <i class="bi bi-sort-down"></i>
+      Новые по активности{% if sort_new %} <i class="bi bi-check2"></i>{% endif %}
+    </a>
+    <a href="{{ url_for('tasks.create') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg"></i> Создать задачу
+    </a>
+  </div>
 </div>
 
 <!-- Filter bar -->
 <div class="filter-bar">
+  <div class="flex items-center gap-2 w-full sm:w-auto">
+    <i class="bi bi-search text-sm opacity-40"></i>
+    <input type="text" id="task-search" placeholder="Поиск по названию..."
+           class="input input-sm input-bordered rounded-xl flex-1 sm:w-52"
+           oninput="applyFilters()">
+  </div>
   <span class="text-xs font-semibold opacity-50 shrink-0">Теги:</span>
   {% for tag in TaskTag.ALL %}
   <button class="tag-filter-btn" data-tag="{{ tag }}" onclick="toggleTagFilter('{{ tag }}')">{{ tag }}</button>
@@ -373,6 +404,7 @@ function toggleTagFilter(tag) {
 
 function applyFilters() {
   const freeOnly = document.getElementById('filter-free-mine').checked;
+  const searchVal = document.getElementById('task-search').value.trim().toLowerCase();
 
   document.querySelectorAll('.task-card').forEach(card => {
     const cardTags = card.dataset.tags ? card.dataset.tags.split(',').filter(Boolean) : [];
@@ -388,6 +420,10 @@ function applyFilters() {
       const isFree = !assignedTo;
       const isMine = assignedTo && String(assignedTo) === String(CURRENT_USER_ID);
       if (!isFree && !isMine) show = false;
+    }
+
+    if (searchVal && !card.querySelector('.task-title').textContent.toLowerCase().includes(searchVal)) {
+      show = false;
     }
 
     card.style.display = show ? '' : 'none';

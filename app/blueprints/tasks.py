@@ -2,7 +2,7 @@ import io
 import os
 import uuid
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, send_from_directory, send_file, current_app)
 from flask_login import login_required, current_user
@@ -10,13 +10,47 @@ from extensions import db
 from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, User
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES, AUTO_TAGS
 
+_last_archive_check: datetime = None
+
+
+def touch(task):
+    """Update task.updated_at to now."""
+    task.updated_at = datetime.utcnow()
+
+
+def _maybe_auto_archive():
+    global _last_archive_check
+    now = datetime.utcnow()
+    if _last_archive_check and (now - _last_archive_check).total_seconds() < 3600:
+        return
+    _last_archive_check = now
+    cutoff = now - timedelta(days=7)
+    tasks = Task.query.filter(
+        Task.status == TaskStatus.DONE,
+        Task.completed_at < cutoff,
+        Task.completed_at.isnot(None),
+        Task.is_archived == False,
+    ).all()
+    if tasks:
+        for t in tasks:
+            t.is_archived = True
+            t.archived_at = now
+        db.session.commit()
+
 tasks_bp = Blueprint('tasks', __name__)
 
 
-def sorted_tasks(query):
+def sorted_tasks(query, sort_new_by_updated=False):
     tasks = query.filter_by(is_archived=False).all()
 
+    SORT_BY_UPDATED = {TaskStatus.IN_PROGRESS, TaskStatus.PAUSED, TaskStatus.DONE}
+
     def key(t):
+        use_updated = t.status in SORT_BY_UPDATED or (sort_new_by_updated and t.status == TaskStatus.NEW)
+        if use_updated:
+            # sort by updated_at desc (most recent first) → negate timestamp
+            upd = t.updated_at or t.created_at or datetime(2000, 1, 1)
+            return (1, 0, datetime(9999, 1, 1) - upd)
         overdue = 0 if t.is_overdue else 1
         urgency = -Urgency.ORDER.get(t.urgency, 2)
         dl = t.deadline or datetime(9999, 1, 1)
@@ -28,9 +62,11 @@ def sorted_tasks(query):
 @tasks_bp.route('/tasks')
 @login_required
 def list_tasks():
+    _maybe_auto_archive()
     from blueprints.plans import convert_due_plans
     convert_due_plans()
-    tasks = sorted_tasks(Task.query)
+    sort_new = request.args.get('sort_new', '0') == '1'
+    tasks = sorted_tasks(Task.query, sort_new_by_updated=sort_new)
     my_active_task_ids = {
         log.task_id for log in
         TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
@@ -38,7 +74,8 @@ def list_tasks():
     return render_template('tasks/list.html', tasks=tasks,
                            TaskStatus=TaskStatus, Urgency=Urgency,
                            TaskTag=TaskTag,
-                           my_active_task_ids=my_active_task_ids)
+                           my_active_task_ids=my_active_task_ids,
+                           sort_new=sort_new)
 
 
 @tasks_bp.route('/tasks/<int:task_id>')
@@ -69,35 +106,9 @@ def create():
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
         task = _task_from_form(request.form, created_by_id=current_user.id)
-        # Publication tag auto-added
-        if task.task_type == 'publication':
-            tags = list(task.tags or [])
-            if TaskTag.PUBLICATION not in tags:
-                tags.append(TaskTag.PUBLICATION)
-            task.tags = tags
         db.session.add(task)
         db.session.flush()
         _save_attachments(request.files.getlist('attachments'), task.id)
-
-        # For publication tasks create child design + text subtasks
-        if task.task_type == 'publication':
-            shared = dict(
-                created_by_id=current_user.id,
-                task_type='publication',
-                urgency=task.urgency,
-                deadline=task.deadline,
-                department_id=task.department_id,
-                customer_name=task.customer_name,
-                customer_phone=task.customer_phone,
-                customer_email=task.customer_email,
-                description=task.description,
-                parent_task_id=task.id,
-                status=TaskStatus.NEW,
-                dynamic_fields=task.dynamic_fields or {},
-            )
-            db.session.add(Task(title=f'[Дизайн] {task.title}', tags=[TaskTag.DESIGN], **shared))
-            db.session.add(Task(title=f'[Текст] {task.title}', tags=[TaskTag.TEXT], **shared))
-
         db.session.commit()
         flash('Задача создана', 'success')
         return redirect(url_for('tasks.detail', task_id=task.id))
@@ -114,6 +125,7 @@ def edit(task_id):
     if request.method == 'POST':
         _task_from_form(request.form, task=task)
         _save_attachments(request.files.getlist('attachments'), task.id)
+        touch(task)
         db.session.commit()
         flash('Задача обновлена', 'success')
         return redirect(url_for('tasks.detail', task_id=task_id))
@@ -125,23 +137,9 @@ def edit(task_id):
 def _task_from_form(form, task=None, created_by_id=None):
     task_type = form.get('task_type')
     dynamic = {}
-    if task_type == 'publication':
-        dynamic['subtype'] = form.get('subtype')
-        dynamic['platforms'] = form.getlist('platforms')
-        pub_date = form.get('pub_date', '').strip()
-        if pub_date:
-            dynamic['pub_date'] = pub_date
-        pub_url = form.get('pub_url', '').strip()
-        if pub_url:
-            dynamic['pub_url'] = pub_url
-    elif task_type == 'revision':
-        revision_ref = form.get('revision_ref', '').strip()
-        if revision_ref:
-            dynamic['revision_ref'] = revision_ref
-    else:
-        clarification = form.get('clarification', '').strip()
-        if clarification:
-            dynamic['clarification'] = clarification
+    clarification = form.get('clarification', '').strip()
+    if clarification:
+        dynamic['clarification'] = clarification
     event_date = form.get('event_date', '').strip()
     if event_date:
         dynamic['event_date'] = event_date
@@ -186,6 +184,7 @@ def move_task(task_id):
     # Moving back to NEW unassigns the task
     if status == TaskStatus.NEW:
         task.assigned_to_id = None
+    touch(task)
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -227,6 +226,7 @@ def timer_start(task_id):
     db.session.add(log)
     task.status = TaskStatus.IN_PROGRESS
     task.assigned_to_id = current_user.id   # claim the task
+    touch(task)
     db.session.commit()
     return jsonify({'success': True, 'started_at': log.started_at.isoformat()})
 
@@ -251,6 +251,9 @@ def timer_force_start(task_id):
     log = TimeLog(task_id=task_id, user_id=current_user.id)
     task.status = TaskStatus.IN_PROGRESS
     task.assigned_to_id = current_user.id   # claim new task
+    touch(task)
+    if active:
+        touch(active.task)
     db.session.add(log)
     db.session.commit()
     return jsonify({
@@ -274,6 +277,7 @@ def timer_pause(task_id):
             task_status = TaskStatus.PAUSED
         else:
             task_status = TaskStatus.IN_PROGRESS
+        touch(task)
         db.session.commit()
     return jsonify({'success': True, 'task_status': task_status})
 
@@ -305,7 +309,7 @@ def delegate_task(task_id):
     task.assigned_to_id = int(new_assignee_id)
     if task.status == TaskStatus.IN_PROGRESS:
         task.status = TaskStatus.PAUSED
-
+    touch(task)
     db.session.commit()
     return jsonify({'success': True, 'assignee_name': new_assignee.full_name})
 
@@ -321,6 +325,7 @@ def unassign_task(task_id):
         log.ended_at = datetime.utcnow()
     task.assigned_to_id = None
     task.status = TaskStatus.NEW
+    touch(task)
     db.session.commit()
     return jsonify({'success': True})
 
@@ -340,6 +345,7 @@ def mark_done(task_id):
     task.status = TaskStatus.DONE
     task.completed_at = now
     task.assigned_to_id = None
+    task.updated_at = now
     db.session.commit()
     flash('Задача закрыта', 'success')
     return redirect(url_for('tasks.detail', task_id=task_id))

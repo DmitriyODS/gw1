@@ -116,6 +116,12 @@
         <div class="font-semibold text-sm truncate">{{ row.name }}</div>
         <div class="text-xs text-base-content/40 mt-0.5">нажмите для деталей</div>
       </div>
+      {% if row.rank %}
+      <div class="flex flex-col items-center shrink-0">
+        <div class="text-lg font-bold text-warning leading-none">{{ row.score }}</div>
+        <div class="text-xs text-base-content/40">#{{ row.rank }}/{{ total_ranked }}</div>
+      </div>
+      {% endif %}
     </div>
     <div class="flex gap-4">
       <div class="stat-pill">
@@ -127,7 +133,16 @@
         <strong id="time-{{ row.id }}">{{ row.secs | duration }}</strong>
       </div>
     </div>
-    {% if row.done > 0 %}
+    {% if row.rank %}
+    <div>
+      <div class="flex justify-between text-xs text-base-content/40 mb-1">
+        <span>Рейтинговый балл</span><span>{{ row.score }}/100</span>
+      </div>
+      <div class="hbar-mini">
+        <div class="hbar-mini-fill" style="width:{{ row.score }}%"></div>
+      </div>
+    </div>
+    {% elif row.done > 0 %}
     <div class="text-xs text-base-content/40">
       <div class="flex justify-between mb-1">
         <span>Закрытые задачи</span><span>{{ row.done }}</span>

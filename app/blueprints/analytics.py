@@ -196,10 +196,15 @@ def time_report():
                  .all()) if can_see_all else [current_user]
 
     # Done tasks per user in period
+    # assigned_to_id is cleared on done, so use TimeLog to find tasks user worked on
     rows = []
     for u in all_users:
+        worked_task_ids = db.session.query(TimeLog.task_id).filter(
+            TimeLog.user_id == u.id,
+            TimeLog.ended_at.isnot(None),
+        ).distinct().subquery()
         done_cnt = Task.query.filter(
-            Task.assigned_to_id == u.id,
+            Task.id.in_(worked_task_ids),
             Task.status == TaskStatus.DONE,
             Task.completed_at >= start,
             Task.completed_at <= end,
@@ -217,13 +222,22 @@ def time_report():
         ).scalar() or 0)
         rows.append({'id': u.id, 'name': u.full_name, 'done': done_cnt, 'secs': secs})
 
+    # Compute score/rank for all users in period
+    all_scores = compute_staff_scores(start, end, limit=None)
+    score_map = {s['id']: {'score': s['score'], 'rank': i + 1} for i, s in enumerate(all_scores)}
+    total_ranked = len(all_scores)
+    for row in rows:
+        info = score_map.get(row['id'])
+        row['score'] = info['score'] if info else None
+        row['rank'] = info['rank'] if info else None
+
     rows.sort(key=lambda r: (-r['done'], -r['secs']))
 
     tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
     today_iso = (datetime.utcnow() + timedelta(hours=tz_hours)).strftime('%Y-%m-%d')
     return render_template('analytics/time.html',
         mode=mode, offset=offset, period_label=period_label,
-        can_see_all=can_see_all, rows=rows, today_iso=today_iso)
+        can_see_all=can_see_all, rows=rows, total_ranked=total_ranked, today_iso=today_iso)
 
 
 @analytics_bp.route('/analytics/time/user-detail')
@@ -243,9 +257,13 @@ def time_user_detail():
 
     start, end, period_label = _period_bounds(mode, offset, tz_hours)
 
-    # Done tasks assigned to user in period
+    # Done tasks the user worked on in period (assigned_to_id is cleared on done)
+    worked_task_ids = db.session.query(TimeLog.task_id).filter(
+        TimeLog.user_id == uid,
+        TimeLog.ended_at.isnot(None),
+    ).distinct().subquery()
     done_tasks = Task.query.filter(
-        Task.assigned_to_id == uid,
+        Task.id.in_(worked_task_ids),
         Task.status == TaskStatus.DONE,
         Task.completed_at >= start,
         Task.completed_at <= end,
@@ -343,21 +361,24 @@ def tv_mode():
     return render_template('analytics/tv.html')
 
 
-def compute_staff_scores(start, end=None):
+def compute_staff_scores(start, end=None, limit=5):
     """Compute employee ranking using formula R_i = 0.5*(N_i/N_max) + 0.5*(T_i/T_max), scaled to 0-100."""
     now = datetime.utcnow()
     if end is None:
         end = now
 
-    # N_i: done tasks assigned to user
+    # N_i: done tasks user worked on (assigned_to_id cleared on done, use TimeLog)
     user_tasks_q = db.session.query(
-        User.id, User.full_name, func.count(Task.id).label('cnt')
-    ).join(Task, Task.assigned_to_id == User.id).filter(
+        TimeLog.user_id,
+        User.full_name,
+        func.count(func.distinct(Task.id)).label('cnt')
+    ).join(Task, TimeLog.task_id == Task.id).join(User, TimeLog.user_id == User.id).filter(
         Task.status == TaskStatus.DONE,
         Task.completed_at >= start,
         Task.completed_at <= end,
         Task.completed_at.isnot(None),
-    ).group_by(User.id, User.full_name).all()
+        TimeLog.ended_at.isnot(None),
+    ).group_by(TimeLog.user_id, User.full_name).all()
 
     # Total time per user in period
     user_time_q = db.session.query(
@@ -376,9 +397,9 @@ def compute_staff_scores(start, end=None):
     staff = []
     for u in user_tasks_q:
         n_i = u.cnt
-        total_secs = time_map.get(u.id, 0)
+        total_secs = time_map.get(u.user_id, 0)
         t_i = total_secs / n_i if n_i > 0 else 0
-        staff.append({'id': u.id, 'name': u.full_name, 'n': n_i, 't': t_i, 'secs': int(total_secs)})
+        staff.append({'id': u.user_id, 'name': u.full_name, 'n': n_i, 't': t_i, 'secs': int(total_secs)})
 
     if not staff:
         return []
@@ -389,7 +410,8 @@ def compute_staff_scores(start, end=None):
     for s in staff:
         s['score'] = round((0.5 * s['n'] / n_max + 0.5 * s['t'] / t_max) * 100)
 
-    return sorted(staff, key=lambda x: x['score'], reverse=True)[:5]
+    ranked = sorted(staff, key=lambda x: x['score'], reverse=True)
+    return ranked[:limit] if limit is not None else ranked
 
 
 @analytics_bp.route('/analytics/tv/data')

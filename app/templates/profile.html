@@ -77,46 +77,48 @@
     <!-- Period nav -->
     <div class="flex items-center gap-2 px-4 py-2 border-b border-base-300">
       <button class="btn btn-ghost btn-xs" onclick="changeOffset(-1)"><i class="bi bi-chevron-left"></i></button>
-      <span id="period-label" class="text-sm font-medium flex-1 text-center">...</span>
+      <div class="relative flex-1 flex justify-center">
+        <button class="btn btn-ghost btn-xs gap-1 text-sm font-medium" onclick="toggleDatePicker()" id="period-label-btn">
+          <span id="period-label">...</span>
+          <i class="bi bi-calendar3 text-xs opacity-50"></i>
+        </button>
+        <div id="date-picker-wrap" class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50
+             bg-base-100 border border-base-300 rounded-xl shadow-lg p-3" style="min-width:210px;">
+          <div class="text-xs font-semibold opacity-50 uppercase tracking-wide mb-2">Выбрать дату</div>
+          <input type="date" id="date-picker-input"
+                 class="input input-sm input-bordered w-full rounded-lg"
+                 onchange="applyDatePicker(this.value)">
+          <div class="text-xs opacity-40 mt-2 text-center">Применяется к текущему режиму</div>
+        </div>
+      </div>
       <button class="btn btn-ghost btn-xs" id="next-btn" onclick="changeOffset(1)"><i class="bi bi-chevron-right"></i></button>
     </div>
     <!-- Summary -->
-    <div id="stats-summary" class="grid grid-cols-2 gap-4 px-4 py-3 border-b border-base-300">
+    <div id="stats-summary" class="grid grid-cols-3 gap-3 px-4 py-3 border-b border-base-300">
       <div>
         <div id="stat-tasks" class="text-2xl font-bold text-success">—</div>
         <div class="text-xs text-base-content/50">Закрыто задач</div>
       </div>
       <div>
         <div id="stat-time" class="text-2xl font-bold text-primary">—</div>
-        <div class="text-xs text-base-content/50">Отработано времени</div>
+        <div class="text-xs text-base-content/50">Отработано</div>
       </div>
+      <div>
+        <div id="stat-score" class="text-2xl font-bold text-warning">—</div>
+        <div id="stat-rank" class="text-xs text-base-content/50">Рейтинг</div>
+      </div>
+    </div>
+    <!-- All tasks button -->
+    <div class="px-4 py-2 border-b border-base-300">
+      <button onclick="openTasksModal()" class="btn btn-ghost btn-sm w-full gap-1 text-base-content/60 hover:text-base-content">
+        <i class="bi bi-list-check"></i> Все задачи за период
+      </button>
     </div>
     <!-- Type table -->
     <div id="type-table" class="divide-y divide-base-300">
       <div class="px-4 py-8 text-center text-base-content/40 text-sm">Загрузка...</div>
     </div>
   </div>
-
-  <!-- Recent tasks -->
-  {% if recent_tasks %}
-  <div class="card bg-base-100 shadow-sm">
-    <div class="px-4 py-2 border-b border-base-300">
-      <span class="font-semibold text-sm"><i class="bi bi-clock-history"></i> Последние задачи</span>
-    </div>
-    <div class="divide-y divide-base-300">
-      {% for task in recent_tasks %}
-      <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
-         class="flex items-center gap-3 px-4 py-3 hover:bg-base-200 transition-colors">
-        <span class="badge badge-{{ TaskStatus.COLORS[task.status] }} badge-sm shrink-0">
-          {{ TaskStatus.LABELS[task.status] }}
-        </span>
-        <span class="text-sm flex-1 truncate">{{ task.title }}</span>
-        <span class="text-xs text-base-content/40">#{{ task.id }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
 
   <!-- Edit profile -->
   <div class="card bg-base-100 shadow-sm">
@@ -152,6 +154,52 @@
   </div>
 
 </div>
+
+<!-- Tasks modal -->
+<dialog id="tasks-modal" class="modal">
+  <div class="modal-box max-w-2xl w-full">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h3 class="font-bold text-lg" id="tmodal-name">Задачи за период</h3>
+        <div class="text-sm text-base-content/50" id="tmodal-period">...</div>
+      </div>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-base-200 rounded-xl p-3 text-center">
+        <div class="text-2xl font-bold text-success" id="tmodal-total-tasks">—</div>
+        <div class="text-xs text-base-content/50 mt-1">Закрыто задач</div>
+      </div>
+      <div class="bg-base-200 rounded-xl p-3 text-center">
+        <div class="text-2xl font-bold text-primary" id="tmodal-total-time">—</div>
+        <div class="text-xs text-base-content/50 mt-1">Отработано</div>
+      </div>
+    </div>
+    <div class="flex gap-1 bg-base-200 rounded-xl p-1 mb-4">
+      <button class="flex-1 py-1.5 rounded-lg text-sm font-medium transition-all bg-base-100 shadow-sm"
+              id="ptab-tasks-btn" onclick="switchPTab('tasks')">
+        <i class="bi bi-card-checklist"></i> Задачи
+      </button>
+      <button class="flex-1 py-1.5 rounded-lg text-sm font-medium transition-all text-base-content/50 hover:text-base-content"
+              id="ptab-types-btn" onclick="switchPTab('types')">
+        <i class="bi bi-bar-chart-steps"></i> По типам
+      </button>
+    </div>
+    <div id="ptab-tasks">
+      <div id="tmodal-tasks-list" class="flex flex-col divide-y divide-base-200 max-h-80 overflow-y-auto">
+        <div class="py-8 text-center text-base-content/40 text-sm">Загрузка...</div>
+      </div>
+    </div>
+    <div id="ptab-types" class="hidden">
+      <div id="tmodal-types-list" class="flex flex-col max-h-80 overflow-y-auto divide-y divide-base-200">
+        <div class="py-8 text-center text-base-content/40 text-sm">Загрузка...</div>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endblock %}
 
 {% block scripts %}
@@ -177,7 +225,9 @@ function setMode(mode) {
 }
 
 function changeOffset(delta) {
-  currentOffset += delta;
+  const next = currentOffset + delta;
+  if (next > 0) return;
+  currentOffset = next;
   document.getElementById('next-btn').disabled = currentOffset >= 0;
   loadStats();
 }
@@ -191,8 +241,47 @@ function fmtDur(s) {
   return `${m}м`;
 }
 
+// ── Date picker ──
+let _datePickerOpen = false;
+function toggleDatePicker() {
+  _datePickerOpen = !_datePickerOpen;
+  document.getElementById('date-picker-wrap').classList.toggle('hidden', !_datePickerOpen);
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('date-picker-wrap');
+  const btn = document.getElementById('period-label-btn');
+  if (_datePickerOpen && wrap && !wrap.contains(e.target) && !btn.contains(e.target)) {
+    _datePickerOpen = false;
+    wrap.classList.add('hidden');
+  }
+});
+function applyDatePicker(dateStr) {
+  const selected = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  let offset = 0;
+  if (currentMode === 'day') {
+    offset = Math.round((selected - today) / 86400000);
+  } else if (currentMode === 'week') {
+    const selMonday = new Date(selected);
+    selMonday.setDate(selected.getDate() - selected.getDay() + (selected.getDay() === 0 ? -6 : 1));
+    const curMonday = new Date(today);
+    curMonday.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+    offset = Math.round((selMonday - curMonday) / (7 * 86400000));
+  } else {
+    const selY = selected.getFullYear(), selM = selected.getMonth();
+    const curY = today.getFullYear(), curM = today.getMonth();
+    offset = (selY - curY) * 12 + (selM - curM);
+  }
+  if (offset > 0) offset = 0;
+  currentOffset = offset;
+  _datePickerOpen = false;
+  document.getElementById('date-picker-wrap').classList.add('hidden');
+  loadStats();
+}
+
 async function loadStats() {
   document.getElementById('type-table').innerHTML = '<div class="px-4 py-8 text-center text-base-content/40 text-sm">Загрузка...</div>';
+  document.getElementById('next-btn').disabled = currentOffset >= 0;
   try {
     const r = await fetch(`/api/profile/stats?mode=${currentMode}&offset=${currentOffset}`);
     const d = await r.json();
@@ -200,7 +289,15 @@ async function loadStats() {
     document.getElementById('period-label').textContent = d.label;
     document.getElementById('stat-tasks').textContent = d.total_tasks;
     document.getElementById('stat-time').textContent = fmtDur(d.total_secs);
-    document.getElementById('next-btn').disabled = currentOffset >= 0;
+    if (d.score !== null && d.score !== undefined) {
+      document.getElementById('stat-score').textContent = d.score;
+      document.getElementById('stat-rank').textContent = d.rank
+        ? `#${d.rank} из ${d.total_ranked}`
+        : 'Рейтинг';
+    } else {
+      document.getElementById('stat-score').textContent = '—';
+      document.getElementById('stat-rank').textContent = 'Рейтинг';
+    }
 
     if (!d.by_type.length) {
       document.getElementById('type-table').innerHTML = '<div class="px-4 py-8 text-center text-base-content/40 text-sm">Нет закрытых задач за период</div>';
@@ -224,6 +321,69 @@ async function loadStats() {
   } catch(e) {
     document.getElementById('type-table').innerHTML = '<div class="px-4 py-4 text-center text-error text-sm">Ошибка загрузки</div>';
   }
+}
+
+// ── Tasks modal ──
+async function openTasksModal() {
+  const modal = document.getElementById('tasks-modal');
+  document.getElementById('tmodal-period').textContent = '...';
+  document.getElementById('tmodal-total-tasks').textContent = '—';
+  document.getElementById('tmodal-total-time').textContent = '—';
+  document.getElementById('tmodal-tasks-list').innerHTML = '<div class="py-8 text-center text-base-content/40 text-sm">Загрузка...</div>';
+  document.getElementById('tmodal-types-list').innerHTML = '<div class="py-8 text-center text-base-content/40 text-sm">Загрузка...</div>';
+  switchPTab('tasks');
+  modal.showModal();
+
+  try {
+    const r = await fetch(`/analytics/time/user-detail?mode=${currentMode}&offset=${currentOffset}`);
+    const d = await r.json();
+
+    document.getElementById('tmodal-name').textContent = d.user_name || 'Задачи за период';
+    document.getElementById('tmodal-period').textContent = d.period_label;
+    document.getElementById('tmodal-total-tasks').textContent = d.total_tasks;
+    document.getElementById('tmodal-total-time').textContent = fmtDur(d.total_secs);
+
+    if (!d.tasks.length) {
+      document.getElementById('tmodal-tasks-list').innerHTML = '<div class="py-8 text-center text-base-content/40 text-sm">Нет закрытых задач за период</div>';
+    } else {
+      document.getElementById('tmodal-tasks-list').innerHTML = d.tasks.map(t => `
+        <div class="flex items-center gap-3 py-2.5">
+          <div class="flex-1 min-w-0">
+            <a href="/tasks/${t.id}" class="text-sm font-medium hover:underline truncate block">#${t.id} ${t.title}</a>
+            <div class="text-xs text-base-content/40 mt-0.5">${t.type} &middot; закрыта ${t.completed_at}</div>
+          </div>
+          <div class="text-sm font-bold shrink-0 text-primary">${fmtDur(t.secs)}</div>
+        </div>`).join('');
+    }
+
+    if (!d.by_type.length) {
+      document.getElementById('tmodal-types-list').innerHTML = '<div class="py-8 text-center text-base-content/40 text-sm">Нет данных</div>';
+    } else {
+      const maxCnt = Math.max(...d.by_type.map(t => t.cnt), 1);
+      document.getElementById('tmodal-types-list').innerHTML = d.by_type.map(t => `
+        <div class="flex items-center gap-10 py-2.5">
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium">${t.label}</div>
+            <div class="h-1.5 rounded-full bg-base-200 mt-1 overflow-hidden">
+              <div class="h-full rounded-full bg-primary" style="width:${(t.cnt/maxCnt*100).toFixed(1)}%"></div>
+            </div>
+          </div>
+          <div class="text-right shrink-0 ml-3">
+            <div class="text-sm font-bold">${t.cnt} <span class="font-normal text-base-content/40 text-xs">зад.</span></div>
+            <div class="text-xs text-base-content/40">${fmtDur(t.secs)}</div>
+          </div>
+        </div>`).join('');
+    }
+  } catch(e) {
+    document.getElementById('tmodal-tasks-list').innerHTML = '<div class="py-8 text-center text-error text-sm">Ошибка загрузки</div>';
+  }
+}
+
+function switchPTab(tab) {
+  document.getElementById('ptab-tasks').classList.toggle('hidden', tab !== 'tasks');
+  document.getElementById('ptab-types').classList.toggle('hidden', tab !== 'types');
+  document.getElementById('ptab-tasks-btn').className = `flex-1 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === 'tasks' ? 'bg-base-100 shadow-sm' : 'text-base-content/50 hover:text-base-content'}`;
+  document.getElementById('ptab-types-btn').className = `flex-1 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === 'types' ? 'bg-base-100 shadow-sm' : 'text-base-content/50 hover:text-base-content'}`;
 }
 
 loadStats();

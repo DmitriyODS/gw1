@@ -167,9 +167,13 @@ def profile_stats_api():
     start_utc = start_local - timedelta(hours=tz_hours)
     end_utc   = end_local   - timedelta(hours=tz_hours)
 
-    # Done tasks in period assigned to current user
+    # Done tasks the user worked on in period (assigned_to_id is cleared on done)
+    worked_task_ids = db.session.query(TimeLog.task_id).filter(
+        TimeLog.user_id == current_user.id,
+        TimeLog.ended_at.isnot(None),
+    ).distinct().subquery()
     done_tasks = Task.query.filter(
-        Task.assigned_to_id == current_user.id,
+        Task.id.in_(worked_task_ids),
         Task.status == TaskStatus.DONE,
         Task.completed_at >= start_utc,
         Task.completed_at <= end_utc,
@@ -210,11 +214,22 @@ def profile_stats_api():
         key=lambda x: x['cnt'], reverse=True
     )
 
+    # Compute ranking score/rank for current user in this period
+    from blueprints.analytics import compute_staff_scores
+    all_scores = compute_staff_scores(start_utc, end_utc, limit=None)
+    user_rank_info = next((s for s in all_scores if s['id'] == current_user.id), None)
+    score = user_rank_info['score'] if user_rank_info else None
+    rank = next((i + 1 for i, s in enumerate(all_scores) if s['id'] == current_user.id), None)
+    total_ranked = len(all_scores)
+
     return jsonify({
         'label': label,
         'total_tasks': len(done_tasks),
         'total_secs': total_period_secs,
         'by_type': type_list,
+        'score': score,
+        'rank': rank,
+        'total_ranked': total_ranked,
     })
 
 

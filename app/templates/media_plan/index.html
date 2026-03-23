@@ -56,6 +56,7 @@
   .pub-chip-paused     { background: color-mix(in oklch, var(--color-warning) 14%, var(--color-base-100)); color: color-mix(in oklch, var(--color-warning) 80%, var(--color-base-content)); border-color: var(--color-warning); }
   .pub-chip-review     { background: color-mix(in oklch, var(--color-info) 12%, var(--color-base-100));    color: var(--color-info);            border-color: var(--color-info); }
   .pub-chip-done       { background: color-mix(in oklch, var(--color-success) 12%, var(--color-base-100)); color: var(--color-success);         border-color: var(--color-success); }
+  .pub-chip-archived  { opacity: 0.55; border-left-style: dashed; }
 
   .day-count {
     font-size: 0.6rem; font-weight: 700; border-radius: 8px;
@@ -113,6 +114,7 @@ const BY_DAY = {
       platforms: {{ ((task.dynamic_fields.get('platforms') or []) if task.dynamic_fields else []) | tojson }},
       pub_url: {{ (task.dynamic_fields.get('pub_url','') if task.dynamic_fields else '') | tojson }},
       url: {{ url_for('tasks.detail', task_id=task.id) | tojson }},
+      is_archived: {{ task.is_archived | tojson }},
     },
     {% endfor %}
   ],
@@ -181,7 +183,7 @@ const MONTH_LABEL = {{ month_label | tojson }};
     <div class="pub-chips">
       {% for task in day_tasks %}
       {% set df = task.dynamic_fields or {} %}
-      <div class="pub-chip pub-chip-{{ task.status }}">
+      <div class="pub-chip pub-chip-{{ task.status }} {% if task.is_archived %}pub-chip-archived{% endif %}">
         {% if task.pub_dt %}
         <span class="pub-chip-time">{{ task.pub_dt.strftime('%H:%M') }}</span>
         {% endif %}
@@ -215,7 +217,8 @@ const MONTH_LABEL = {{ month_label | tojson }};
       <span class="badge badge-{{ TaskStatus.COLORS[task.status] }} badge-sm shrink-0">
         {{ TaskStatus.LABELS[task.status] }}
       </span>
-      <span class="text-sm flex-1 truncate">{{ task.title }}</span>
+      {% if task.is_archived %}<span class="badge badge-neutral badge-sm shrink-0 opacity-60"><i class="bi bi-archive"></i> Архив</span>{% endif %}
+      <span class="text-sm flex-1 truncate {% if task.is_archived %}opacity-60{% endif %}">{{ task.title }}</span>
       <div class="flex items-center gap-1.5 shrink-0">
         {% for p in (df.get('platforms') or []) %}
         <i class="bi {{ PLATFORM_ICONS.get(p, 'bi-dot') }} text-base-content/40 text-sm" title="{{ p }}"></i>
@@ -297,6 +300,7 @@ function openDayModal(day) {
             <div class="day-pub-title">${escHtml(t.title)}</div>
             <div class="day-pub-meta">
               <span class="day-pub-status status-${t.status}">${STATUS_LABELS[t.status] || t.status}</span>
+              ${t.is_archived ? '<span class="day-pub-status" style="border-color:var(--color-base-300);color:var(--color-base-content);opacity:0.5"><i class="bi bi-archive"></i> Архив</span>' : ''}
               ${subtype}
               ${platforms}
             </div>

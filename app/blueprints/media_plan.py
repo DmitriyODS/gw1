@@ -38,8 +38,7 @@ def _get_month_tasks(current_month):
     tasks_no_date: tasks without pub_date.
     """
     all_pubs = Task.query.filter(
-        Task.task_type == 'publication',
-        Task.is_archived == False,
+        Task.task_type.in_(['placement', 'publication']),
     ).all()
 
     month_start = date(current_month.year, current_month.month, 1)

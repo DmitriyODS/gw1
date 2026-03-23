@@ -102,11 +102,68 @@ def detail(task_id):
              .filter(User.role != 'tv')
              .order_by(User.full_name)
              .all())
+    from blueprints.analytics import TYPE_LABELS
     return render_template('tasks/detail.html', task=task, logs=logs,
                            active_log=active_log, my_active=my_active,
                            subtasks=subtasks, parent_task=parent_task,
-                           users=users,
+                           users=users, type_labels=TYPE_LABELS,
                            TaskStatus=TaskStatus, Urgency=Urgency, TaskTag=TaskTag)
+
+
+def _create_publication(form, files, created_by_id):
+    """Create parent placement task + 2 subtasks (images + text) for publication mode."""
+    pub_date = form.get('pub_date_pub', '').strip()
+    platforms = form.getlist('pub_platforms')
+    deadline_str = form.get('deadline')
+    deadline = datetime.strptime(deadline_str, '%Y-%m-%dT%H:%M') if deadline_str else None
+    urgency = form.get('urgency', Urgency.NORMAL)
+    dept_id = form.get('department_id') or None
+    title = form.get('title', '').strip()
+
+    dynamic = {}
+    if pub_date:
+        dynamic['pub_date'] = pub_date
+    if platforms:
+        dynamic['platforms'] = platforms
+
+    parent = Task(
+        created_by_id=created_by_id,
+        title=title,
+        description=form.get('description', '').strip(),
+        customer_name=form.get('customer_name', '').strip() or None,
+        customer_phone=form.get('customer_phone', '').strip() or None,
+        customer_email=form.get('customer_email', '').strip() or None,
+        department_id=dept_id,
+        task_type='placement',
+        urgency=urgency,
+        deadline=deadline,
+        dynamic_fields=dynamic,
+        tags=['публикация'],
+    )
+    db.session.add(parent)
+    db.session.flush()
+
+    sub_common = dict(
+        created_by_id=created_by_id,
+        description=form.get('description', '').strip(),
+        customer_name=form.get('customer_name', '').strip() or None,
+        customer_phone=form.get('customer_phone', '').strip() or None,
+        customer_email=form.get('customer_email', '').strip() or None,
+        department_id=dept_id,
+        urgency=urgency,
+        deadline=deadline,
+        dynamic_fields=dynamic,
+        parent_task_id=parent.id,
+    )
+    sub1 = Task(title=f'Картинки — {title}', task_type='pub_images', tags=['дизайн'], **sub_common)
+    sub2 = Task(title=f'Текст — {title}', task_type='text_writing', tags=['текст'], **sub_common)
+    db.session.add(sub1)
+    db.session.add(sub2)
+    db.session.flush()
+    _save_attachments(files, parent.id)
+    db.session.commit()
+    flash('Создана публикация: родительская задача + 2 подзадачи', 'success')
+    return parent.id
 
 
 @tasks_bp.route('/tasks/create', methods=['GET', 'POST'])
@@ -114,6 +171,13 @@ def detail(task_id):
 def create():
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
+        if request.form.get('create_mode') == 'publication':
+            task_id = _create_publication(
+                request.form,
+                request.files.getlist('attachments'),
+                current_user.id,
+            )
+            return redirect(url_for('tasks.detail', task_id=task_id))
         task = _task_from_form(request.form, created_by_id=current_user.id)
         db.session.add(task)
         db.session.flush()
@@ -121,9 +185,14 @@ def create():
         db.session.commit()
         flash('Задача создана', 'success')
         return redirect(url_for('tasks.detail', task_id=task.id))
+    parent_task = None
+    parent_id = request.args.get('parent_id')
+    if parent_id:
+        parent_task = Task.query.get(int(parent_id))
     return render_template('tasks/form.html', task=None, departments=departments,
                            Urgency=Urgency, TaskTag=TaskTag, task_types=TASK_TYPES,
-                           pub_subtypes=PUB_SUBTYPES, platforms=PLATFORMS)
+                           pub_subtypes=PUB_SUBTYPES, platforms=PLATFORMS,
+                           parent_task=parent_task)
 
 
 @tasks_bp.route('/tasks/<int:task_id>/edit', methods=['GET', 'POST'])
@@ -172,6 +241,8 @@ def _task_from_form(form, task=None, created_by_id=None):
     task.deadline = deadline
     task.dynamic_fields = dynamic
     task.tags = tags
+    parent_id = form.get('parent_task_id')
+    task.parent_task_id = int(parent_id) if parent_id else None
     return task
 
 

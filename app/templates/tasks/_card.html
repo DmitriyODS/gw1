@@ -54,6 +54,12 @@
       <i class="bi bi-diagram-2"></i> Подзадача
     </span>
     {% endif %}
+    {% set pub_date = task.dynamic_fields.get('pub_date') if task.dynamic_fields else None %}
+    {% if pub_date %}
+    <span class="task-meta-item" style="color:var(--color-primary)">
+      <i class="bi bi-send"></i> {{ pub_date[8:10] }}.{{ pub_date[5:7] }} {{ pub_date[11:16] }}
+    </span>
+    {% endif %}
   </div>
 
   <div class="card-footer">

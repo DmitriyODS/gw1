@@ -269,13 +269,13 @@
   <div class="flex items-center gap-3 ml-auto shrink-0">
     <label class="flex items-center gap-1.5 cursor-pointer" title="Только свои и свободные задачи">
       <input type="checkbox" id="filter-free-mine" class="toggle toggle-primary toggle-sm"
-             onchange="applyFilters()">
+             onchange="LS.save(); applyFilters()">
       <span class="text-xs font-semibold opacity-60 hidden sm:inline">Свои / свободные</span>
       <i class="bi bi-person-check sm:hidden opacity-60"></i>
     </label>
     <label class="flex items-center gap-1.5 cursor-pointer" title="Показать архивные задачи в «Готово»">
       <input type="checkbox" id="filter-show-archived" class="toggle toggle-sm"
-             onchange="applyFilters()">
+             onchange="LS.save(); applyFilters()">
       <span class="text-xs font-semibold opacity-60 hidden sm:inline">Архивные</span>
       <i class="bi bi-archive sm:hidden opacity-60"></i>
     </label>
@@ -472,6 +472,26 @@ function onSearchInput() {
 // ── Tags dropdown ──
 const activeTagFilters = new Set();
 
+const LS = {
+  save() {
+    localStorage.setItem('gw-tags', JSON.stringify([...activeTagFilters]));
+    localStorage.setItem('gw-free-mine', document.getElementById('filter-free-mine').checked ? '1' : '');
+    localStorage.setItem('gw-show-archived', document.getElementById('filter-show-archived').checked ? '1' : '');
+  },
+  load() {
+    try {
+      const tags = JSON.parse(localStorage.getItem('gw-tags') || '[]');
+      tags.forEach(t => {
+        activeTagFilters.add(t);
+        const cb = document.querySelector(`.tag-checkbox[value="${CSS.escape(t)}"]`);
+        if (cb) cb.checked = true;
+      });
+    } catch (_) {}
+    if (localStorage.getItem('gw-free-mine')) document.getElementById('filter-free-mine').checked = true;
+    if (localStorage.getItem('gw-show-archived')) document.getElementById('filter-show-archived').checked = true;
+  }
+};
+
 function toggleTagsDropdown(e) {
   e.stopPropagation();
   const dropdown = document.getElementById('tags-dropdown');
@@ -484,6 +504,7 @@ function onTagCheckboxChange(cb) {
   else activeTagFilters.delete(cb.value);
   updateTagsBtn();
   updateTagChips();
+  LS.save();
   applyFilters();
 }
 function removeTag(tag) {
@@ -493,6 +514,7 @@ function removeTag(tag) {
   });
   updateTagsBtn();
   updateTagChips();
+  LS.save();
   applyFilters();
 }
 function updateTagsBtn() {
@@ -777,6 +799,9 @@ async function pollSync() {
 setInterval(pollSync, 20000);
 
 // ── Init ──
+LS.load();
+updateTagsBtn();
+updateTagChips();
 applyFilters();
 </script>
 {% endblock %}

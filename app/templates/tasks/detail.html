@@ -70,17 +70,25 @@
     </div>
     {% endif %}
 
-    {% if subtasks %}
     <div class="card bg-base-100 border border-base-300 mb-4">
-      <div class="px-4 py-2 border-b border-base-300">
-        <span class="font-semibold text-sm"><i class="bi bi-diagram-3"></i> Подзадачи</span>
-        {% set open_count = task.open_subtasks_count %}
-        {% if open_count > 0 %}
-        <span class="badge badge-warning badge-sm ml-1">{{ open_count }} открыто</span>
-        {% else %}
-        <span class="badge badge-success badge-sm ml-1">Все выполнены</span>
-        {% endif %}
+      <div class="px-4 py-2 border-b border-base-300 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-sm"><i class="bi bi-diagram-3"></i> Подзадачи</span>
+          {% if subtasks %}
+            {% set open_count = task.open_subtasks_count %}
+            {% if open_count > 0 %}
+            <span class="badge badge-warning badge-sm">{{ open_count }} открыто</span>
+            {% else %}
+            <span class="badge badge-success badge-sm">Все выполнены</span>
+            {% endif %}
+          {% endif %}
+        </div>
+        <a href="{{ url_for('tasks.create') }}?parent_id={{ task.id }}"
+           class="btn btn-xs btn-ghost gap-1 opacity-60 hover:opacity-100">
+          <i class="bi bi-plus-lg"></i> Добавить
+        </a>
       </div>
+      {% if subtasks %}
       <ul class="divide-y divide-base-300">
         {% for sub in subtasks %}
         <li class="flex items-center gap-3 px-4 py-2">
@@ -101,8 +109,12 @@
         </li>
         {% endfor %}
       </ul>
+      {% else %}
+      <div class="px-4 py-3 text-sm text-base-content/40 text-center">
+        Подзадач нет
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
 
     <!-- Ownership / Assignment block -->
     <div class="card bg-base-100 border border-base-300 mb-4">
@@ -227,7 +239,7 @@
           {% if task.task_type %}
           <div>
             <div class="text-xs text-base-content/60">Тип</div>
-            <div>{{ {'publication':'Публикация','picture':'Разработка картинки','handout':'Разработка раздатки','banner':'Разработка баннера','poster':'Разработка плаката/афиши','presentation_verify':'Верификация презентации','presentation':'Разработка презентации','presentation_update':'Доработка презентации','design_verify':'Верификация дизайна','merch':'Разработка сувенирной продукции','postcard':'Разработка открыток','newsletter':'Выполнение корпоративных рассылок','photo_video':'Фото/видео сопровождение','mail_check':'Проверка почты','revision':'Правки по задаче','video_edit':'Монтаж видео','photo_edit':'Обработка фото','dept_internal':'Внутренняя работа отдела','dept_external':'Внешняя работа отдела','other':'Другое'}.get(task.task_type, task.task_type) }}</div>
+            <div>{{ type_labels.get(task.task_type, task.task_type or 'Не указан') }}</div>
           </div>
           {% endif %}
           {% if task.created_by %}
@@ -239,36 +251,40 @@
         </div>
 
         {% if task.dynamic_fields %}
+        {% set df = task.dynamic_fields %}
+        {% if df.get('pub_date') or df.get('platforms') or df.get('pub_url') or df.get('subtype') or df.get('clarification') %}
         <div class="divider my-2"></div>
-        {% if task.task_type == 'publication' %}
-          {% if task.dynamic_fields.get('subtype') %}
-          <div><span class="text-xs text-base-content/60">Подтип:</span> {{ task.dynamic_fields.subtype }}</div>
-          {% endif %}
-          {% if task.dynamic_fields.get('platforms') %}
+        {% if df.get('pub_date') %}
+          {% set pd = df.pub_date %}
+          <div class="mt-1 flex items-center gap-1.5">
+            <i class="bi bi-send text-xs opacity-50"></i>
+            <span class="text-xs text-base-content/60">Публикация:</span>
+            <span class="text-sm font-semibold">{{ pd[8:10] }}.{{ pd[5:7] }}.{{ pd[:4] }} {{ pd[11:16] }}</span>
+          </div>
+        {% endif %}
+        {% if df.get('platforms') %}
           <div class="mt-1">
             <span class="text-xs text-base-content/60">Площадки: </span>
-            {% for p in task.dynamic_fields.platforms %}
+            {% for p in df.platforms %}
             <span class="badge badge-neutral badge-sm">{{ p }}</span>
             {% endfor %}
           </div>
-          {% endif %}
-          {% if task.dynamic_fields.get('pub_date') %}
-          <div class="mt-1">
-            <span class="text-xs text-base-content/60">Дата публикации:</span>
-            <span class="text-sm font-medium">{{ task.dynamic_fields.pub_date | replace('T', ' ') }}</span>
-          </div>
-          {% endif %}
-          {% if task.dynamic_fields.get('pub_url') %}
+        {% endif %}
+        {% if df.get('subtype') %}
+          <div class="mt-1"><span class="text-xs text-base-content/60">Подтип:</span> {{ df.subtype }}</div>
+        {% endif %}
+        {% if df.get('pub_url') %}
           <div class="mt-1">
             <span class="text-xs text-base-content/60">Ссылка:</span>
-            <a href="{{ task.dynamic_fields.pub_url }}" target="_blank" rel="noopener"
+            <a href="{{ df.pub_url }}" target="_blank" rel="noopener"
                class="text-sm text-primary hover:underline truncate max-w-xs inline-block align-bottom">
-              {{ task.dynamic_fields.pub_url }}
+              {{ df.pub_url }}
             </a>
           </div>
-          {% endif %}
-        {% elif task.dynamic_fields.get('clarification') %}
-          <div><span class="text-xs text-base-content/60">Уточнение:</span> {{ task.dynamic_fields.clarification }}</div>
+        {% endif %}
+        {% if df.get('clarification') %}
+          <div class="mt-1"><span class="text-xs text-base-content/60">Уточнение:</span> {{ df.clarification }}</div>
+        {% endif %}
         {% endif %}
         {% endif %}
 

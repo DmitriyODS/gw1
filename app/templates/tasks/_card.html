@@ -5,19 +5,25 @@
 {% set timer_running = task.id in my_active_task_ids %}
 
 <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
-   class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %} {% if is_taken %}task-taken{% endif %}"
+   class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %} {% if is_taken %}task-taken{% endif %} {% if task.is_archived %}task-archived{% endif %}"
    data-id="{{ task.id }}"
    data-status="{{ task.status }}"
    data-tags="{{ (task.tags or []) | join(',') }}"
    data-assigned="{{ task.assigned_to_id or '' }}"
-   {% if not is_taken %}draggable="true"{% endif %}>
+   data-archived="{{ 'true' if task.is_archived else 'false' }}"
+   {% if not is_taken and not task.is_archived %}draggable="true"{% endif %}>
 
-  <!-- Top row: urgency badge + tags + id -->
+  <!-- Top row: urgency badge + archived chip + tags + id -->
   <div class="flex items-start justify-between gap-1 mb-1">
     <div class="flex items-center gap-1 flex-wrap min-w-0">
       <span class="badge badge-{{ Urgency.COLORS[task.urgency] }} badge-sm text-xs shrink-0">
         {{ Urgency.LABELS[task.urgency] }}
       </span>
+      {% if task.is_archived %}
+      <span class="badge badge-neutral badge-sm text-xs shrink-0">
+        <i class="bi bi-archive"></i> архив
+      </span>
+      {% endif %}
       {% for tag in (task.tags or []) %}
       <span class="task-tag-badge task-tag-{{ tag | replace('/', '-') | replace(' ', '-') }}">{{ tag }}</span>
       {% endfor %}
@@ -77,7 +83,12 @@
       {% endif %}
     </div>
 
-    {% if task.status != 'done' %}
+    {% if task.is_archived and current_user.can_admin %}
+      <button class="btn-timer" style="background:color-mix(in oklch,var(--color-warning) 14%,var(--color-base-100));color:color-mix(in oklch,var(--color-warning) 80%,var(--color-base-content))"
+              data-action="unarchive" data-id="{{ task.id }}">
+        <i class="bi bi-box-arrow-up"></i> Достать
+      </button>
+    {% elif task.status != 'done' %}
       {% if is_taken %}
         {# no button — task belongs to someone else #}
       {% elif timer_running %}

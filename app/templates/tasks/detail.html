@@ -34,12 +34,18 @@
           <span class="badge badge-{{ TaskStatus.COLORS[task.status] }}">{{ TaskStatus.LABELS[task.status] }}</span>
           <span class="badge badge-{{ Urgency.COLORS[task.urgency] }}">{{ Urgency.LABELS[task.urgency] }}</span>
           {% if task.is_overdue %}<span class="badge badge-error">Просрочено</span>{% endif %}
+          {% if task.is_archived %}<span class="badge badge-neutral"><i class="bi bi-archive"></i> Архив</span>{% endif %}
           {% for tag in (task.tags or []) %}
           <span class="task-tag-badge task-tag-{{ tag | replace('/', '-') | replace(' ', '-') }}">{{ tag }}</span>
           {% endfor %}
         </div>
       </div>
       <div class="flex gap-2 shrink-0">
+        {% if task.is_archived and current_user.can_admin %}
+        <button onclick="document.getElementById('unarchiveModal').showModal()" class="btn btn-outline btn-warning btn-sm">
+          <i class="bi bi-box-arrow-up"></i> Достать из архива
+        </button>
+        {% endif %}
         <a href="{{ url_for('tasks.edit', task_id=task.id) }}" class="btn btn-outline btn-sm">
           <i class="bi bi-pencil"></i>
         </a>
@@ -443,6 +449,25 @@
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Unarchive confirmation -->
+{% if current_user.can_admin and task.is_archived %}
+<dialog id="unarchiveModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Достать из архива?</h3>
+    <p class="py-4">
+      Задача <strong>#{{ task.id }} — {{ task.title }}</strong> вернётся в колонку «Готово».
+    </p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-warning" id="unarchiveConfirmBtn">
+        <i class="bi bi-box-arrow-up"></i> Достать
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+
 <!-- Delete task confirmation -->
 {% if current_user.can_admin %}
 <dialog id="deleteModal" class="modal">
@@ -548,6 +573,15 @@ setInterval(() => {
 function post(url) {
   return fetch(url, {method:'POST', headers:{'X-CSRFToken':CSRF}}).then(r => r.json());
 }
+
+{% if current_user.can_admin and task.is_archived %}
+document.getElementById('unarchiveConfirmBtn').addEventListener('click', async () => {
+  document.getElementById('unarchiveModal').close();
+  const d = await post('{{ url_for("tasks.unarchive_task", task_id=task.id) }}');
+  if (d.ok) location.reload();
+  else alert(d.error || 'Ошибка');
+});
+{% endif %}
 
 // ── Timer handlers ──
 function handleStart(taskId) {

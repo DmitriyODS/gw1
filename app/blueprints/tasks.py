@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, send_from_directory, send_file, current_app)
 from flask_login import login_required, current_user
+from sqlalchemy import or_, and_
 from extensions import db
 from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, User
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES, AUTO_TAGS
@@ -40,8 +41,16 @@ def _maybe_auto_archive():
 tasks_bp = Blueprint('tasks', __name__)
 
 
-def sorted_tasks(query, sort_new_by_updated=False):
-    tasks = query.filter_by(is_archived=False).all()
+def sorted_tasks(query, sort_new_by_updated=False, include_archived_done=False):
+    if include_archived_done:
+        tasks = query.filter(
+            or_(
+                Task.is_archived == False,
+                and_(Task.is_archived == True, Task.status == TaskStatus.DONE)
+            )
+        ).all()
+    else:
+        tasks = query.filter_by(is_archived=False).all()
 
     SORT_BY_UPDATED = {TaskStatus.IN_PROGRESS, TaskStatus.PAUSED, TaskStatus.DONE}
 
@@ -66,7 +75,7 @@ def list_tasks():
     from blueprints.plans import convert_due_plans
     convert_due_plans()
     sort_new = request.args.get('sort_new', '0') == '1'
-    tasks = sorted_tasks(Task.query, sort_new_by_updated=sort_new)
+    tasks = sorted_tasks(Task.query, sort_new_by_updated=sort_new, include_archived_done=True)
     my_active_task_ids = {
         log.task_id for log in
         TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
@@ -455,14 +464,48 @@ def my_timer():
 @tasks_bp.route('/tasks/poll')
 @login_required
 def poll_tasks():
-    """Returns {task_id: {status, assigned_to}} for all active tasks."""
-    tasks = (Task.query.filter_by(is_archived=False)
-             .with_entities(Task.id, Task.status, Task.assigned_to_id)
-             .all())
+    """Returns {task_id: {status, assigned_to, archived}} for active and archived-done tasks."""
+    tasks = (Task.query.filter(
+        or_(
+            Task.is_archived == False,
+            and_(Task.is_archived == True, Task.status == TaskStatus.DONE)
+        ))
+        .with_entities(Task.id, Task.status, Task.assigned_to_id, Task.is_archived)
+        .all())
     return jsonify({
-        str(t.id): {'status': t.status, 'assigned_to': t.assigned_to_id}
+        str(t.id): {'status': t.status, 'assigned_to': t.assigned_to_id, 'archived': t.is_archived}
         for t in tasks
     })
+
+
+@tasks_bp.route('/tasks/<int:task_id>/unarchive', methods=['POST'])
+@login_required
+def unarchive_task(task_id):
+    if not current_user.can_admin:
+        return jsonify({'error': 'Нет прав'}), 403
+    task = Task.query.get_or_404(task_id)
+    task.is_archived = False
+    task.archived_at = None
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@tasks_bp.route('/tasks/archive-done', methods=['POST'])
+@login_required
+def archive_done():
+    if not current_user.can_admin:
+        return jsonify({'error': 'Нет прав'}), 403
+    now = datetime.utcnow()
+    tasks = Task.query.filter(
+        Task.status == TaskStatus.DONE,
+        Task.is_archived == False,
+    ).all()
+    count = len(tasks)
+    for t in tasks:
+        t.is_archived = True
+        t.archived_at = now
+    db.session.commit()
+    return jsonify({'ok': True, 'count': count})
 
 
 @tasks_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])

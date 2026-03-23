@@ -132,6 +132,12 @@
   .col-paused .col-dot            { background: var(--color-warning); }
   .col-new .col-dot               { background: #94a3b8; }
 
+  /* ── Archived card ── */
+  .task-card.task-archived {
+    opacity: 0.6;
+    border-left-style: dashed;
+  }
+
   /* ── Tag badges ── */
   .task-tag-badge {
     display: inline-block; font-size: 0.65rem; font-weight: 600;
@@ -148,20 +154,11 @@
   /* ── Filter bar ── */
   .filter-bar {
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-    padding: 10px 12px; margin-bottom: 12px;
+    padding: 8px 10px; margin-bottom: 12px;
     background: var(--color-base-100);
     border: 1px solid var(--color-base-300);
     border-radius: 14px;
   }
-  .tag-filter-btn {
-    font-size: 0.75rem; font-weight: 600; padding: 3px 10px;
-    border-radius: 20px; border: 1.5px solid var(--color-base-300);
-    background: var(--color-base-100); cursor: pointer;
-    transition: all 0.12s; color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
-    white-space: nowrap;
-  }
-  .tag-filter-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
-  .tag-filter-btn.active { border-color: var(--color-primary); background: var(--color-primary); color: white; }
 
   /* ── Mobile tabs ── */
   .mobile-col-tabs {
@@ -228,22 +225,60 @@
 </div>
 
 <!-- Filter bar -->
-<div class="filter-bar">
-  <div class="flex items-center gap-2 w-full sm:w-auto">
-    <i class="bi bi-search text-sm opacity-40"></i>
-    <input type="text" id="task-search" placeholder="Поиск по названию..."
-           class="input input-sm input-bordered rounded-xl flex-1 sm:w-52"
-           oninput="applyFilters()">
-  </div>
-  <span class="text-xs font-semibold opacity-50 shrink-0">Теги:</span>
-  {% for tag in TaskTag.ALL %}
-  <button class="tag-filter-btn" data-tag="{{ tag }}" onclick="toggleTagFilter('{{ tag }}')">{{ tag }}</button>
-  {% endfor %}
+<div class="filter-bar" id="filter-bar">
 
-  <div class="flex items-center gap-2 ml-auto shrink-0">
-    <span class="text-xs font-semibold opacity-60">Только свои / свободные</span>
-    <input type="checkbox" id="filter-free-mine" class="toggle toggle-primary toggle-sm"
-           onchange="applyFilters()">
+  <!-- Search button + popup -->
+  <div class="relative" id="search-wrapper">
+    <button id="search-btn" class="btn btn-sm btn-ghost gap-1 border border-base-300"
+            onclick="openSearch(event)" title="Поиск по названию">
+      <i class="bi bi-search"></i>
+      <span id="search-label" class="hidden sm:inline text-xs">Поиск</span>
+    </button>
+    <div id="search-popup"
+         class="hidden absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-xl shadow-xl p-2 w-72">
+      <input type="text" id="task-search" placeholder="Поиск по названию..."
+             class="input input-sm input-bordered rounded-lg w-full"
+             oninput="onSearchInput()">
+    </div>
+  </div>
+
+  <!-- Tags dropdown -->
+  <div class="relative" id="tags-wrapper">
+    <button id="tags-btn" class="btn btn-sm btn-ghost gap-1 border border-base-300"
+            onclick="toggleTagsDropdown(event)" title="Фильтр по тегам">
+      <i class="bi bi-tags"></i>
+      <span id="tags-label" class="hidden sm:inline text-xs">Теги</span>
+      <i class="bi bi-chevron-down text-xs opacity-40"></i>
+    </button>
+    <div id="tags-dropdown"
+         class="hidden absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-xl shadow-xl p-1.5 w-44">
+      {% for tag in TaskTag.ALL %}
+      <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 cursor-pointer select-none">
+        <input type="checkbox" class="checkbox checkbox-xs checkbox-primary tag-checkbox"
+               value="{{ tag }}" onchange="onTagCheckboxChange(this)">
+        <span class="text-sm">{{ tag }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Active tag chips -->
+  <div id="active-tags-chips" class="flex gap-1 flex-wrap"></div>
+
+  <!-- Right-side controls -->
+  <div class="flex items-center gap-3 ml-auto shrink-0">
+    <label class="flex items-center gap-1.5 cursor-pointer" title="Только свои и свободные задачи">
+      <input type="checkbox" id="filter-free-mine" class="toggle toggle-primary toggle-sm"
+             onchange="applyFilters()">
+      <span class="text-xs font-semibold opacity-60 hidden sm:inline">Свои / свободные</span>
+      <i class="bi bi-person-check sm:hidden opacity-60"></i>
+    </label>
+    <label class="flex items-center gap-1.5 cursor-pointer" title="Показать архивные задачи в «Готово»">
+      <input type="checkbox" id="filter-show-archived" class="toggle toggle-sm"
+             onchange="applyFilters()">
+      <span class="text-xs font-semibold opacity-60 hidden sm:inline">Архивные</span>
+      <i class="bi bi-archive sm:hidden opacity-60"></i>
+    </label>
   </div>
 </div>
 
@@ -273,7 +308,17 @@
         <span class="col-dot"></span>
         {{ label }}
       </div>
-      <span class="kanban-count" id="cnt-{{ status }}">{{ col_tasks | length }}</span>
+      <div class="flex items-center gap-1">
+        {% if status == 'done' and current_user.can_admin %}
+        <button id="btn-archive-done"
+                class="btn btn-xs btn-ghost opacity-40 hover:opacity-100 px-1"
+                title="Архивировать все задачи из «Готово»"
+                onclick="archiveDone()">
+          <i class="bi bi-archive"></i>
+        </button>
+        {% endif %}
+        <span class="kanban-count" id="cnt-{{ status }}">{{ col_tasks | length }}</span>
+      </div>
     </div>
 
     <div class="kanban-body" data-status="{{ status }}">
@@ -320,6 +365,21 @@
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Archive done confirm modal -->
+<dialog id="archiveConfirmModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Архивировать «Готово»</h3>
+    <p class="py-4">Все задачи из колонки «Готово» будут перемещены в архив. Их можно будет посмотреть через переключатель «Архивные».</p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-neutral" id="archiveConfirmBtn">
+        <i class="bi bi-archive"></i> Архивировать
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Generic error modal -->
 <dialog id="errorModal" class="modal">
   <div class="modal-box">
@@ -356,7 +416,6 @@ function updateCount(body) {
   if (badge) badge.textContent = visible;
   if (tabCount) tabCount.textContent = visible;
 }
-
 function moveCard(card, newStatus) {
   const origin = card.closest('.kanban-body');
   const targetBody = document.querySelector(`.kanban-body[data-status="${newStatus}"]`);
@@ -369,7 +428,6 @@ function moveCard(card, newStatus) {
     updateCount(origin); updateCount(targetBody);
   }
 }
-
 async function refreshCard(taskId) {
   try {
     const r = await fetch(`/tasks/${taskId}/card`);
@@ -380,56 +438,170 @@ async function refreshCard(taskId) {
     const newCard = tmp.firstElementChild;
     if (!newCard) return;
     const old = document.querySelector(`.task-card[data-id="${taskId}"]`);
-    if (old) {
-      old.replaceWith(newCard);
-      applyFilters(); // re-apply filters after refresh
-    }
+    if (old) { old.replaceWith(newCard); applyFilters(); }
   } catch (_) {}
 }
 
-// ── Filters ──
-const activeTagFilters = new Set();
-
-function toggleTagFilter(tag) {
-  if (activeTagFilters.has(tag)) {
-    activeTagFilters.delete(tag);
-  } else {
-    activeTagFilters.add(tag);
+// ── Search popup ──
+function openSearch(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('search-popup');
+  const wasOpen = !popup.classList.contains('hidden');
+  closeAllPopups();
+  if (!wasOpen) {
+    popup.classList.remove('hidden');
+    document.getElementById('task-search').focus();
   }
-  document.querySelectorAll('.tag-filter-btn').forEach(btn => {
-    btn.classList.toggle('active', activeTagFilters.has(btn.dataset.tag));
-  });
+}
+function onSearchInput() {
+  const val = document.getElementById('task-search').value;
+  const btn = document.getElementById('search-btn');
+  const label = document.getElementById('search-label');
+  if (val) {
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-ghost', 'border', 'border-base-300');
+    label.textContent = `"${val.length > 12 ? val.slice(0, 12) + '…' : val}"`;
+  } else {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost', 'border', 'border-base-300');
+    label.textContent = 'Поиск';
+  }
   applyFilters();
 }
 
+// ── Tags dropdown ──
+const activeTagFilters = new Set();
+
+function toggleTagsDropdown(e) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('tags-dropdown');
+  const wasOpen = !dropdown.classList.contains('hidden');
+  closeAllPopups();
+  if (!wasOpen) dropdown.classList.remove('hidden');
+}
+function onTagCheckboxChange(cb) {
+  if (cb.checked) activeTagFilters.add(cb.value);
+  else activeTagFilters.delete(cb.value);
+  updateTagsBtn();
+  updateTagChips();
+  applyFilters();
+}
+function removeTag(tag) {
+  activeTagFilters.delete(tag);
+  document.querySelectorAll('.tag-checkbox').forEach(cb => {
+    if (cb.value === tag) cb.checked = false;
+  });
+  updateTagsBtn();
+  updateTagChips();
+  applyFilters();
+}
+function updateTagsBtn() {
+  const btn = document.getElementById('tags-btn');
+  const label = document.getElementById('tags-label');
+  if (activeTagFilters.size > 0) {
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-ghost', 'border', 'border-base-300');
+    label.textContent = `Теги (${activeTagFilters.size})`;
+  } else {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost', 'border', 'border-base-300');
+    label.textContent = 'Теги';
+  }
+}
+function updateTagChips() {
+  const container = document.getElementById('active-tags-chips');
+  container.innerHTML = '';
+  activeTagFilters.forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'badge badge-primary badge-sm gap-1 select-none';
+    chip.dataset.tag = tag;
+    chip.appendChild(document.createTextNode(tag + ' '));
+    const x = document.createElement('i');
+    x.className = 'bi bi-x cursor-pointer';
+    x.addEventListener('click', () => removeTag(tag));
+    chip.appendChild(x);
+    container.appendChild(chip);
+  });
+}
+
+// ── Close popups on outside click ──
+function closeAllPopups() {
+  document.getElementById('search-popup').classList.add('hidden');
+  document.getElementById('tags-dropdown').classList.add('hidden');
+}
+document.addEventListener('click', e => {
+  const inSearch = document.getElementById('search-wrapper').contains(e.target);
+  const inTags = document.getElementById('tags-wrapper').contains(e.target);
+  if (!inSearch && !inTags) closeAllPopups();
+  else if (!inSearch) document.getElementById('search-popup').classList.add('hidden');
+  else if (!inTags) document.getElementById('tags-dropdown').classList.add('hidden');
+});
+
+// ── Filters ──
 function applyFilters() {
   const freeOnly = document.getElementById('filter-free-mine').checked;
+  const showArchived = document.getElementById('filter-show-archived').checked;
   const searchVal = document.getElementById('task-search').value.trim().toLowerCase();
 
   document.querySelectorAll('.task-card').forEach(card => {
     const cardTags = card.dataset.tags ? card.dataset.tags.split(',').filter(Boolean) : [];
     const assignedTo = card.dataset.assigned;
+    const isArchived = card.dataset.archived === 'true';
     let show = true;
 
-    if (activeTagFilters.size > 0) {
-      const hasTag = [...activeTagFilters].some(t => cardTags.includes(t));
-      if (!hasTag) show = false;
-    }
+    if (isArchived && !showArchived) show = false;
 
-    if (freeOnly) {
+    if (show && activeTagFilters.size > 0) {
+      show = [...activeTagFilters].some(t => cardTags.includes(t));
+    }
+    if (show && freeOnly) {
       const isFree = !assignedTo;
       const isMine = assignedTo && String(assignedTo) === String(CURRENT_USER_ID);
       if (!isFree && !isMine) show = false;
     }
-
-    if (searchVal && !card.querySelector('.task-title').textContent.toLowerCase().includes(searchVal)) {
-      show = false;
+    if (show && searchVal) {
+      show = card.querySelector('.task-title').textContent.toLowerCase().includes(searchVal);
     }
 
     card.style.display = show ? '' : 'none';
   });
 
   document.querySelectorAll('.kanban-body').forEach(body => updateCount(body));
+}
+
+// ── Archive done ──
+function archiveDone() {
+  document.getElementById('archiveConfirmModal').showModal();
+}
+
+document.getElementById('archiveConfirmBtn').addEventListener('click', async () => {
+  document.getElementById('archiveConfirmModal').close();
+  const btn = document.getElementById('btn-archive-done');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/tasks/archive-done', {
+      method: 'POST', headers: {'X-CSRFToken': CSRF}
+    });
+    const d = await r.json();
+    if (!d.ok) { showError(d.error || 'Ошибка'); return; }
+    const doneCards = [...document.querySelectorAll('.task-card[data-status="done"]')]
+      .filter(c => c.dataset.archived !== 'true');
+    await Promise.all(doneCards.map(c => refreshCard(c.dataset.id)));
+    applyFilters();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+// ── Unarchive ──
+async function unarchiveTask(taskId) {
+  const r = await fetch(`/tasks/${taskId}/unarchive`, {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}
+  });
+  const d = await r.json();
+  if (!d.ok) { showError(d.error || 'Ошибка'); return; }
+  await refreshCard(taskId);
+  applyFilters();
 }
 
 // ── Mobile tabs ──
@@ -452,6 +624,7 @@ document.getElementById('kanban-wrap').addEventListener('click', e => {
   const { action, id: taskId } = btn.dataset;
   if (action === 'start') timerStart(taskId);
   if (action === 'pause') timerPause(taskId);
+  if (action === 'unarchive') unarchiveTask(taskId);
 });
 
 let _pendingConflictTaskId = null;
@@ -459,7 +632,6 @@ let _pendingConflictTaskId = null;
 async function timerStart(taskId) {
   const r = await fetch(`/tasks/${taskId}/timer/start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
   const d = await r.json();
-
   if (d.taken) {
     document.getElementById('takenByName').textContent = d.by;
     document.getElementById('takenModal').showModal();
@@ -520,7 +692,6 @@ wrap.addEventListener('dragstart', e => {
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', card.dataset.id);
 });
-
 wrap.addEventListener('dragend', e => {
   isDragging = false;
   e.target.closest('.task-card')?.classList.remove('dragging');
@@ -569,7 +740,7 @@ async function pollSync() {
   try {
     const r = await fetch('/tasks/poll');
     if (!r.ok) return;
-    const snapshot = await r.json(); // {id: {status, assigned_to}}
+    const snapshot = await r.json();
 
     const domIds = new Set([...document.querySelectorAll('.task-card[data-id]')].map(c => c.dataset.id));
     for (const id of Object.keys(snapshot)) {
@@ -587,12 +758,14 @@ async function pollSync() {
       } else {
         const newStatus = data.status;
         const newAssigned = data.assigned_to != null ? String(data.assigned_to) : '';
+        const newArchived = data.archived ? 'true' : 'false';
         const statusChanged = card.dataset.status !== newStatus;
         const assignedChanged = card.dataset.assigned !== newAssigned;
+        const archivedChanged = card.dataset.archived !== newArchived;
         if (statusChanged) {
           moveCard(card, newStatus);
           changed.push(card.dataset.id);
-        } else if (assignedChanged) {
+        } else if (assignedChanged || archivedChanged) {
           changed.push(card.dataset.id);
         }
       }
@@ -602,5 +775,8 @@ async function pollSync() {
 }
 
 setInterval(pollSync, 20000);
+
+// ── Init ──
+applyFilters();
 </script>
 {% endblock %}

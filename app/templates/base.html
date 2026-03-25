@@ -204,7 +204,7 @@
 <header id="topbar">
   <button id="sidebar-toggle" onclick="openSidebar()"><i class="bi bi-list"></i></button>
   <div class="flex-1"></div>
-  {% set at = current_user.active_timer %}
+  {% set at = current_user_active_timer %}
   <a id="topbar-timer"
      class="timer-badge"
      href="{{ url_for('tasks.detail', task_id=at.task_id) if at else '#' }}"

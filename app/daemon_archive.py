@@ -56,18 +56,14 @@ def run():
                 now_local = now_utc + timedelta(hours=TZ_OFFSET)
 
                 if _should_archive(now_local):
-                    done_tasks = Task.query.filter_by(
+                    now_stamp = datetime.utcnow()
+                    count = Task.query.filter_by(
                         status=TaskStatus.DONE,
                         is_archived=False,
-                    ).all()
-
-                    count = 0
-                    now_stamp = datetime.utcnow()
-                    for task in done_tasks:
-                        task.is_archived = True
-                        task.archived_at = now_stamp
-                        count += 1
-
+                    ).update(
+                        {'is_archived': True, 'archived_at': now_stamp},
+                        synchronize_session=False,
+                    )
                     db.session.commit()
                     _last_archive_date = now_local.date()
                     log.info('Weekly archive complete: archived %d tasks', count)

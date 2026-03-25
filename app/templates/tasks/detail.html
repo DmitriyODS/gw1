@@ -156,14 +156,14 @@
         <div class="flex items-center gap-4 flex-wrap">
           <div>
             <div class="text-base-content/60 text-xs">Всего затрачено</div>
-            <div class="timer-mono">{{ task.total_seconds | duration }}</div>
+            <div class="timer-mono">{{ task_total_seconds | duration }}</div>
           </div>
           {% if my_active %}
           <div>
             <div class="text-base-content/60 text-xs">Текущая сессия</div>
             <div class="timer-mono text-success" id="session-display"
                  data-started="{{ my_active.started_at.isoformat() }}"
-                 data-total="{{ task.total_seconds }}">00:00:00</div>
+                 data-total="{{ task_total_seconds }}">00:00:00</div>
           </div>
           {% endif %}
           <div class="ml-auto flex gap-2 flex-wrap">
@@ -203,11 +203,10 @@
             {% endif %}
           </div>
         </div>
-        {% set active = task.active_timers %}
-        {% if active %}
+        {% if active_timers %}
         <div class="mt-2">
           <small class="text-base-content/60">Сейчас работают:
-            {% for log in active %}
+            {% for log in active_timers %}
             <span class="badge badge-success badge-sm">{{ log.user.full_name }}</span>
             {% endfor %}
           </small>

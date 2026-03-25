@@ -220,14 +220,16 @@ def migrate_review():
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.archive'))
     now = datetime.utcnow()
-    tasks = Task.query.filter_by(status='review').all()
-    count = len(tasks)
-    for t in tasks:
-        t.status = TaskStatus.DONE
-        if not t.completed_at:
-            t.completed_at = now
+    # Задачи без completed_at — ставим статус и дату закрытия
+    c1 = Task.query.filter(Task.status == 'review', Task.completed_at.is_(None)).update(
+        {'status': TaskStatus.DONE, 'completed_at': now}, synchronize_session=False
+    )
+    # Задачи с completed_at — только статус
+    c2 = Task.query.filter(Task.status == 'review', Task.completed_at.isnot(None)).update(
+        {'status': TaskStatus.DONE}, synchronize_session=False
+    )
     db.session.commit()
-    flash(f'Переведено в «Готово»: {count} задач', 'success')
+    flash(f'Переведено в «Готово»: {c1 + c2} задач', 'success')
     return redirect(url_for('admin.archive'))
 
 
@@ -291,56 +293,68 @@ def archive_import():
         def parse_dt(s):
             return datetime.fromisoformat(s) if s else None
 
-        for d in data.get('departments', []):
-            db.session.add(Department(id=d['id'], name=d['name']))
+        # Batch-вставки вместо поштучных db.session.add() — в разы быстрее при больших объёмах
+        db.session.bulk_insert_mappings(Department, [
+            {'id': d['id'], 'name': d['name']}
+            for d in data.get('departments', [])
+        ])
         db.session.flush()
 
-        for u in data.get('users', []):
-            obj = User(
-                id=u['id'], username=u['username'], email=u['email'],
-                password_hash=u['password_hash'], full_name=u['full_name'],
-                role=u['role'], is_active=u.get('is_active', True),
-                created_at=parse_dt(u.get('created_at')),
-            )
-            db.session.add(obj)
+        db.session.bulk_insert_mappings(User, [
+            {
+                'id': u['id'], 'username': u['username'], 'email': u['email'],
+                'password_hash': u['password_hash'], 'full_name': u['full_name'],
+                'role': u['role'], 'is_active': u.get('is_active', True),
+                'created_at': parse_dt(u.get('created_at')),
+            }
+            for u in data.get('users', [])
+        ])
         db.session.flush()
 
-        for t in data.get('tasks', []):
-            db.session.add(Task(
-                id=t['id'], title=t['title'], description=t.get('description'),
-                customer_name=t.get('customer_name'), customer_phone=t.get('customer_phone'),
-                department_id=t.get('department_id'), task_type=t.get('task_type'),
-                urgency=t.get('urgency', 'normal'), status=t.get('status', 'new'),
-                deadline=parse_dt(t.get('deadline')), created_by_id=t.get('created_by_id'),
-                dynamic_fields=t.get('dynamic_fields') or {},
-                is_archived=t.get('is_archived', False),
-                archived_at=parse_dt(t.get('archived_at')),
-                completed_at=parse_dt(t.get('completed_at')),
-                created_at=parse_dt(t.get('created_at')),
-            ))
+        db.session.bulk_insert_mappings(Task, [
+            {
+                'id': t['id'], 'title': t['title'], 'description': t.get('description'),
+                'customer_name': t.get('customer_name'), 'customer_phone': t.get('customer_phone'),
+                'department_id': t.get('department_id'), 'task_type': t.get('task_type'),
+                'urgency': t.get('urgency', 'normal'), 'status': t.get('status', 'new'),
+                'deadline': parse_dt(t.get('deadline')), 'created_by_id': t.get('created_by_id'),
+                'dynamic_fields': t.get('dynamic_fields') or {},
+                'is_archived': t.get('is_archived', False),
+                'archived_at': parse_dt(t.get('archived_at')),
+                'completed_at': parse_dt(t.get('completed_at')),
+                'created_at': parse_dt(t.get('created_at')),
+            }
+            for t in data.get('tasks', [])
+        ])
         db.session.flush()
 
-        for a in data.get('attachments', []):
-            db.session.add(TaskAttachment(
-                id=a['id'], task_id=a['task_id'],
-                filename=a.get('filename'), original_name=a.get('original_name'),
-                uploaded_at=parse_dt(a.get('uploaded_at')),
-            ))
+        db.session.bulk_insert_mappings(TaskAttachment, [
+            {
+                'id': a['id'], 'task_id': a['task_id'],
+                'filename': a.get('filename'), 'original_name': a.get('original_name'),
+                'uploaded_at': parse_dt(a.get('uploaded_at')),
+            }
+            for a in data.get('attachments', [])
+        ])
 
-        for c in data.get('comments', []):
-            db.session.add(TaskComment(
-                id=c['id'], task_id=c['task_id'], user_id=c['user_id'],
-                text=c.get('text'), filename=c.get('filename'),
-                original_name=c.get('original_name'),
-                created_at=parse_dt(c.get('created_at')),
-            ))
+        db.session.bulk_insert_mappings(TaskComment, [
+            {
+                'id': c['id'], 'task_id': c['task_id'], 'user_id': c['user_id'],
+                'text': c.get('text'), 'filename': c.get('filename'),
+                'original_name': c.get('original_name'),
+                'created_at': parse_dt(c.get('created_at')),
+            }
+            for c in data.get('comments', [])
+        ])
 
-        for l in data.get('time_logs', []):
-            db.session.add(TimeLog(
-                id=l['id'], task_id=l['task_id'], user_id=l['user_id'],
-                started_at=parse_dt(l['started_at']),
-                ended_at=parse_dt(l.get('ended_at')),
-            ))
+        db.session.bulk_insert_mappings(TimeLog, [
+            {
+                'id': l['id'], 'task_id': l['task_id'], 'user_id': l['user_id'],
+                'started_at': parse_dt(l['started_at']),
+                'ended_at': parse_dt(l.get('ended_at')),
+            }
+            for l in data.get('time_logs', [])
+        ])
 
         db.session.commit()
         # Reset sequences so new inserts don't collide with imported IDs

@@ -27,16 +27,13 @@ def _maybe_auto_archive():
         return
     _last_archive_check = now
     cutoff = now - timedelta(days=7)
-    tasks = Task.query.filter(
+    updated = Task.query.filter(
         Task.status == TaskStatus.DONE,
         Task.completed_at < cutoff,
         Task.completed_at.isnot(None),
         Task.is_archived == False,
-    ).all()
-    if tasks:
-        for t in tasks:
-            t.is_archived = True
-            t.archived_at = now
+    ).update({'is_archived': True, 'archived_at': now}, synchronize_session=False)
+    if updated:
         db.session.commit()
 
 tasks_bp = Blueprint('tasks', __name__)
@@ -76,14 +73,34 @@ def list_tasks():
     _maybe_auto_archive()
     sort_new = request.args.get('sort_new', '0') == '1'
     tasks = sorted_tasks(Task.query, sort_new_by_updated=sort_new, include_archived_done=True)
-    my_active_task_ids = {
-        log.task_id for log in
-        TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
-    }
+
+    # 1 запрос: все активные таймеры с пользователями (вместо N запросов через task.active_timers в шаблоне)
+    from collections import defaultdict
+    all_active_logs = TimeLog.query.options(joinedload(TimeLog.user)).filter_by(ended_at=None).all()
+    active_timers_by_task = defaultdict(list)
+    for log in all_active_logs:
+        active_timers_by_task[log.task_id].append(log)
+
+    # Производим из уже загруженных логов — отдельный запрос не нужен
+    my_active_task_ids = {log.task_id for log in all_active_logs if log.user_id == current_user.id}
+
+    # 1 запрос: суммарное время по задачам (вместо N запросов через task.total_seconds в шаблоне)
+    now = datetime.utcnow()
+    from sqlalchemy import func as sqlfunc
+    secs_rows = db.session.query(
+        TimeLog.task_id,
+        sqlfunc.coalesce(sqlfunc.sum(
+            sqlfunc.extract('epoch', sqlfunc.coalesce(TimeLog.ended_at, now) - TimeLog.started_at)
+        ), 0).label('secs')
+    ).group_by(TimeLog.task_id).all()
+    secs_by_task = {row.task_id: int(row.secs) for row in secs_rows}
+
     return render_template('tasks/list.html', tasks=tasks,
                            TaskStatus=TaskStatus, Urgency=Urgency,
                            TaskTag=TaskTag,
                            my_active_task_ids=my_active_task_ids,
+                           active_timers_by_task=active_timers_by_task,
+                           secs_by_task=secs_by_task,
                            sort_new=sort_new)
 
 
@@ -110,9 +127,17 @@ def detail(task_id):
              .filter(User.role != 'tv')
              .order_by(User.full_name)
              .all())
+    # Активные таймеры и суммарное время — из уже загруженных logs (без доп. запросов)
+    active_timers = [l for l in logs if l.ended_at is None]
+    _now = datetime.utcnow()
+    task_total_seconds = int(sum(
+        ((l.ended_at or _now) - l.started_at).total_seconds() for l in logs
+    ))
     from blueprints.analytics import TYPE_LABELS
     return render_template('tasks/detail.html', task=task, logs=logs,
                            active_log=active_log, my_active=my_active,
+                           active_timers=active_timers,
+                           task_total_seconds=task_total_seconds,
                            subtasks=subtasks, parent_task=parent_task,
                            users=users, type_labels=TYPE_LABELS,
                            TaskStatus=TaskStatus, Urgency=Urgency, TaskTag=TaskTag)
@@ -272,8 +297,9 @@ def move_task(task_id):
     if status == TaskStatus.IN_PROGRESS:
         return jsonify({'error': 'Нельзя перетащить в «В работе» — используйте кнопку таймера'}), 400
     now = datetime.utcnow()
-    for log in task.active_timers:
-        log.ended_at = now
+    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+        {'ended_at': now}, synchronize_session=False
+    )
     task.status = status
     # Moving back to NEW unassigns the task
     if status == TaskStatus.NEW:
@@ -373,8 +399,8 @@ def timer_pause(task_id):
     if log:
         log.ended_at = datetime.utcnow()
         task = Task.query.get(task_id)
-        # Task stays assigned to user even when paused
-        if not task.active_timers:
+        # autoflush учтёт ended_at при следующем запросе — проверяем остальных
+        if not TimeLog.query.filter_by(task_id=task_id, ended_at=None).first():
             task.status = TaskStatus.PAUSED
             task_status = TaskStatus.PAUSED
         else:
@@ -426,8 +452,9 @@ def admin_pause(task_id):
     if task.status != TaskStatus.IN_PROGRESS:
         return jsonify({'error': 'Задача не в работе'}), 400
     now = datetime.utcnow()
-    for log in task.active_timers:
-        log.ended_at = now
+    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+        {'ended_at': now}, synchronize_session=False
+    )
     task.status = TaskStatus.PAUSED
     touch(task)
     db.session.commit()
@@ -441,8 +468,9 @@ def unassign_task(task_id):
     if task.assigned_to_id != current_user.id and not current_user.can_admin:
         return jsonify({'error': 'Нет прав'}), 403
 
-    for log in task.active_timers:
-        log.ended_at = datetime.utcnow()
+    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+        {'ended_at': datetime.utcnow()}, synchronize_session=False
+    )
     task.assigned_to_id = None
     task.status = TaskStatus.NEW
     touch(task)
@@ -455,13 +483,20 @@ def unassign_task(task_id):
 def mark_done(task_id):
     task = Task.query.get_or_404(task_id)
 
-    if task.open_subtasks_count > 0:
-        flash(f'Нельзя закрыть: {task.open_subtasks_count} подзадач ещё не выполнены', 'warning')
+    # 1 запрос вместо 2 (open_subtasks_count вызывался дважды через property)
+    open_count = Task.query.filter(
+        Task.parent_task_id == task_id,
+        Task.status != TaskStatus.DONE,
+        Task.is_archived == False,
+    ).count()
+    if open_count > 0:
+        flash(f'Нельзя закрыть: {open_count} подзадач ещё не выполнены', 'warning')
         return redirect(url_for('tasks.detail', task_id=task_id))
 
     now = datetime.utcnow()
-    for log in task.active_timers:
-        log.ended_at = now
+    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+        {'ended_at': now}, synchronize_session=False
+    )
     task.status = TaskStatus.DONE
     task.completed_at = now
     task.assigned_to_id = None
@@ -571,22 +606,32 @@ def delete_comment(task_id, comment_id):
 @tasks_bp.route('/tasks/<int:task_id>/card')
 @login_required
 def task_card(task_id):
+    from collections import defaultdict
+    from sqlalchemy import func as sqlfunc
     task = (Task.query
             .options(joinedload(Task.assigned_to), joinedload(Task.department))
             .get_or_404(task_id))
-    my_active_task_ids = {
-        log.task_id for log in
-        TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
-    }
+    active_logs = TimeLog.query.options(joinedload(TimeLog.user)).filter_by(task_id=task_id, ended_at=None).all()
+    active_timers_by_task = defaultdict(list)
+    for log in active_logs:
+        active_timers_by_task[log.task_id].append(log)
+    my_active_task_ids = {log.task_id for log in active_logs if log.user_id == current_user.id}
+    now = datetime.utcnow()
+    secs = db.session.query(sqlfunc.coalesce(sqlfunc.sum(
+        sqlfunc.extract('epoch', sqlfunc.coalesce(TimeLog.ended_at, now) - TimeLog.started_at)
+    ), 0)).filter(TimeLog.task_id == task_id).scalar() or 0
+    secs_by_task = {task_id: int(secs)}
     return render_template('tasks/_card.html', task=task,
                            Urgency=Urgency, TaskStatus=TaskStatus, TaskTag=TaskTag,
-                           my_active_task_ids=my_active_task_ids)
+                           my_active_task_ids=my_active_task_ids,
+                           active_timers_by_task=active_timers_by_task,
+                           secs_by_task=secs_by_task)
 
 
 @tasks_bp.route('/tasks/my-timer')
 @login_required
 def my_timer():
-    active = current_user.active_timer
+    active = TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).first()
     if not active:
         return jsonify({'active': False})
     return jsonify({
@@ -631,14 +676,10 @@ def archive_done():
     if not current_user.can_admin:
         return jsonify({'error': 'Нет прав'}), 403
     now = datetime.utcnow()
-    tasks = Task.query.filter(
+    count = Task.query.filter(
         Task.status == TaskStatus.DONE,
         Task.is_archived == False,
-    ).all()
-    count = len(tasks)
-    for t in tasks:
-        t.is_archived = True
-        t.archived_at = now
+    ).update({'is_archived': True, 'archived_at': now}, synchronize_session=False)
     db.session.commit()
     return jsonify({'ok': True, 'count': count})
 
@@ -655,14 +696,16 @@ def delete_task(task_id):
         if os.path.exists(path):
             os.remove(path)
         db.session.delete(att)
-    for log in task.time_logs.all():
-        db.session.delete(log)
-    # Orphan subtasks: clear their parent reference
-    for sub in task.subtasks:
-        sub.parent_task_id = None
-    # Clear plan references (plans that were converted into this task)
+    # Bulk delete time_logs вместо поштучного удаления
+    TimeLog.query.filter_by(task_id=task_id).delete(synchronize_session=False)
+    # Bulk update subtasks и планов
+    Task.query.filter_by(parent_task_id=task_id).update(
+        {'parent_task_id': None}, synchronize_session=False
+    )
     from models import Plan
-    Plan.query.filter_by(converted_task_id=task_id).update({'converted_task_id': None})
+    Plan.query.filter_by(converted_task_id=task_id).update(
+        {'converted_task_id': None}, synchronize_session=False
+    )
     db.session.delete(task)
     db.session.commit()
     flash('Задача удалена', 'success')

@@ -42,15 +42,22 @@ def create_app():
     @app.context_processor
     def inject_avatar_v():
         v = 0
+        active_timer = None
         try:
             if current_user.is_authenticated:
                 p = os.path.join(app.root_path, 'static', 'avatars',
                                  f'{current_user.id}.png')
                 if os.path.exists(p):
                     v = int(os.path.getmtime(p))
+                # Активный таймер для topbar — один раз на запрос через context processor
+                # вместо вызова current_user.active_timer прямо в base.html
+                from models import TimeLog
+                active_timer = TimeLog.query.filter_by(
+                    user_id=current_user.id, ended_at=None
+                ).first()
         except Exception:
             pass
-        return {'avatar_v': v}
+        return {'avatar_v': v, 'current_user_active_timer': active_timer}
 
     @app.route('/')
     def index():
@@ -196,26 +203,14 @@ def create_app():
     def fix_none_fields():
         """Clear literal 'None' string values from customer fields."""
         from models import Task
-        tasks = Task.query.filter(
-            db.or_(
-                Task.customer_name == 'None',
-                Task.customer_phone == 'None',
-                Task.customer_email == 'None',
-            )
-        ).all()
-        count = 0
-        for t in tasks:
-            if t.customer_name == 'None':
-                t.customer_name = None
-                count += 1
-            if t.customer_phone == 'None':
-                t.customer_phone = None
-                count += 1
-            if t.customer_email == 'None':
-                t.customer_email = None
-                count += 1
+        c1 = Task.query.filter(Task.customer_name == 'None').update(
+            {'customer_name': None}, synchronize_session=False)
+        c2 = Task.query.filter(Task.customer_phone == 'None').update(
+            {'customer_phone': None}, synchronize_session=False)
+        c3 = Task.query.filter(Task.customer_email == 'None').update(
+            {'customer_email': None}, synchronize_session=False)
         db.session.commit()
-        print(f'Fixed {count} fields in {len(tasks)} tasks')
+        print(f'Fixed {c1 + c2 + c3} fields')
 
     @app.cli.command('auto-archive')
     def auto_archive_cmd():
@@ -224,17 +219,14 @@ def create_app():
         from models import Task, TaskStatus
         now = datetime.utcnow()
         cutoff = now - timedelta(days=7)
-        tasks = Task.query.filter(
+        count = Task.query.filter(
             Task.status == TaskStatus.DONE,
             Task.completed_at < cutoff,
             Task.completed_at.isnot(None),
             Task.is_archived == False,
-        ).all()
-        for t in tasks:
-            t.is_archived = True
-            t.archived_at = now
+        ).update({'is_archived': True, 'archived_at': now}, synchronize_session=False)
         db.session.commit()
-        print(f'Archived {len(tasks)} tasks')
+        print(f'Archived {count} tasks')
 
     @app.cli.command('fix-sequences')
     def fix_sequences():
@@ -255,16 +247,14 @@ def create_app():
     def archive_old():
         from datetime import datetime, timedelta
         from models import Task, TaskStatus
-        cutoff = datetime.utcnow() - timedelta(days=365)
-        tasks = Task.query.filter(
+        now = datetime.utcnow()
+        cutoff = now - timedelta(days=365)
+        count = Task.query.filter(
             Task.created_at < cutoff,
             Task.is_archived == False,
             Task.status == TaskStatus.DONE
-        ).all()
-        for t in tasks:
-            t.is_archived = True
-            t.archived_at = datetime.utcnow()
+        ).update({'is_archived': True, 'archived_at': now}, synchronize_session=False)
         db.session.commit()
-        print(f'Archived {len(tasks)} tasks')
+        print(f'Archived {count} tasks')
 
     return app

@@ -1,4 +1,4 @@
-{% set active = task.active_timers %}
+{% set active = active_timers_by_task.get(task.id, []) %}
 {% set is_mine = task.assigned_to_id == current_user.id %}
 {% set is_taken = task.assigned_to_id is not none and not is_mine %}
 {% set is_free = task.assigned_to_id is none %}
@@ -64,9 +64,10 @@
 
   <div class="card-footer">
     <div class="flex items-center gap-2 flex-wrap">
-      {% if task.total_seconds > 0 %}
+      {% set task_secs = secs_by_task.get(task.id, 0) %}
+      {% if task_secs > 0 %}
       <span class="task-meta-item task-meta">
-        <i class="bi bi-clock"></i> {{ task.total_seconds | duration }}
+        <i class="bi bi-clock"></i> {{ task_secs | duration }}
       </span>
       {% endif %}
       {% if is_taken %}

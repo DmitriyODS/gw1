@@ -3,7 +3,6 @@ import io
 from datetime import date, datetime
 from flask import Blueprint, render_template, request, send_file
 from flask_login import login_required
-from sqlalchemy import or_, and_
 from models import Task, TaskStatus
 
 media_plan_bp = Blueprint('media_plan', __name__)
@@ -44,20 +43,9 @@ def _get_month_tasks(current_month):
     else:
         month_end = date(current_month.year, current_month.month + 1, 1)
 
-    # Фильтруем в БД: не архивные, только нужный месяц или без даты
-    # dynamic_fields['pub_date'].astext использует PostgreSQL оператор ->>
-    pub_date_col = Task.dynamic_fields['pub_date'].astext
     all_pubs = Task.query.filter(
         Task.task_type.in_(['placement', 'publication']),
         Task.is_archived == False,
-        or_(
-            pub_date_col.is_(None),                          # ключ отсутствует в JSON
-            pub_date_col == '',                              # пустая строка
-            and_(
-                pub_date_col >= month_start.isoformat(),
-                pub_date_col < month_end.isoformat(),
-            )
-        )
     ).all()
 
     by_day = {}

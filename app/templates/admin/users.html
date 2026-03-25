@@ -40,9 +40,11 @@
         {% if current_user.can_admin %}
         <td class="text-right">
           <div class="flex gap-1 justify-end">
+            {% if not u.is_super_admin or current_user.is_super_admin %}
             <a href="{{ url_for('admin.edit_user', user_id=u.id) }}" class="btn btn-ghost btn-xs">
               <i class="bi bi-pencil"></i>
             </a>
+            {% endif %}
             {% if current_user.is_super_admin and not u.is_super_admin %}
             <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}" class="inline"
                   onsubmit="return confirm('Удалить пользователя {{ u.full_name }}?')">

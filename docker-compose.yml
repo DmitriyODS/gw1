@@ -27,6 +27,36 @@ services:
     depends_on:
       - db
 
+  daemon_rhythms:
+    build: ./app
+    command: python daemon_rhythms.py
+    volumes:
+      - ./app:/app
+      - uploads:/app/uploads
+    environment:
+      FLASK_APP: factory:create_app
+      DATABASE_URL: postgresql://tasktime:tasktime@db:5432/tasktime
+      SECRET_KEY: dev-secret-key
+      UPLOAD_FOLDER: /app/uploads
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  daemon_archive:
+    build: ./app
+    command: python daemon_archive.py
+    volumes:
+      - ./app:/app
+      - uploads:/app/uploads
+    environment:
+      FLASK_APP: factory:create_app
+      DATABASE_URL: postgresql://tasktime:tasktime@db:5432/tasktime
+      SECRET_KEY: dev-secret-key
+      UPLOAD_FOLDER: /app/uploads
+    depends_on:
+      - db
+    restart: unless-stopped
+
 volumes:
   pgdata:
   uploads:

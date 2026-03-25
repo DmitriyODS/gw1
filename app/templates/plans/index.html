@@ -101,16 +101,6 @@
 
 {% block content %}
 
-{# ─── Conversion notification ─── #}
-{% if converted %}
-<div class="alert alert-success py-2 mb-4 text-sm flex items-center gap-2">
-  <i class="bi bi-arrow-right-circle-fill"></i>
-  {{ converted }} {{ 'план превращён' if converted == 1 else 'плана превращены' }} в {{ 'задачу' if converted == 1 else 'задачи' }} и добавлен{{ 'а' if converted == 1 else 'ы' }} на доску
-  <a href="{{ url_for('tasks.list_tasks') }}" class="ml-1 underline font-semibold">Перейти →</a>
-  <button onclick="this.parentElement.remove()" class="btn btn-ghost btn-xs ml-auto opacity-50">✕</button>
-</div>
-{% endif %}
-
 {# ─── Header ─── #}
 <div class="flex items-center justify-between mb-4">
   <h1 class="text-lg font-bold flex items-center gap-2">
@@ -152,7 +142,7 @@
 <div class="empty-plans">
   <i class="bi bi-calendar2-plus" style="font-size:3rem; display:block; margin-bottom:12px; opacity:0.2"></i>
   <div class="font-semibold mb-1">Планов пока нет</div>
-  <div class="text-sm mb-4">Добавьте план — он автоматически станет задачей в нужный момент</div>
+  <div class="text-sm mb-4">Добавьте план — когда придёт время, нажмите «Реализовать» чтобы создать задачу</div>
   <button class="btn btn-primary btn-sm" onclick="document.getElementById('createPlanModal').showModal()">
     Добавить первый план
   </button>
@@ -206,8 +196,7 @@
         {% set diff = (plan.release_date - now) %}
         {% set total_secs = diff.total_seconds() %}
         {% if total_secs <= 0 %}
-          {# Should not happen (auto-converted), but safety net #}
-          <span class="release-badge today"><i class="bi bi-clock-fill"></i> Сейчас</span>
+          <span class="release-badge today"><i class="bi bi-clock-fill"></i> Пора реализовать</span>
         {% elif total_secs < 86400 %}
           <span class="release-badge today"><i class="bi bi-clock-fill"></i>
             Сегодня {{ plan.release_date.strftime('%H:%M') }}
@@ -240,9 +229,9 @@
     <div class="flex items-center gap-1 pt-1 border-t border-base-200">
       {# Push to board button #}
       <button class="btn btn-ghost btn-xs text-primary gap-1"
-              title="Перекинуть на доску сейчас"
+              title="Создать задачу и удалить план"
               onclick="confirmPush(this)">
-        <i class="bi bi-send-fill"></i> На доску
+        <i class="bi bi-send-fill"></i> Реализовать
       </button>
 
       <div class="ml-auto flex gap-1">
@@ -307,7 +296,7 @@
           <input type="datetime-local" name="release_date" class="input input-bordered w-full">
         </div>
         <div class="text-xs text-base-content/50 mt-1">
-          <i class="bi bi-info-circle"></i> В это время план автоматически станет задачей на канбан-доске
+          <i class="bi bi-info-circle"></i> Ориентировочная дата — план не конвертируется автоматически
         </div>
       </div>
 
@@ -515,7 +504,7 @@
       <li class="flex items-center gap-2 py-2">
         <span class="flex-1 text-sm font-medium">{{ g.name }}</span>
         <span class="text-xs text-base-content/40">
-          {{ g.plans | selectattr('is_converted', 'equalto', False) | list | length }} планов
+          {{ g.plans | list | length }} планов
         </span>
         <form method="post" action="{{ url_for('plans.delete_group', group_id=g.id) }}" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -542,10 +531,9 @@
 ══════════════════════════════════════════════════ #}
 <dialog id="pushPlanModal" class="modal">
   <div class="modal-box">
-    <h3 class="font-bold text-lg"><i class="bi bi-send-fill text-primary"></i> Перекинуть на доску?</h3>
+    <h3 class="font-bold text-lg"><i class="bi bi-send-fill text-primary"></i> Реализовать план?</h3>
     <p class="py-4">
-      План <strong id="pushPlanName"></strong> сразу станет задачей в колонке «Новые».
-      <span class="block text-sm text-base-content/50 mt-1">Дата реализации будет проигнорирована.</span>
+      Будет создана задача из плана <strong id="pushPlanName"></strong>, после чего план удалится.
     </p>
     <div class="modal-action">
       <button type="button" class="btn btn-ghost"
@@ -553,7 +541,7 @@
       <form id="pushPlanForm" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary">
-          <i class="bi bi-send-fill"></i> На доску
+          <i class="bi bi-send-fill"></i> Создать задачу
         </button>
       </form>
     </div>

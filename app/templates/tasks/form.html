@@ -119,7 +119,7 @@
           </div>
         </div>
         <div id="field-task-type">
-          <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
+          <label class="label pb-1"><span class="label-text font-semibold">Тип задачи <span class="text-error">*</span></span></label>
           <div class="ss-wrap relative" id="type_wrap" data-blank="— выберите —">
             <div class="ss-trigger input input-bordered w-full flex items-center gap-2 cursor-pointer select-none" tabindex="0">
               <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— выберите —</span>
@@ -421,13 +421,24 @@ const AUTO_TAGS = {
   'merch':               ['дизайн'],
   'poster':              ['дизайн'],
   'presentation':        ['дизайн'],
+  'presentation_update': ['дизайн'],
   'presentation_verify': ['дизайн'],
   'design_verify':       ['дизайн'],
+  'pub_images':          ['дизайн'],
+  'stand_design':        ['дизайн'],
+  'pub_design':          ['дизайн'],
+  'branded':             ['дизайн'],
+  'small_design':        ['дизайн'],
   'postcard':            ['дизайн', 'текст'],
+  'text_writing':        ['текст'],
   'newsletter':          ['текст'],
   'video_edit':          ['фото/видео'],
   'photo_edit':          ['фото/видео'],
+  'video_shoot':         ['фото/видео'],
+  'photo_shoot':         ['фото/видео'],
   'photo_video':         ['фото/видео'],
+  'internal':            ['внутреннее'],
+  'external':            ['внешнее'],
   'mail_check':          ['внутреннее'],
   'dept_internal':       ['внутреннее'],
   'dept_external':       ['внешнее'],
@@ -558,6 +569,85 @@ document.getElementById('delAttFormConfirmBtn')?.addEventListener('click', () =>
     method: 'POST', headers: {'X-CSRFToken': CSRF}
   }).then(r => r.json()).then(d => {
     if (d.success) document.getElementById('att-' + _pendingDelAttId)?.remove();
+  });
+});
+
+// ── Task type required validation ──
+document.querySelector('form').addEventListener('submit', function(e) {
+  const mode = document.getElementById('create-mode-val')?.value || 'task';
+  if (mode === 'publication') return; // no type field in pub mode
+  const typeVal = document.getElementById('task_type_hidden')?.value || '';
+  if (!typeVal) {
+    e.preventDefault();
+    const trigger = document.querySelector('#type_wrap .ss-trigger');
+    if (trigger) {
+      trigger.classList.add('input-error');
+      trigger.scrollIntoView({behavior: 'smooth', block: 'center'});
+      setTimeout(() => trigger.classList.remove('input-error'), 3000);
+    }
+    // Show inline error
+    let err = document.getElementById('type-required-error');
+    if (!err) {
+      err = document.createElement('div');
+      err.id = 'type-required-error';
+      err.className = 'text-error text-xs mt-1';
+      err.textContent = 'Выберите тип задачи';
+      document.getElementById('type_wrap').after(err);
+    }
+    setTimeout(() => err?.remove(), 3000);
+  }
+});
+
+// Remove error state when type is selected
+document.getElementById('task_type_hidden')?.addEventListener('change', function() {
+  document.querySelector('#type_wrap .ss-trigger')?.classList.remove('input-error');
+  document.getElementById('type-required-error')?.remove();
+});
+
+// ── Datetime-local year fix: max 4 digits, auto-advance after 4th ──
+document.querySelectorAll('input[type="datetime-local"]').forEach(inp => {
+  if (!inp.max) inp.max = '2099-12-31T23:59';
+
+  let yearDone = false;
+  let yearCount = 0;
+
+  inp.addEventListener('focus', () => {
+    yearDone = false;
+    yearCount = 0;
+  });
+  inp.addEventListener('blur', () => {
+    yearDone = false;
+    yearCount = 0;
+  });
+
+  inp.addEventListener('keydown', function(e) {
+    if (yearDone) return;
+    if (/^\d$/.test(e.key)) {
+      yearCount++;
+      if (yearCount >= 4) {
+        yearDone = true;
+        setTimeout(() => {
+          this.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'ArrowRight', keyCode: 39, bubbles: true
+          }));
+        }, 0);
+      }
+    } else if (e.key !== 'Backspace' && e.key !== 'Delete') {
+      // User navigated manually — stop tracking year
+      yearDone = true;
+    }
+  });
+
+  // Safety: truncate year > 4 digits on change
+  inp.addEventListener('change', function() {
+    if (!this.value) return;
+    const [dp, tp] = this.value.split('T');
+    if (!dp) return;
+    const parts = dp.split('-');
+    if (parts[0] && parts[0].length > 4) {
+      parts[0] = parts[0].slice(0, 4);
+      this.value = parts.join('-') + (tp ? 'T' + tp : '');
+    }
   });
 });
 </script>

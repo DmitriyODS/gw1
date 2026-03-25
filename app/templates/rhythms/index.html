@@ -191,6 +191,10 @@
             {% endfor %}
           </select>
         </div>
+        <div>
+          <label class="label pb-1"><span class="label-text">Время срабатывания</span></label>
+          <input type="time" name="trigger_time" class="input input-bordered w-full" placeholder="09:00">
+        </div>
         <div id="c-field-weekly" style="display:none">
           <label class="label pb-1"><span class="label-text">День недели</span></label>
           <select name="day_of_week" class="select select-bordered w-full">
@@ -217,8 +221,8 @@
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
-          <select name="task_type" class="select select-bordered w-full">
+          <label class="label pb-1"><span class="label-text font-semibold">Тип задачи <span class="text-error">*</span></span></label>
+          <select name="task_type" class="select select-bordered w-full" required>
             <option value="">— не выбрано —</option>
             {% for val, label in task_types %}
             <option value="{{ val }}">{{ label }}</option>
@@ -300,6 +304,11 @@
             {% endfor %}
           </select>
         </div>
+        <div>
+          <label class="label pb-1"><span class="label-text">Время срабатывания</span></label>
+          <input type="time" name="trigger_time" class="input input-bordered w-full"
+                 value="{{ r.trigger_time or '' }}">
+        </div>
         <div id="e{{ r.id }}-field-weekly" style="display:{{ '' if r.frequency == 'weekly' else 'none' }}">
           <label class="label pb-1"><span class="label-text">День недели</span></label>
           <select name="day_of_week" class="select select-bordered w-full">
@@ -327,8 +336,8 @@
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
-          <select name="task_type" class="select select-bordered w-full">
+          <label class="label pb-1"><span class="label-text font-semibold">Тип задачи <span class="text-error">*</span></span></label>
+          <select name="task_type" class="select select-bordered w-full" required>
             <option value="">— не выбрано —</option>
             {% for val, label in task_types %}
             <option value="{{ val }}" {% if r.task_type == val %}selected{% endif %}>{{ label }}</option>

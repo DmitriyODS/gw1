@@ -31,6 +31,7 @@ TASK_TYPES = [
     ('stand_design',         'Разработка стендов'),
     ('pub_design',           'Разработка дизайна для публикаций'),
     ('branded',              'Разработка брендированной продукции'),
+    ('small_design',         'Мелкий дизайн'),
 ]
 EXTERNAL_TASK_TYPES = TASK_TYPES  # все типы видны везде
 _INTERNAL_ONLY = set()  # больше нет внутренних типов
@@ -48,6 +49,7 @@ AUTO_TAGS = {
     'stand_design':         ['дизайн'],
     'pub_design':           ['дизайн'],
     'branded':              ['дизайн'],
+    'small_design':         ['дизайн'],
     'photo_edit':           ['фото/видео'],
     'video_edit':           ['фото/видео'],
     'video_shoot':          ['фото/видео'],

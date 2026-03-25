@@ -155,6 +155,23 @@
 
 </div>
 
+<!-- Avatar crop modal -->
+<dialog id="avatarCropModal" class="modal">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-4"><i class="bi bi-crop"></i> Обрезать фото</h3>
+    <div class="relative mx-auto select-none" style="width:300px;height:300px;">
+      <canvas id="cropCanvas" width="300" height="300"
+              class="block rounded-xl border border-base-300 cursor-grab touch-none"></canvas>
+    </div>
+    <p class="text-xs text-base-content/40 text-center mt-2">Тяните для перемещения &middot; прокручивайте для масштаба</p>
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('avatarCropModal').close()">Отмена</button>
+      <button type="button" class="btn btn-primary" id="cropSaveBtn"><i class="bi bi-check2"></i> Сохранить</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Tasks modal -->
 <dialog id="tasks-modal" class="modal">
   <div class="modal-box max-w-2xl w-full">
@@ -204,12 +221,144 @@
 
 {% block scripts %}
 <script>
+// ── Avatar crop editor ──
+const CSIZE = 300;    // canvas display size
+const CIRCLE_R = 130; // crop circle radius
+const OUT_SIZE = 400; // output image size
+
+let _img = null, _panX = 0, _panY = 0, _scale = 1, _minScale = 1;
+let _drag = false, _lx = 0, _ly = 0, _pinch = 0;
+
+const cropCanvas = document.getElementById('cropCanvas');
+const cropCtx    = cropCanvas.getContext('2d');
+
+function _initScale() {
+  const minDim = Math.min(_img.naturalWidth, _img.naturalHeight);
+  _minScale = (CIRCLE_R * 2) / minDim;
+  _scale = _minScale;
+  _panX = 0; _panY = 0;
+}
+
+function _clamp() {
+  const hw = (_img.naturalWidth  * _scale) / 2;
+  const hh = (_img.naturalHeight * _scale) / 2;
+  const lim = CIRCLE_R;
+  _panX = Math.max(-(hw - lim), Math.min(hw - lim, _panX));
+  _panY = Math.max(-(hh - lim), Math.min(hh - lim, _panY));
+}
+
+function _draw() {
+  const cx = CSIZE / 2;
+  const x  = cx + _panX - (_img.naturalWidth  * _scale) / 2;
+  const y  = cx + _panY - (_img.naturalHeight * _scale) / 2;
+  cropCtx.clearRect(0, 0, CSIZE, CSIZE);
+  cropCtx.drawImage(_img, x, y, _img.naturalWidth * _scale, _img.naturalHeight * _scale);
+  // dark overlay with circular hole
+  cropCtx.save();
+  cropCtx.fillStyle = 'rgba(0,0,0,0.48)';
+  cropCtx.beginPath();
+  cropCtx.rect(0, 0, CSIZE, CSIZE);
+  cropCtx.arc(cx, cx, CIRCLE_R, 0, Math.PI * 2, true);
+  cropCtx.fill('evenodd');
+  // circle border
+  cropCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+  cropCtx.lineWidth = 2;
+  cropCtx.beginPath();
+  cropCtx.arc(cx, cx, CIRCLE_R, 0, Math.PI * 2);
+  cropCtx.stroke();
+  cropCtx.restore();
+}
+
+// Mouse
+cropCanvas.addEventListener('mousedown', e => { _drag = true; _lx = e.clientX; _ly = e.clientY; cropCanvas.style.cursor = 'grabbing'; });
+window.addEventListener('mousemove', e => {
+  if (!_drag || !_img) return;
+  _panX += e.clientX - _lx; _panY += e.clientY - _ly;
+  _lx = e.clientX; _ly = e.clientY;
+  _clamp(); _draw();
+});
+window.addEventListener('mouseup', () => { _drag = false; cropCanvas.style.cursor = 'grab'; });
+cropCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!_img) return;
+  _scale = Math.max(_minScale, _scale * (e.deltaY > 0 ? 0.9 : 1.1));
+  _clamp(); _draw();
+}, { passive: false });
+
+// Touch
+cropCanvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) { _drag = true; _lx = e.touches[0].clientX; _ly = e.touches[0].clientY; }
+  else if (e.touches.length === 2) { _drag = false; _pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+}, { passive: false });
+cropCanvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!_img) return;
+  if (e.touches.length === 1 && _drag) {
+    _panX += e.touches[0].clientX - _lx; _panY += e.touches[0].clientY - _ly;
+    _lx = e.touches[0].clientX; _ly = e.touches[0].clientY;
+    _clamp(); _draw();
+  } else if (e.touches.length === 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    _scale = Math.max(_minScale, _scale * (d / _pinch));
+    _pinch = d; _clamp(); _draw();
+  }
+}, { passive: false });
+cropCanvas.addEventListener('touchend', e => { if (e.touches.length === 0) _drag = false; });
+
+// Open editor when file chosen
 document.getElementById('avatar-upload').addEventListener('change', function() {
   if (!this.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = e => { document.getElementById('avatar-preview').src = e.target.result; };
-  reader.readAsDataURL(this.files[0]);
-  document.getElementById('avatar-form').submit();
+  const url = URL.createObjectURL(this.files[0]);
+  this.value = '';
+  _img = new Image();
+  _img.onload = () => { _initScale(); _draw(); document.getElementById('avatarCropModal').showModal(); };
+  _img.src = url;
+});
+
+// Save: crop → scale → compress → upload
+document.getElementById('cropSaveBtn').addEventListener('click', async () => {
+  if (!_img) return;
+  const btn = document.getElementById('cropSaveBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+
+  const cx = CSIZE / 2;
+  const imgX = cx + _panX - (_img.naturalWidth  * _scale) / 2;
+  const imgY = cx + _panY - (_img.naturalHeight * _scale) / 2;
+
+  // 1. Render the circular crop area into a tmp square canvas
+  const srcOff = cx - CIRCLE_R;  // = 20
+  const srcSize = CIRCLE_R * 2;  // = 260
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = srcSize;
+  tmp.getContext('2d').drawImage(_img, imgX - srcOff, imgY - srcOff,
+    _img.naturalWidth * _scale, _img.naturalHeight * _scale);
+
+  // 2. Scale to output size
+  const out = document.createElement('canvas');
+  out.width = out.height = OUT_SIZE;
+  out.getContext('2d').drawImage(tmp, 0, 0, srcSize, srcSize, 0, 0, OUT_SIZE, OUT_SIZE);
+
+  // 3. Compress to ≤ 2 MB
+  const MAX = 2 * 1024 * 1024;
+  let blob, q = 0.92;
+  do { blob = await new Promise(res => out.toBlob(res, 'image/jpeg', q)); q -= 0.08; }
+  while (blob && blob.size > MAX && q > 0.1);
+
+  // 4. Update preview immediately
+  document.getElementById('avatar-preview').src = URL.createObjectURL(blob);
+  document.getElementById('avatarCropModal').close();
+
+  // 5. Upload
+  const fd = new FormData();
+  fd.append('csrf_token', document.querySelector('#avatar-form [name=csrf_token]').value);
+  fd.append('action', 'upload');
+  fd.append('avatar', blob, 'avatar.jpg');
+  await fetch('{{ url_for("profile.update_avatar") }}', { method: 'POST', body: fd });
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-check2"></i> Сохранить';
 });
 
 let currentMode = 'week';

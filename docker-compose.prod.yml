@@ -22,6 +22,32 @@ services:
       - db
     restart: always
 
+  daemon_rhythms:
+    build: ./app
+    command: python daemon_rhythms.py
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      UPLOAD_FOLDER: /app/uploads
+    depends_on:
+      - db
+    restart: always
+
+  daemon_archive:
+    build: ./app
+    command: python daemon_archive.py
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      UPLOAD_FOLDER: /app/uploads
+    depends_on:
+      - db
+    restart: always
+
   nginx:
     image: nginx:alpine
     volumes:

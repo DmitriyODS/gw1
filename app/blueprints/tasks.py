@@ -72,8 +72,6 @@ def sorted_tasks(query, sort_new_by_updated=False, include_archived_done=False):
 @login_required
 def list_tasks():
     _maybe_auto_archive()
-    from blueprints.plans import convert_due_plans
-    convert_due_plans()
     sort_new = request.args.get('sort_new', '0') == '1'
     tasks = sorted_tasks(Task.query, sort_new_by_updated=sort_new, include_archived_done=True)
     my_active_task_ids = {
@@ -178,13 +176,16 @@ def create():
                 current_user.id,
             )
             return redirect(url_for('tasks.detail', task_id=task_id))
+        if not request.form.get('task_type'):
+            flash('Выберите тип задачи — это обязательное поле', 'warning')
+            return redirect(url_for('tasks.create', **request.args))
         task = _task_from_form(request.form, created_by_id=current_user.id)
         db.session.add(task)
         db.session.flush()
         _save_attachments(request.files.getlist('attachments'), task.id)
         db.session.commit()
         flash('Задача создана', 'success')
-        return redirect(url_for('tasks.detail', task_id=task.id))
+        return redirect(url_for('tasks.detail', task_id=task.id, new=1))
     parent_task = None
     parent_id = request.args.get('parent_id')
     if parent_id:
@@ -201,6 +202,9 @@ def edit(task_id):
     task = Task.query.get_or_404(task_id)
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
+        if not request.form.get('task_type'):
+            flash('Выберите тип задачи — это обязательное поле', 'warning')
+            return redirect(url_for('tasks.edit', task_id=task_id))
         _task_from_form(request.form, task=task)
         _save_attachments(request.files.getlist('attachments'), task.id)
         touch(task)
@@ -392,6 +396,24 @@ def delegate_task(task_id):
     touch(task)
     db.session.commit()
     return jsonify({'success': True, 'assignee_name': new_assignee.full_name})
+
+
+@tasks_bp.route('/tasks/<int:task_id>/admin-pause', methods=['POST'])
+@login_required
+def admin_pause(task_id):
+    """Admin/manager: stop all active timers and pause a task taken by someone else."""
+    if not current_user.can_admin:
+        return jsonify({'error': 'Нет прав'}), 403
+    task = Task.query.get_or_404(task_id)
+    if task.status != TaskStatus.IN_PROGRESS:
+        return jsonify({'error': 'Задача не в работе'}), 400
+    now = datetime.utcnow()
+    for log in task.active_timers:
+        log.ended_at = now
+    task.status = TaskStatus.PAUSED
+    touch(task)
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 @tasks_bp.route('/tasks/<int:task_id>/unassign', methods=['POST'])

@@ -171,6 +171,17 @@
             <span class="text-sm text-base-content/50 italic">
               Задача у <strong>{{ task.assigned_to.full_name }}</strong>
             </span>
+            {% if current_user.can_admin %}
+              {% if task.status == TaskStatus.IN_PROGRESS %}
+              <button class="btn btn-warning btn-sm" onclick="adminPause({{ task.id }})">
+                <i class="bi bi-pause-fill"></i> Пауза
+              </button>
+              {% elif task.status == TaskStatus.PAUSED %}
+              <button class="btn btn-ghost btn-sm border border-base-300" onclick="adminUnpause({{ task.id }})">
+                <i class="bi bi-arrow-counterclockwise"></i> Снять с паузы
+              </button>
+              {% endif %}
+            {% endif %}
             {% else %}
               {% if (is_free or is_mine) and not my_active %}
               <button class="btn btn-success btn-sm" onclick="handleStart({{ task.id }})">
@@ -440,6 +451,23 @@
 
 <!-- ── Modals ── -->
 
+<!-- Just-created: start task? -->
+{% if request.args.get('new') and task.status == TaskStatus.NEW %}
+<dialog id="justCreatedModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">Задача создана!</h3>
+    <p class="py-4">Хотите сразу начать работу над ней?</p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-success" onclick="handleStart({{ task.id }}); document.getElementById('justCreatedModal').close();">
+        <i class="bi bi-play-fill"></i> Старт
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+
 <!-- Taken modal (task already claimed by someone else) -->
 <dialog id="takenModal" class="modal">
   <div class="modal-box">
@@ -707,6 +735,30 @@ function doUnassign(taskId) {
   }).then(r => r.json()).then(d => {
     if (d.success) location.reload();
   });
+}
+
+// ── Auto-open just-created modal ──
+{% if request.args.get('new') and task.status == TaskStatus.NEW %}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('justCreatedModal')?.showModal();
+});
+{% endif %}
+
+// ── Admin pause / unpause ──
+async function adminPause(taskId) {
+  const d = await post(`/tasks/${taskId}/admin-pause`);
+  if (d.ok) location.reload();
+  else alert(d.error || 'Ошибка');
+}
+async function adminUnpause(taskId) {
+  const r = await fetch(`/tasks/${taskId}/move`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({status: 'new'})
+  });
+  const d = await r.json();
+  if (d.ok) location.reload();
+  else alert(d.error || 'Ошибка');
 }
 
 // ── Comment multi-file handling ──

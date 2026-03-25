@@ -9,6 +9,18 @@ from models import User, Department, Role, Task, TaskAttachment, TaskComment, Ti
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
+def _reset_sequences():
+    """Reset PostgreSQL sequences to max(id) for all tables after bulk import."""
+    tables = ['users', 'departments', 'tasks', 'task_attachments',
+              'task_comments', 'time_logs']
+    with db.engine.connect() as conn:
+        for table in tables:
+            conn.execute(db.text(
+                f"SELECT setval('{table}_id_seq', COALESCE((SELECT MAX(id) FROM {table}), 1))"
+            ))
+        conn.commit()
+
+
 @admin_bp.route('/users')
 @login_required
 def users():
@@ -54,6 +66,9 @@ def edit_user(user_id):
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     user = User.query.get_or_404(user_id)
+    if user.is_super_admin and not current_user.is_super_admin:
+        flash('Нельзя редактировать Super Admin', 'danger')
+        return redirect(url_for('admin.users'))
     if request.method == 'POST':
         new_role = request.form.get('role', user.role)
         if new_role == Role.SUPER_ADMIN and not current_user.is_super_admin:
@@ -328,6 +343,8 @@ def archive_import():
             ))
 
         db.session.commit()
+        # Reset sequences so new inserts don't collide with imported IDs
+        _reset_sequences()
         counts = {k: len(data.get(k, [])) for k in ('users','tasks','comments','time_logs','attachments','departments')}
         flash(
             f"Импорт завершён: {counts['users']} польз., {counts['tasks']} задач, "

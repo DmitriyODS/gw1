@@ -277,6 +277,7 @@ class Rhythm(db.Model):
     frequency = db.Column(db.String(20), nullable=False, default=RhythmFrequency.DAILY)
     day_of_week = db.Column(db.Integer)    # 0-6 (Mon-Sun) for weekly
     day_of_month = db.Column(db.Integer)   # 1-31 for monthly
+    trigger_time = db.Column(db.String(5))  # HH:MM, e.g. "09:00"
     task_title = db.Column(db.String(500), nullable=False)
     task_description = db.Column(db.Text)
     task_tags = db.Column(db.JSON, default=list)
@@ -293,30 +294,50 @@ class Rhythm(db.Model):
 
     @property
     def is_due(self):
-        """True if this rhythm should fire today but hasn't yet."""
+        """True if this rhythm should fire now but hasn't yet today."""
         if not self.is_active:
             return False
-        from datetime import date as date_type
-        today = datetime.utcnow().date()
-        if self.last_run_at and self.last_run_at.date() == today:
-            return False
+        from datetime import timedelta as td
+        TZ = 3  # МСК offset
+        now_local = datetime.utcnow() + td(hours=TZ)
+        today = now_local.date()
+
+        if self.last_run_at:
+            last_local = self.last_run_at + td(hours=TZ)
+            if last_local.date() == today:
+                return False
+
+        # Check day
+        day_ok = False
         if self.frequency == RhythmFrequency.DAILY:
-            return True
-        if self.frequency == RhythmFrequency.WEEKLY:
-            return today.weekday() == (self.day_of_week or 0)
-        if self.frequency == RhythmFrequency.MONTHLY:
-            return today.day == (self.day_of_month or 1)
-        return False
+            day_ok = True
+        elif self.frequency == RhythmFrequency.WEEKLY:
+            day_ok = today.weekday() == (self.day_of_week or 0)
+        elif self.frequency == RhythmFrequency.MONTHLY:
+            day_ok = today.day == (self.day_of_month or 1)
+        if not day_ok:
+            return False
+
+        # Check time (if set, fire only after that time)
+        if self.trigger_time:
+            try:
+                hh, mm = map(int, self.trigger_time.split(':'))
+                fire_at = now_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                return now_local >= fire_at
+            except (ValueError, AttributeError):
+                pass
+        return True
 
     @property
     def schedule_label(self):
+        t = f' в {self.trigger_time}' if self.trigger_time else ''
         if self.frequency == RhythmFrequency.DAILY:
-            return 'Ежедневно'
+            return f'Ежедневно{t}'
         if self.frequency == RhythmFrequency.WEEKLY:
             day = RhythmFrequency.WEEKDAYS[self.day_of_week or 0]
-            return f'Еженедельно ({day})'
+            return f'Еженедельно ({day}){t}'
         if self.frequency == RhythmFrequency.MONTHLY:
-            return f'Ежемесячно ({self.day_of_month or 1}-го)'
+            return f'Ежемесячно ({self.day_of_month or 1}-го){t}'
         return self.frequency
 
 

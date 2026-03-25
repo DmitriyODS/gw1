@@ -121,6 +121,7 @@ def create_app():
             ('tasks', 'updated_at',      'TIMESTAMP'),
             ('task_comments', 'filename',     'VARCHAR(255)'),
             ('task_comments', 'original_name','VARCHAR(255)'),
+            ('rhythms',       'trigger_time', 'VARCHAR(5)'),
         ]
         for table, col, col_type in cols:
             try:
@@ -215,6 +216,21 @@ def create_app():
             t.archived_at = now
         db.session.commit()
         print(f'Archived {len(tasks)} tasks')
+
+    @app.cli.command('fix-sequences')
+    def fix_sequences():
+        """Reset PostgreSQL ID sequences to max(id) — run after manual data import."""
+        tables = ['users', 'departments', 'tasks', 'task_attachments',
+                  'task_comments', 'time_logs']
+        with db.engine.connect() as conn:
+            for table in tables:
+                result = conn.execute(db.text(
+                    f"SELECT setval('{table}_id_seq', COALESCE((SELECT MAX(id) FROM {table}), 1))"
+                ))
+                val = result.scalar()
+                print(f'{table}_id_seq → {val}')
+            conn.commit()
+        print('Sequences fixed')
 
     @app.cli.command('archive-old')
     def archive_old():

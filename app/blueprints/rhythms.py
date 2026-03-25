@@ -25,6 +25,9 @@ def index():
 @rhythms_bp.route('/rhythms/create', methods=['POST'])
 @login_required
 def create():
+    if not request.form.get('task_type'):
+        flash('Укажите тип задачи', 'danger')
+        return redirect(url_for('rhythms.index'))
     r = _rhythm_from_form(request.form, created_by_id=current_user.id)
     db.session.add(r)
     db.session.commit()
@@ -35,6 +38,9 @@ def create():
 @rhythms_bp.route('/rhythms/<int:rhythm_id>/edit', methods=['POST'])
 @login_required
 def edit(rhythm_id):
+    if not request.form.get('task_type'):
+        flash('Укажите тип задачи', 'danger')
+        return redirect(url_for('rhythms.index'))
     r = Rhythm.query.get_or_404(rhythm_id)
     _rhythm_from_form(request.form, rhythm=r)
     db.session.commit()
@@ -86,6 +92,7 @@ def _rhythm_from_form(form, rhythm=None, created_by_id=None):
     rhythm.task_urgency = form.get('task_urgency', Urgency.NORMAL)
     rhythm.task_type = form.get('task_type') or None
     rhythm.department_id = form.get('department_id') or None
+    rhythm.trigger_time = form.get('trigger_time', '').strip() or None
     rhythm.is_active = form.get('is_active') == '1'
     return rhythm
 

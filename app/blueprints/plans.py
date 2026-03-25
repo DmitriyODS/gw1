@@ -9,51 +9,8 @@ plans_bp = Blueprint('plans', __name__)
 
 
 def convert_due_plans():
-    """Convert plans whose release_date has passed into tasks. Returns count converted."""
-    due = Plan.query.filter(
-        Plan.release_date <= datetime.utcnow(),
-        Plan.is_converted == False
-    ).all()
-    if not due:
-        return 0
-    for plan in due:
-        tags = list(plan.tags or [])
-        if plan.task_type == 'publication' and TaskTag.PUBLICATION not in tags:
-            tags.append(TaskTag.PUBLICATION)
-        task = Task(
-            title=plan.title,
-            description=plan.description,
-            customer_name=plan.customer_name,
-            customer_phone=plan.customer_phone,
-            department_id=plan.department_id,
-            task_type=plan.task_type,
-            urgency=plan.urgency or Urgency.NORMAL,
-            tags=tags,
-            dynamic_fields=plan.dynamic_fields or {},
-            status=TaskStatus.NEW,
-            created_by_id=plan.created_by_id,
-        )
-        db.session.add(task)
-        db.session.flush()
-        if plan.task_type == 'publication':
-            db.session.add(Task(
-                title=f'[Дизайн] {task.title}',
-                task_type='publication', tags=[TaskTag.DESIGN],
-                urgency=task.urgency, department_id=task.department_id,
-                parent_task_id=task.id, status=TaskStatus.NEW,
-                dynamic_fields={}, created_by_id=plan.created_by_id,
-            ))
-            db.session.add(Task(
-                title=f'[Текст] {task.title}',
-                task_type='publication', tags=[TaskTag.TEXT],
-                urgency=task.urgency, department_id=task.department_id,
-                parent_task_id=task.id, status=TaskStatus.NEW,
-                dynamic_fields={}, created_by_id=plan.created_by_id,
-            ))
-        plan.is_converted = True
-        plan.converted_task_id = task.id
-    db.session.commit()
-    return len(due)
+    """Kept for backward compatibility — no longer auto-converts plans."""
+    return 0
 
 
 @plans_bp.route('/plans')
@@ -114,11 +71,8 @@ def edit(plan_id):
 @plans_bp.route('/plans/<int:plan_id>/push', methods=['POST'])
 @login_required
 def push_to_board(plan_id):
-    """Immediately convert a plan to a task regardless of release_date."""
+    """Create a task from the plan, then delete the plan."""
     plan = Plan.query.get_or_404(plan_id)
-    if plan.is_converted:
-        flash('Этот план уже превращён в задачу', 'warning')
-        return redirect(url_for('plans.index'))
 
     tags = list(plan.tags or [])
     if plan.task_type == 'publication' and TaskTag.PUBLICATION not in tags:
@@ -156,11 +110,11 @@ def push_to_board(plan_id):
             dynamic_fields={}, created_by_id=plan.created_by_id,
         ))
 
-    plan.is_converted = True
-    plan.converted_task_id = task.id
+    plan_title = plan.title
+    db.session.delete(plan)
     db.session.commit()
-    flash(f'План «{plan.title}» добавлен на доску', 'success')
-    return redirect(url_for('tasks.detail', task_id=task.id))
+    flash(f'Задача «{plan_title}» создана, план удалён', 'success')
+    return redirect(url_for('tasks.detail', task_id=task.id, new=1))
 
 
 @plans_bp.route('/plans/<int:plan_id>/delete', methods=['POST'])

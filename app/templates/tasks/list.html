@@ -717,28 +717,35 @@ wrap.addEventListener('dragstart', e => {
 wrap.addEventListener('dragend', e => {
   isDragging = false;
   e.target.closest('.task-card')?.classList.remove('dragging');
-  document.querySelectorAll('.kanban-body').forEach(b => b.classList.remove('drag-over', 'drag-blocked'));
+  document.querySelectorAll('.kanban-body').forEach(b => b.classList.remove('drag-over'));
 });
 
 document.querySelectorAll('.kanban-body').forEach(body => {
-  const blocked = body.dataset.status === 'in_progress';
   body.addEventListener('dragover', e => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = blocked ? 'none' : 'move';
-    body.classList.add(blocked ? 'drag-blocked' : 'drag-over');
+    e.dataTransfer.dropEffect = 'move';
+    body.classList.add('drag-over');
   });
   body.addEventListener('dragleave', e => {
-    if (!body.contains(e.relatedTarget)) body.classList.remove('drag-over', 'drag-blocked');
+    if (!body.contains(e.relatedTarget)) body.classList.remove('drag-over');
   });
   body.addEventListener('drop', async e => {
     e.preventDefault();
-    body.classList.remove('drag-over', 'drag-blocked');
-    if (!dragCard || body === originBody || blocked) return;
+    body.classList.remove('drag-over');
+    if (!dragCard || body === originBody) return;
     const newStatus = body.dataset.status;
     const taskId = dragCard.dataset.id;
     const savedCard = dragCard;
     const savedOrigin = originBody;
     dragCard = null;
+
+    // Дроп в «В работе» → запускаем таймер (со всей механикой конфликтов)
+    if (newStatus === 'in_progress') {
+      savedCard.classList.add('was-dragged');
+      timerStart(taskId);
+      return;
+    }
+
     const r = await fetch(`/tasks/${taskId}/move`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
@@ -797,6 +804,20 @@ async function pollSync() {
 }
 
 setInterval(pollSync, 20000);
+
+// ── Sort-new persistence ──
+(function() {
+  const params = new URLSearchParams(location.search);
+  if (params.has('sort_new')) {
+    localStorage.setItem('gw-sort-new', params.get('sort_new'));
+  } else {
+    const saved = localStorage.getItem('gw-sort-new');
+    if (saved === '1') {
+      params.set('sort_new', '1');
+      location.replace('?' + params.toString());
+    }
+  }
+})();
 
 // ── Init ──
 LS.load();

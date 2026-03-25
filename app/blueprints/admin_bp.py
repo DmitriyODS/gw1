@@ -112,8 +112,9 @@ def departments():
         return redirect(url_for('tasks.list_tasks'))
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
+        head = request.form.get('head', '').strip()
         if name and not Department.query.filter_by(name=name).first():
-            db.session.add(Department(name=name))
+            db.session.add(Department(name=name, head=head))
             db.session.commit()
             flash('Отдел добавлен', 'success')
         elif name:
@@ -144,7 +145,7 @@ def build_backup():
         'exported_at': datetime.utcnow().isoformat(),
         'version': '1',
         'departments': [
-            {'id': d.id, 'name': d.name}
+            {'id': d.id, 'name': d.name, 'head': d.head}
             for d in Department.query.order_by(Department.id).all()
         ],
         'users': [
@@ -295,7 +296,7 @@ def archive_import():
 
         # Batch-вставки вместо поштучных db.session.add() — в разы быстрее при больших объёмах
         db.session.bulk_insert_mappings(Department, [
-            {'id': d['id'], 'name': d['name']}
+            {'id': d['id'], 'name': d['name'], 'head': d.get('head', '')}
             for d in data.get('departments', [])
         ])
         db.session.flush()

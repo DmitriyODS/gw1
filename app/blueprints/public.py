@@ -63,12 +63,16 @@ AUTO_TAGS = {
 def api_departments():
     """Returns active departments as JSON — used by forms to populate selects dynamically."""
     depts = Department.query.order_by(Department.name).all()
-    return jsonify([{'id': d.id, 'name': d.name} for d in depts])
+    return jsonify([{'id': d.id, 'name': d.name, 'head': d.head} for d in depts])
 
 
 @public_bp.route('/api/task-types')
 def api_task_types():
-    """Returns task type list as JSON — used by internal form to populate select dynamically."""
+    """Returns task type list as JSON — queries DB, falls back to hardcoded list."""
+    from models import TaskType
+    types = TaskType.query.order_by(TaskType.sort_order, TaskType.label).all()
+    if types:
+        return jsonify([{'value': t.slug, 'label': t.label} for t in types])
     return jsonify([{'value': v, 'label': l} for v, l in TASK_TYPES])
 
 

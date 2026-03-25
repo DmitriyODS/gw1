@@ -28,6 +28,7 @@ def create_app():
     from blueprints.media_plan import media_plan_bp
     from blueprints.rhythms import rhythms_bp
     from blueprints.plans import plans_bp
+    from blueprints.lists_bp import lists_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(public_bp)
@@ -38,6 +39,7 @@ def create_app():
     app.register_blueprint(media_plan_bp)
     app.register_blueprint(rhythms_bp)
     app.register_blueprint(plans_bp)
+    app.register_blueprint(lists_bp)
 
     @app.context_processor
     def inject_avatar_v():
@@ -57,7 +59,8 @@ def create_app():
                 ).first()
         except Exception:
             pass
-        return {'avatar_v': v, 'current_user_active_timer': active_timer}
+        from models import Role
+        return {'avatar_v': v, 'current_user_active_timer': active_timer, 'Role': Role}
 
     @app.route('/')
     def index():
@@ -129,6 +132,7 @@ def create_app():
             ('task_comments', 'filename',     'VARCHAR(255)'),
             ('task_comments', 'original_name','VARCHAR(255)'),
             ('rhythms',       'trigger_time', 'VARCHAR(5)'),
+            ('departments',   'head',         "VARCHAR(200) NOT NULL DEFAULT ''"),
         ]
         for table, col, col_type in cols:
             try:
@@ -157,8 +161,16 @@ def create_app():
                 print(f'Index {name} OK')
             except Exception as e:
                 print(f'Skipped index {name}: {e}')
-        # Create new tables (rhythms etc.)
+        # Create new tables (rhythms, task_types etc.)
         db.create_all()
+        # Seed task_types from hardcoded list if table is empty
+        from models import TaskType
+        from blueprints.public import TASK_TYPES
+        if not TaskType.query.first():
+            for i, (slug, label) in enumerate(TASK_TYPES):
+                db.session.add(TaskType(slug=slug, label=label, sort_order=i))
+            db.session.commit()
+            print(f'Task types seeded: {len(TASK_TYPES)} types')
         print('Migration complete')
 
     @app.cli.command('init-db')
@@ -182,6 +194,14 @@ def create_app():
                 db.session.add(Department(name=name))
             db.session.commit()
             print('Departments seeded')
+
+        from models import TaskType
+        from blueprints.public import TASK_TYPES
+        if not TaskType.query.first():
+            for i, (slug, label) in enumerate(TASK_TYPES):
+                db.session.add(TaskType(slug=slug, label=label, sort_order=i))
+            db.session.commit()
+            print(f'Task types seeded: {len(TASK_TYPES)} types')
 
         print('DB initialized!')
 

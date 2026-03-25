@@ -128,6 +128,10 @@ class User(UserMixin, db.Model):
         return self.role == Role.TV
 
     @property
+    def role_label(self):
+        return Role.LABELS.get(self.role, self.role)
+
+    @property
     def active_timer(self):
         return TimeLog.query.filter_by(user_id=self.id, ended_at=None).first()
 
@@ -136,6 +140,15 @@ class Department(db.Model):
     __tablename__ = 'departments'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), unique=True, nullable=False)
+    head = db.Column(db.String(200), nullable=False, default='', server_default='')
+
+
+class TaskType(db.Model):
+    __tablename__ = 'task_types'
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(50), unique=True, nullable=False)
+    label = db.Column(db.String(200), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
 
 
 class Task(db.Model):

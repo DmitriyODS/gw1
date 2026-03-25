@@ -1,47 +1,107 @@
 {% extends 'base.html' %}
 {% block title %}Пользователи — Groove Work{% endblock %}
 
+{% block head %}
+<style>
+  .users-table { width: 100%; border-collapse: collapse; }
+  .users-table th {
+    text-align: left; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 9px 14px;
+    color: color-mix(in oklch, var(--color-base-content) 45%, transparent);
+    border-bottom: 1px solid var(--color-base-300);
+  }
+  .users-table td {
+    padding: 11px 14px; font-size: 0.875rem;
+    border-bottom: 1px solid var(--color-base-200);
+    vertical-align: middle;
+  }
+  .users-table tr:last-child td { border-bottom: none; }
+  .users-table tr:hover td { background: var(--color-base-200); }
+  .user-avatar-sm {
+    width: 32px; height: 32px; border-radius: 50%;
+    object-fit: cover; background: var(--color-primary);
+    flex-shrink: 0;
+  }
+  .login-badge {
+    font-family: 'Courier New', monospace; font-size: 0.78rem;
+    background: var(--color-base-200); border-radius: 6px;
+    padding: 2px 7px;
+    color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="flex justify-between items-center mb-4">
-  <h5 class="text-lg font-bold flex items-center gap-2"><i class="bi bi-people"></i> Пользователи</h5>
+<div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
+  <h1 class="text-lg font-bold flex items-center gap-2">
+    <i class="bi bi-people opacity-60"></i> Пользователи
+  </h1>
   {% if current_user.can_admin %}
-  <a href="{{ url_for('admin.create_user') }}" class="btn btn-primary btn-sm">
+  <a href="{{ url_for('admin.create_user') }}" class="btn btn-primary btn-sm gap-1">
     <i class="bi bi-person-plus"></i> Добавить
   </a>
   {% endif %}
 </div>
 
 <div class="card bg-base-100 shadow-sm">
-  <div class="overflow-x-auto">
-    <table class="table">
+  <div class="card-body p-0">
+    <!-- Table header -->
+    <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-base-200">
+      <div class="text-sm font-semibold text-base-content/60">{{ users | length }} пользователей</div>
+    </div>
+
+    <table class="users-table">
       <thead>
-        <tr class="bg-neutral text-neutral-content">
-          <th>ФИО</th><th>Логин</th><th>Email</th><th>Роль</th><th>Статус</th>
-          {% if current_user.can_admin %}<th></th>{% endif %}
+        <tr>
+          <th style="width:44px"></th>
+          <th>Имя</th>
+          <th>Логин</th>
+          <th class="hidden sm:table-cell">Email</th>
+          <th>Роль</th>
+          <th>Статус</th>
+          {% if current_user.can_admin %}<th style="width:90px"></th>{% endif %}
         </tr>
       </thead>
       <tbody>
       {% for u in users %}
-      <tr class="hover">
-        <td class="font-medium">{{ u.full_name }}</td>
-        <td><code class="bg-base-200 px-1 rounded text-sm">{{ u.username }}</code></td>
-        <td class="text-base-content/60 text-sm">{{ u.email }}</td>
+      {% set role_colors = {'super_admin':'error','manager':'warning','admin':'info','staff':'neutral','tv':'neutral'} %}
+      <tr>
+        <td style="padding-right:0;">
+          <img class="user-avatar-sm"
+               src="{{ url_for('profile.avatar', user_id=u.id) }}"
+               alt="{{ u.full_name[:1] }}">
+        </td>
         <td>
-          {% set role_colors = {'super_admin':'error','manager':'warning','admin':'info','staff':'neutral'} %}
-          <span class="badge badge-{{ role_colors.get(u.role, 'neutral') }}">{{ Role.LABELS.get(u.role, u.role) }}</span>
+          <div class="font-semibold">{{ u.full_name }}</div>
+          <div class="text-xs text-base-content/50 sm:hidden">{{ u.email }}</div>
+        </td>
+        <td><span class="login-badge">{{ u.username }}</span></td>
+        <td class="hidden sm:table-cell text-base-content/60">{{ u.email or '—' }}</td>
+        <td>
+          <span class="badge badge-{{ role_colors.get(u.role, 'neutral') }} badge-sm">
+            {{ Role.LABELS.get(u.role, u.role) }}
+          </span>
         </td>
         <td>
           {% if u.is_active %}
-          <span class="badge badge-success badge-sm">Активен</span>
+          <span class="inline-flex items-center gap-1 text-xs font-semibold" style="color: var(--color-success);">
+            <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+            Активен
+          </span>
           {% else %}
-          <span class="badge badge-neutral badge-sm">Отключён</span>
+          <span class="inline-flex items-center gap-1 text-xs font-semibold text-base-content/40">
+            <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+            Отключён
+          </span>
           {% endif %}
         </td>
         {% if current_user.can_admin %}
-        <td class="text-right">
-          <div class="flex gap-1 justify-end">
+        <td>
+          <div class="flex items-center gap-1 justify-end">
             {% if not u.is_super_admin or current_user.is_super_admin %}
-            <a href="{{ url_for('admin.edit_user', user_id=u.id) }}" class="btn btn-ghost btn-xs">
+            <a href="{{ url_for('admin.edit_user', user_id=u.id) }}"
+               class="btn btn-ghost btn-xs" title="Редактировать">
               <i class="bi bi-pencil"></i>
             </a>
             {% endif %}
@@ -49,13 +109,17 @@
             <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}" class="inline"
                   onsubmit="return confirm('Удалить пользователя {{ u.full_name }}?')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-ghost btn-xs text-error"><i class="bi bi-trash"></i></button>
+              <button type="submit" class="btn btn-ghost btn-xs text-error" title="Удалить">
+                <i class="bi bi-trash"></i>
+              </button>
             </form>
             {% endif %}
           </div>
         </td>
         {% endif %}
       </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center py-10 text-base-content/40">Нет пользователей</td></tr>
       {% endfor %}
       </tbody>
     </table>

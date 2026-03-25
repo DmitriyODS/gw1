@@ -23,6 +23,8 @@
 {% set is_free = task.assigned_to_id is none %}
 
 <div class="flex flex-col lg:flex-row gap-4">
+
+  <!-- ── LEFT COLUMN (60%) ── -->
   <div class="flex-1 min-w-0">
 
     <!-- Header -->
@@ -70,6 +72,7 @@
     </div>
     {% endif %}
 
+    <!-- Subtasks -->
     <div class="card bg-base-100 border border-base-300 mb-4">
       <div class="px-4 py-2 border-b border-base-300 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -132,12 +135,10 @@
             <div class="text-sm text-base-content/50 italic">Не назначен — задача свободна</div>
             {% endif %}
           </div>
-
           <div class="ml-auto flex gap-2 flex-wrap items-center">
-            <!-- Delegation: only current assignee or admin -->
             {% if (is_mine or current_user.can_admin) and task.status != 'done' and task.assigned_to_id %}
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('delegateModal').showModal()">
-              <i class="bi bi-person-arrows"></i> Делегировать
+              <i class="bi bi-person-check"></i> Делегировать
             </button>
             <button class="btn btn-ghost btn-sm text-warning"
                     onclick="document.getElementById('unassignModal').showModal()">
@@ -148,73 +149,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Timer Block -->
-    {% if task.status != TaskStatus.DONE %}
-    <div class="card bg-base-100 border border-primary mb-4">
-      <div class="card-body py-3 px-4">
-        <div class="flex items-center gap-4 flex-wrap">
-          <div>
-            <div class="text-base-content/60 text-xs">Всего затрачено</div>
-            <div class="timer-mono">{{ task_total_seconds | duration }}</div>
-          </div>
-          {% if my_active %}
-          <div>
-            <div class="text-base-content/60 text-xs">Текущая сессия</div>
-            <div class="timer-mono text-success" id="session-display"
-                 data-started="{{ my_active.started_at.isoformat() }}"
-                 data-total="{{ task_total_seconds }}">00:00:00</div>
-          </div>
-          {% endif %}
-          <div class="ml-auto flex gap-2 flex-wrap">
-            {% if is_taken %}
-            <span class="text-sm text-base-content/50 italic">
-              Задача у <strong>{{ task.assigned_to.full_name }}</strong>
-            </span>
-            {% if current_user.can_admin %}
-              {% if task.status == TaskStatus.IN_PROGRESS %}
-              <button class="btn btn-warning btn-sm" onclick="adminPause({{ task.id }})">
-                <i class="bi bi-pause-fill"></i> Пауза
-              </button>
-              {% elif task.status == TaskStatus.PAUSED %}
-              <button class="btn btn-ghost btn-sm border border-base-300" onclick="adminUnpause({{ task.id }})">
-                <i class="bi bi-arrow-counterclockwise"></i> Снять с паузы
-              </button>
-              {% endif %}
-            {% endif %}
-            {% else %}
-              {% if (is_free or is_mine) and not my_active %}
-              <button class="btn btn-success btn-sm" onclick="handleStart({{ task.id }})">
-                <i class="bi bi-play-fill"></i> {% if is_mine %}Продолжить{% else %}Старт{% endif %}
-              </button>
-              {% endif %}
-              {% if my_active %}
-              <button class="btn btn-warning btn-sm" onclick="handlePause({{ task.id }})">
-                <i class="bi bi-pause-fill"></i> Пауза
-              </button>
-              {% endif %}
-              {% if task.status != TaskStatus.DONE %}
-              <button class="btn btn-success btn-sm"
-                      {% if not task.can_close %}disabled title="Не все подзадачи выполнены"{% endif %}
-                      onclick="document.getElementById('doneModal').showModal()">
-                <i class="bi bi-check-circle"></i> Закрыть задачу
-              </button>
-              {% endif %}
-            {% endif %}
-          </div>
-        </div>
-        {% if active_timers %}
-        <div class="mt-2">
-          <small class="text-base-content/60">Сейчас работают:
-            {% for log in active_timers %}
-            <span class="badge badge-success badge-sm">{{ log.user.full_name }}</span>
-            {% endfor %}
-          </small>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
 
     <!-- Details -->
     <div class="card bg-base-100 shadow-sm mb-4">
@@ -334,15 +268,116 @@
     </div>
     {% endif %}
 
+  </div><!-- /left column -->
+
+  <!-- ── RIGHT COLUMN (40%) ── -->
+  <div class="w-full lg:w-[40%] shrink-0 flex flex-col gap-4"
+       style="position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow: hidden;"
+       id="detail-right-col">
+
+    <!-- Timer Block -->
+    {% if task.status != TaskStatus.DONE %}
+    <div class="card bg-base-100 border border-primary">
+      <div class="card-body py-3 px-4">
+        <div class="flex items-center gap-4 flex-wrap">
+          <div>
+            <div class="text-base-content/60 text-xs">Всего затрачено</div>
+            <div class="timer-mono">{{ task_total_seconds | duration }}</div>
+          </div>
+          {% if my_active %}
+          <div>
+            <div class="text-base-content/60 text-xs">Текущая сессия</div>
+            <div class="timer-mono text-success" id="session-display"
+                 data-started="{{ my_active.started_at.isoformat() }}"
+                 data-total="{{ task_total_seconds }}">00:00:00</div>
+          </div>
+          {% endif %}
+          <div class="ml-auto flex gap-2 flex-wrap">
+            {% if is_taken %}
+            <span class="text-sm text-base-content/50 italic">
+              Задача у <strong>{{ task.assigned_to.full_name }}</strong>
+            </span>
+            {% if current_user.can_admin %}
+              {% if task.status == TaskStatus.IN_PROGRESS %}
+              <button class="btn btn-warning btn-sm" onclick="adminPause({{ task.id }})">
+                <i class="bi bi-pause-fill"></i> Пауза
+              </button>
+              {% elif task.status == TaskStatus.PAUSED %}
+              <button class="btn btn-ghost btn-sm border border-base-300" onclick="adminUnpause({{ task.id }})">
+                <i class="bi bi-arrow-counterclockwise"></i> Снять с паузы
+              </button>
+              {% endif %}
+            {% endif %}
+            {% else %}
+              {% if (is_free or is_mine) and not my_active %}
+              <button class="btn btn-success btn-sm" onclick="handleStart({{ task.id }})">
+                <i class="bi bi-play-fill"></i> {% if is_mine %}Продолжить{% else %}Старт{% endif %}
+              </button>
+              {% endif %}
+              {% if my_active %}
+              <button class="btn btn-warning btn-sm" onclick="handlePause({{ task.id }})">
+                <i class="bi bi-pause-fill"></i> Пауза
+              </button>
+              {% endif %}
+              {% if task.status != TaskStatus.DONE %}
+              <button class="btn btn-success btn-sm"
+                      {% if not task.can_close %}disabled title="Не все подзадачи выполнены"{% endif %}
+                      onclick="document.getElementById('doneModal').showModal()">
+                <i class="bi bi-check-circle"></i> Закрыть задачу
+              </button>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+        {% if active_timers %}
+        <div class="mt-2">
+          <small class="text-base-content/60">Сейчас работают:
+            {% for log in active_timers %}
+            <span class="badge badge-success badge-sm">{{ log.user.full_name }}</span>
+            {% endfor %}
+          </small>
+        </div>
+        {% endif %}
+        <!-- Time log button -->
+        {% if logs %}
+        <div class="mt-2 pt-2 border-t border-base-200">
+          <button class="btn btn-ghost btn-xs gap-1 opacity-60 hover:opacity-100"
+                  onclick="document.getElementById('timeLogModal').showModal()">
+            <i class="bi bi-clock-history"></i> Лог времени
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <!-- Done task: show total time + log button -->
+    <div class="card bg-base-100 border border-base-300">
+      <div class="card-body py-3 px-4">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <div class="text-base-content/60 text-xs">Затрачено всего</div>
+            <div class="timer-mono">{{ task_total_seconds | duration }}</div>
+          </div>
+          {% if logs %}
+          <button class="btn btn-ghost btn-sm gap-1"
+                  onclick="document.getElementById('timeLogModal').showModal()">
+            <i class="bi bi-clock-history"></i> Лог времени
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Comments -->
-    <div class="card bg-base-100 shadow-sm mb-4">
-      <div class="px-4 py-2 border-b border-base-300">
+    <div class="card bg-base-100 shadow-sm flex flex-col min-h-0 flex-1" style="overflow: hidden;">
+      <div class="px-4 py-2 border-b border-base-300 shrink-0">
         <span class="font-semibold text-sm"><i class="bi bi-chat-left-text"></i> Комментарии
           {% set ccount = task.comments.count() %}
           {% if ccount %}<span class="badge badge-neutral badge-sm ml-1">{{ ccount }}</span>{% endif %}
         </span>
       </div>
-      <div class="divide-y divide-base-300">
+      <div class="divide-y divide-base-300 overflow-y-auto flex-1 min-h-0">
         {% for comment in task.comments.all() %}
         <div class="px-4 py-3 flex gap-3" id="comment-{{ comment.id }}">
           <div class="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden">
@@ -384,7 +419,7 @@
         <p class="text-base-content/50 text-center py-4 text-sm">Нет комментариев</p>
         {% endfor %}
       </div>
-      <div class="px-4 py-3 border-t border-base-300">
+      <div class="px-4 py-3 border-t border-base-300 shrink-0">
         <form method="post" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
               enctype="multipart/form-data" id="comment-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -410,45 +445,44 @@
         </form>
       </div>
     </div>
-  </div>
 
-  <!-- Time Logs -->
-  <div class="w-full lg:w-72 shrink-0">
-    <div class="card bg-base-100 shadow-sm">
-      <div class="px-4 py-2 border-b border-base-300">
-        <span class="font-semibold text-sm"><i class="bi bi-clock-history"></i> Лог времени</span>
-      </div>
-      <div class="card-body p-0">
-        {% if logs %}
-        <table class="table table-xs">
-          <thead>
-            <tr><th>Сотрудник</th><th>Начало</th><th>Время</th></tr>
-          </thead>
-          <tbody>
-          {% for log in logs %}
-          <tr {% if not log.ended_at %}class="bg-success/10"{% endif %}>
-            <td class="text-xs">{{ log.user.full_name.split()[0] }}</td>
-            <td class="text-xs">{{ log.started_at | shorttime }}</td>
-            <td class="text-xs">
-              {% if log.ended_at %}
-                {{ log.duration_seconds | duration }}
-              {% else %}
-                <i class="bi bi-play-circle text-success"></i> идёт
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p class="text-base-content/50 text-center py-4 text-sm">Нет записей</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
+  </div><!-- /right column -->
 </div>
 
 <!-- ── Modals ── -->
+
+<!-- Time Log Modal -->
+{% if logs %}
+<dialog id="timeLogModal" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg mb-3"><i class="bi bi-clock-history"></i> Лог времени</h3>
+    <table class="table table-sm w-full">
+      <thead>
+        <tr><th>Сотрудник</th><th>Начало</th><th>Время</th></tr>
+      </thead>
+      <tbody>
+      {% for log in logs %}
+      <tr {% if not log.ended_at %}class="bg-success/10"{% endif %}>
+        <td class="text-sm">{{ log.user.full_name }}</td>
+        <td class="text-sm">{{ log.started_at | shorttime }}</td>
+        <td class="text-sm">
+          {% if log.ended_at %}
+            {{ log.duration_seconds | duration }}
+          {% else %}
+            <i class="bi bi-play-circle text-success"></i> идёт
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn">Закрыть</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
 
 <!-- Just-created: start task? -->
 {% if request.args.get('new') and task.status == TaskStatus.NEW %}
@@ -467,7 +501,7 @@
 </dialog>
 {% endif %}
 
-<!-- Taken modal (task already claimed by someone else) -->
+<!-- Taken modal -->
 <dialog id="takenModal" class="modal">
   <div class="modal-box">
     <h3 class="font-bold text-lg">Задача занята</h3>
@@ -603,7 +637,7 @@
 </dialog>
 {% endif %}
 
-<!-- Unassign (return to pool) confirmation -->
+<!-- Unassign confirmation -->
 <dialog id="unassignModal" class="modal">
   <div class="modal-box">
     <h3 class="font-bold text-lg">Вернуть в пул?</h3>

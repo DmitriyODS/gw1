@@ -271,14 +271,6 @@
            class="input input-bordered w-full rounded-full pl-9 text-sm"
            oninput="onSearchInput()">
   </div>
-  <div class="flex items-center gap-2 ml-auto shrink-0">
-    <a href="{{ url_for('tasks.list_tasks', sort_new='0' if sort_new else '1') }}"
-       class="btn btn-sm gap-1 {% if sort_new %}btn-warning{% else %}btn-ghost border border-base-300{% endif %}"
-       title="Сортировка колонки «Новые» по последнему изменению">
-      <i class="bi bi-sort-down"></i>
-      <span class="hidden sm:inline">Новые по активности</span>
-    </a>
-  </div>
 </div>
 
 <!-- Filter bar -->
@@ -306,20 +298,38 @@
         <span class="text-sm">{{ tag }}</span>
       </label>
       {% endfor %}
-      <div class="border-t border-base-200 px-3 py-2 flex flex-col gap-1.5">
-        <label class="flex items-center gap-2 cursor-pointer select-none" title="Только свои и свободные задачи">
-          <input type="checkbox" id="filter-free-mine" class="checkbox checkbox-xs checkbox-primary"
-                 onchange="LS.save(); applyFilters()">
-          <span class="text-sm">Свои / свободные</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer select-none" title="Показать архивные задачи в «Готово»">
-          <input type="checkbox" id="filter-show-archived" class="checkbox checkbox-xs"
-                 onchange="LS.save(); applyFilters()">
-          <span class="text-sm">Показать архивные</span>
-        </label>
-      </div>
     </div>
   </div>
+
+  <!-- Quick filter toggles -->
+  <button id="btn-free-mine-toggle"
+          class="btn btn-sm btn-ghost border border-base-300 gap-1.5 shrink-0"
+          style="border-radius:20px;"
+          onclick="toggleFreeMine()"
+          title="Только свои и свободные задачи">
+    <i class="bi bi-person-check text-sm"></i>
+    <span class="text-xs font-semibold hidden sm:inline">Свободные и мои</span>
+  </button>
+  <button id="btn-archived-toggle"
+          class="btn btn-sm btn-ghost border border-base-300 gap-1.5 shrink-0"
+          style="border-radius:20px;"
+          onclick="toggleShowArchived()"
+          title="Показать архивные задачи в «Готово»">
+    <i class="bi bi-archive text-sm"></i>
+    <span class="text-xs font-semibold hidden sm:inline">Архивные</span>
+  </button>
+  <button id="btn-sort-activity"
+          class="btn btn-sm btn-ghost border border-base-300 gap-1.5 shrink-0"
+          style="border-radius:20px;"
+          onclick="toggleSortActivity()"
+          title="Сортировать «Новые» по последнему изменению">
+    <i class="bi bi-sort-down text-sm"></i>
+    <span class="text-xs font-semibold hidden sm:inline">По активности</span>
+  </button>
+
+  <!-- Hidden checkboxes for JS compatibility -->
+  <input type="checkbox" id="filter-free-mine" class="hidden">
+  <input type="checkbox" id="filter-show-archived" class="hidden">
 
   <!-- Active filter chips -->
   <div id="active-tags-chips" class="flex gap-1.5 flex-wrap"></div>
@@ -516,6 +526,7 @@ const LS = {
     } catch (_) {}
     if (localStorage.getItem('gw-free-mine')) document.getElementById('filter-free-mine').checked = true;
     if (localStorage.getItem('gw-show-archived')) document.getElementById('filter-show-archived').checked = true;
+    syncToggleButtons();
   }
 };
 
@@ -565,6 +576,71 @@ function updateTagChips() {
     chip.appendChild(x);
     container.appendChild(chip);
   });
+}
+
+// ── Sort by activity (client-side) ──
+let isSortByActivity = false;
+
+function applySortNew() {
+  const newBody = document.querySelector('.kanban-body[data-status="new"]');
+  if (!newBody) return;
+  const cards = [...newBody.querySelectorAll('.task-card')];
+  if (!cards.length) return;
+  if (isSortByActivity) {
+    cards.sort((a, b) => {
+      const at = a.dataset.updated ? new Date(a.dataset.updated + (a.dataset.updated.includes('Z') ? '' : 'Z')).getTime() : 0;
+      const bt = b.dataset.updated ? new Date(b.dataset.updated + (b.dataset.updated.includes('Z') ? '' : 'Z')).getTime() : 0;
+      return bt - at;
+    });
+  } else {
+    // Default: sort by task id desc (matches server created_at desc)
+    cards.sort((a, b) => parseInt(b.dataset.id) - parseInt(a.dataset.id));
+  }
+  cards.forEach(c => newBody.appendChild(c));
+}
+
+function toggleSortActivity() {
+  isSortByActivity = !isSortByActivity;
+  localStorage.setItem('gw-sort-new', isSortByActivity ? '1' : '');
+  applySortNew();
+  syncToggleButtons();
+}
+
+// ── Quick filter toggles ──
+function syncToggleButtons() {
+  const freeMine = document.getElementById('filter-free-mine').checked;
+  const archived = document.getElementById('filter-show-archived').checked;
+  const btnFM = document.getElementById('btn-free-mine-toggle');
+  const btnAr = document.getElementById('btn-archived-toggle');
+  const btnSA = document.getElementById('btn-sort-activity');
+  if (btnFM) {
+    btnFM.className = freeMine
+      ? 'btn btn-sm btn-primary gap-1.5 shrink-0'
+      : 'btn btn-sm btn-ghost border border-base-300 gap-1.5 shrink-0';
+    btnFM.style.borderRadius = '20px';
+  }
+  if (btnAr) {
+    btnAr.className = archived
+      ? 'btn btn-sm btn-primary gap-1.5 shrink-0'
+      : 'btn btn-sm btn-ghost border border-base-300 gap-1.5 shrink-0';
+    btnAr.style.borderRadius = '20px';
+  }
+  if (btnSA) {
+    btnSA.className = isSortByActivity
+      ? 'btn btn-sm btn-primary gap-1.5 shrink-0'
+      : 'btn btn-sm btn-ghost border border-base-300 gap-1.5 shrink-0';
+    btnSA.style.borderRadius = '20px';
+  }
+}
+function toggleFreeMine() {
+  const cb = document.getElementById('filter-free-mine');
+  cb.checked = !cb.checked;
+  LS.save(); applyFilters(); syncToggleButtons();
+}
+function toggleShowArchived() {
+  const cb = document.getElementById('filter-show-archived');
+  cb.checked = !cb.checked;
+  LS.save(); applyFilters(); syncToggleButtons();
 }
 
 // ── Close popups on outside click ──
@@ -822,24 +898,15 @@ async function pollSync() {
 
 setInterval(pollSync, 20000);
 
-// ── Sort-new persistence ──
-(function() {
-  const params = new URLSearchParams(location.search);
-  if (params.has('sort_new')) {
-    localStorage.setItem('gw-sort-new', params.get('sort_new'));
-  } else {
-    const saved = localStorage.getItem('gw-sort-new');
-    if (saved === '1') {
-      params.set('sort_new', '1');
-      location.replace('?' + params.toString());
-    }
-  }
-})();
-
 // ── Init ──
 LS.load();
 updateTagsBtn();
 updateTagChips();
 applyFilters();
+if (localStorage.getItem('gw-sort-new') === '1') {
+  isSortByActivity = true;
+  applySortNew();
+  syncToggleButtons();
+}
 </script>
 {% endblock %}

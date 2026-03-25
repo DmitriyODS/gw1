@@ -262,7 +262,7 @@ body:hover .dots { opacity: 1; }
     <div class="row2" style="flex:1; min-height:0;">
       <div class="chart-card col">
         <div class="chart-title">Топ отделов по заявкам</div>
-        <div class="chart-wrap"><canvas id="chart-donut-today"></canvas></div>
+        <div class="hbar-list" id="chart-depts-today"></div>
       </div>
       <div class="chart-card col">
         <div class="chart-title">Рейтинг сотрудников</div>
@@ -312,7 +312,7 @@ body:hover .dots { opacity: 1; }
     <div class="row2" style="flex:1; min-height:0;">
       <div class="chart-card col">
         <div class="chart-title">Топ отделов по заявкам</div>
-        <div class="chart-wrap"><canvas id="chart-donut-week"></canvas></div>
+        <div class="hbar-list" id="chart-depts-week"></div>
       </div>
       <div class="chart-card col">
         <div class="chart-title">Рейтинг сотрудников</div>
@@ -472,7 +472,7 @@ function render() {
   document.getElementById('d1-time').textContent = fmt(td.total_secs);
 
   // Slide 2 - today depts & staff
-  renderDonut('chart-donut-today', td.depts);
+  renderHbars('chart-depts-today', td.depts);
   renderRankList('d2-staff', td.staff, r => r.score + ' бал.');
 
   // Slide 3 - week tasks
@@ -484,7 +484,7 @@ function render() {
   document.getElementById('w1-time').textContent = fmt(wk.total_secs);
 
   // Slide 4 - week depts & staff
-  renderDonut('chart-donut-week', wk.depts);
+  renderHbars('chart-depts-week', wk.depts);
   renderRankList('w2-staff', wk.staff, r => r.score + ' бал.');
 
   // Slide 5 - alltime

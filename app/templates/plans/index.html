@@ -24,9 +24,16 @@
     border-radius: 14px;
     padding: 14px 16px;
     display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     transition: box-shadow 0.15s;
   }
-  .plan-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.09); }
+  .plan-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+  [data-theme="dark"] .plan-card {
+    background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
+    border-color: color-mix(in oklch, var(--color-base-content) 16%, transparent);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+  }
+  [data-theme="dark"] .plan-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.45); }
   .plan-card.urgency-urgent    { border-left-color: var(--color-error) !important; }
   .plan-card.urgency-important { border-left-color: #f97316 !important; }
   .plan-card.urgency-normal    { border-left-color: var(--color-info) !important; }
@@ -88,6 +95,18 @@
   .empty-plans {
     text-align: center; padding: 60px 20px;
     color: color-mix(in oklch, var(--color-base-content) 35%, transparent);
+  }
+
+  /* ── Searchable select ── */
+  .ss-wrap { position: relative; }
+  .ss-trigger { cursor: pointer; user-select: none; }
+  .ss-dropdown {
+    position: absolute; z-index: 100; left: 0; right: 0; margin-top: 4px;
+    background: var(--color-base-100);
+    border: 1px solid var(--color-base-300);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+    overflow: hidden;
   }
 
   /* ── Plans grid ── */
@@ -271,13 +290,19 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
-          <select name="task_type" id="c-task-type" class="select select-bordered w-full"
-                  onchange="planTypeChanged('c', this.value)">
-            <option value="">— не выбрано —</option>
-            {% for val, label in task_types %}
-            <option value="{{ val }}">{{ label }}</option>
-            {% endfor %}
-          </select>
+          <div class="ss-wrap" id="c-type-wrap" data-blank="— не выбрано —">
+            <div class="ss-trigger input input-bordered w-full flex items-center gap-2" tabindex="0">
+              <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— не выбрано —</span>
+              <i class="bi bi-chevron-down text-xs opacity-40"></i>
+            </div>
+            <input type="hidden" name="task_type" id="c-task-type" class="ss-value">
+            <div class="ss-dropdown hidden">
+              <div class="p-2 border-b border-base-200">
+                <input type="text" class="ss-search input input-sm input-bordered w-full" placeholder="Поиск типа…" autocomplete="off">
+              </div>
+              <div class="ss-list overflow-y-auto py-1" style="max-height:200px"></div>
+            </div>
+          </div>
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Срочность</span></label>
@@ -382,13 +407,19 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="label pb-1"><span class="label-text">Тип задачи</span></label>
-          <select name="task_type" id="e-task-type" class="select select-bordered w-full"
-                  onchange="planTypeChanged('e', this.value)">
-            <option value="">— не выбрано —</option>
-            {% for val, label in task_types %}
-            <option value="{{ val }}">{{ label }}</option>
-            {% endfor %}
-          </select>
+          <div class="ss-wrap" id="e-type-wrap" data-blank="— не выбрано —">
+            <div class="ss-trigger input input-bordered w-full flex items-center gap-2" tabindex="0">
+              <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— не выбрано —</span>
+              <i class="bi bi-chevron-down text-xs opacity-40"></i>
+            </div>
+            <input type="hidden" name="task_type" id="e-task-type" class="ss-value">
+            <div class="ss-dropdown hidden">
+              <div class="p-2 border-b border-base-200">
+                <input type="text" class="ss-search input input-sm input-bordered w-full" placeholder="Поиск типа…" autocomplete="off">
+              </div>
+              <div class="ss-list overflow-y-auto py-1" style="max-height:200px"></div>
+            </div>
+          </div>
         </div>
         <div>
           <label class="label pb-1"><span class="label-text">Срочность</span></label>
@@ -572,6 +603,69 @@
 
 {% block scripts %}
 <script>
+// ── Searchable select for task type ──
+const PLAN_TASK_TYPES = [
+  {% for val, label in task_types %}
+  {value: "{{ val }}", label: "{{ label }}"},
+  {% endfor %}
+];
+
+function initPlanSS(wrapId, data, onChange) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const trigger = wrap.querySelector('.ss-trigger');
+  const valueEl = wrap.querySelector('.ss-value');
+  const dropdown = wrap.querySelector('.ss-dropdown');
+  const searchEl = wrap.querySelector('.ss-search');
+  const listEl = wrap.querySelector('.ss-list');
+  const labelEl = wrap.querySelector('.ss-label');
+  const blank = wrap.dataset.blank || '— выберите —';
+
+  function renderList(q) {
+    const items = q ? data.filter(d => d.label.toLowerCase().includes(q.toLowerCase())) : data;
+    listEl.innerHTML = items.length
+      ? items.map(d => `<div class="ss-item px-3 py-1.5 text-sm cursor-pointer hover:bg-base-200 rounded-lg mx-1 transition-colors" data-value="${d.value}">${d.label}</div>`).join('')
+      : '<div class="px-3 py-2 text-sm opacity-40">Ничего не найдено</div>';
+  }
+  function open() { dropdown.classList.remove('hidden'); searchEl.value = ''; renderList(''); requestAnimationFrame(() => searchEl.focus()); }
+  function close() { dropdown.classList.add('hidden'); }
+
+  trigger.addEventListener('click', e => { e.stopPropagation(); dropdown.classList.contains('hidden') ? open() : close(); });
+  trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  searchEl.addEventListener('input', () => renderList(searchEl.value));
+  searchEl.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  listEl.addEventListener('click', e => {
+    const item = e.target.closest('.ss-item');
+    if (!item) return;
+    valueEl.value = item.dataset.value;
+    labelEl.textContent = item.textContent;
+    labelEl.classList.remove('opacity-50');
+    close();
+    if (onChange) onChange(item.dataset.value);
+  });
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
+}
+
+function setPlanSSValue(wrapId, val) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const valueEl = wrap.querySelector('.ss-value');
+  const labelEl = wrap.querySelector('.ss-label');
+  const blank = wrap.dataset.blank || '— выберите —';
+  valueEl.value = val || '';
+  if (val) {
+    const found = PLAN_TASK_TYPES.find(d => d.value === val);
+    labelEl.textContent = found ? found.label : val;
+    labelEl.classList.remove('opacity-50');
+  } else {
+    labelEl.textContent = blank;
+    labelEl.classList.add('opacity-50');
+  }
+}
+
+initPlanSS('c-type-wrap', PLAN_TASK_TYPES, val => planTypeChanged('c', val));
+initPlanSS('e-type-wrap', PLAN_TASK_TYPES, val => planTypeChanged('e', val));
+
 // Auto-tag mapping
 const AUTO_TAGS = {
   'publication':         ['публикация'],
@@ -618,7 +712,8 @@ function openEditPlan(btn) {
   document.getElementById('e-customer-name').value = plan.customer_name || '';
   document.getElementById('e-customer-phone').value = plan.customer_phone || '';
   document.getElementById('e-customer-email').value = plan.customer_email || '';
-  document.getElementById('e-task-type').value = plan.task_type || '';
+  setPlanSSValue('e-type-wrap', plan.task_type || '');
+  planTypeChanged('e', plan.task_type || '');
   document.getElementById('e-urgency').value = plan.urgency || 'normal';
   document.getElementById('e-group-id').value = plan.group_id || '';
   document.getElementById('e-department-id').value = plan.department_id || '';

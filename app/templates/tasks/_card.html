@@ -11,6 +11,7 @@
    data-tags="{{ (task.tags or []) | join(',') }}"
    data-assigned="{{ task.assigned_to_id or '' }}"
    data-archived="{{ 'true' if task.is_archived else 'false' }}"
+   data-updated="{{ task.updated_at.isoformat() if task.updated_at else '' }}"
    {% if not is_taken and not task.is_archived %}draggable="true"{% endif %}>
 
   <!-- Top row: urgency badge + archived chip + tags + id -->

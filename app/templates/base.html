@@ -37,11 +37,12 @@
     }
     .sidebar-logo-btn {
       display: flex; align-items: center; gap: 9px;
+      width: 100%; border: none;
       background: var(--color-primary);
       color: white; border-radius: 12px;
       padding: 10px 14px;
       font-weight: 800; font-size: 0.9rem;
-      text-decoration: none;
+      text-decoration: none; cursor: pointer;
       transition: opacity 0.15s;
     }
     .sidebar-logo-btn:hover { opacity: 0.88; color: white; }
@@ -218,11 +219,11 @@
 <aside id="sidebar">
   <!-- Logo -->
   <div class="sidebar-logo-wrap">
-    <a href="{{ url_for('tasks.list_tasks') }}" class="sidebar-logo-btn">
+    <button class="sidebar-logo-btn" onclick="openReleaseNotes(event)" title="История изменений">
       <img src="{{ url_for('static', filename='logo.svg') }}" style="width:22px;height:22px;border-radius:6px;flex-shrink:0;" alt="logo">
       Groove Work
       <span class="sidebar-version">v1.3</span>
-    </a>
+    </button>
   </div>
 
   <!-- Nav -->
@@ -461,6 +462,38 @@ function _clearTopbarTimer() {
   if (badge) { badge.style.display = 'none'; badge.dataset.activeStart = ''; }
 }
 
+async function openReleaseNotes(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const modal = document.getElementById('releaseNotesModal');
+  if (!modal) return;
+  modal.showModal();
+  const content = document.getElementById('release-notes-content');
+  if (!content || content.dataset.loaded) return;
+  try {
+    const r = await fetch('/static/version.json');
+    if (!r.ok) throw new Error();
+    const versions = await r.json();
+    content.dataset.loaded = '1';
+    content.style = '';
+    content.innerHTML = versions.map((v, idx) => `
+      <div style="margin-bottom:${idx < versions.length-1 ? '24px' : '0'};">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
+          <span style="font-size:1.6rem;font-weight:900;color:var(--color-primary);line-height:1;">v${v.version}</span>
+          <span style="font-size:0.78rem;opacity:0.45;font-weight:500;">${v.date}</span>
+        </div>
+        ${v.description ? `<div style="font-size:0.88rem;font-weight:600;margin-bottom:8px;opacity:0.75;">${v.description}</div>` : ''}
+        ${v.changes && v.changes.length ? `<ul style="display:flex;flex-direction:column;gap:5px;list-style:none;padding:0;margin:0;">
+          ${v.changes.map(c => `<li style="display:flex;align-items:flex-start;gap:8px;font-size:0.84rem;line-height:1.45;">
+            <i class="bi bi-check2-circle" style="color:var(--color-success);margin-top:2px;flex-shrink:0;font-size:0.85rem;"></i>
+            <span>${c}</span></li>`).join('')}
+        </ul>` : ''}
+      </div>
+      ${idx < versions.length-1 ? '<hr style="margin:24px 0;opacity:0.12;">' : ''}`).join('');
+  } catch(_) {
+    if (content) content.innerHTML = '<div style="text-align:center;padding:16px;opacity:0.45;font-size:0.85rem;">История изменений недоступна</div>';
+  }
+}
+
 async function syncTopbarTimer() {
   try {
     const r = await fetch('/tasks/my-timer');
@@ -483,5 +516,25 @@ async function syncTopbarTimer() {
 })();
 </script>
 {% block scripts %}{% endblock %}
+
+{% if current_user.is_authenticated %}
+<!-- Release notes modal -->
+<dialog id="releaseNotesModal" class="modal">
+  <div class="modal-box max-w-lg max-h-[80vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i class="bi bi-rocket-takeoff"></i> История изменений
+      </h3>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+    <div id="release-notes-content" style="display:flex;justify-content:center;padding:32px 0;opacity:0.35;">
+      <i class="bi bi-hourglass-split" style="font-size:1.5rem;"></i>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
 </body>
 </html>

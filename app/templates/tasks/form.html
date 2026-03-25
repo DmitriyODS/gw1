@@ -344,6 +344,27 @@
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Yandex Disk suggestion modal (shown when files exceed 100 MB) -->
+<dialog id="yadiskModalForm" class="modal">
+  <div class="modal-box max-w-md">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i class="bi bi-cloud-upload text-warning"></i> Файлы превышают 100 МБ
+    </h3>
+    <p class="py-3 text-sm">Суммарный размер прикреплённых файлов превышает 100 МБ.</p>
+    <p class="text-sm text-base-content/70">Рекомендуем загрузить файлы на <strong>Яндекс Диск</strong> и прикрепить ссылку в описании задачи.</p>
+    <div class="flex flex-col gap-2 mt-3">
+      <a href="https://disk.yandex.ru" target="_blank" rel="noopener"
+         class="btn btn-warning btn-sm gap-2">
+        <i class="bi bi-cloud-arrow-up"></i> Открыть Яндекс Диск
+      </a>
+    </div>
+    <div class="modal-action mt-2">
+      <form method="dialog"><button class="btn btn-ghost btn-sm">Закрыть</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 {% endblock %}
 
 {% block scripts %}
@@ -584,6 +605,18 @@ document.getElementById('delAttFormConfirmBtn')?.addEventListener('click', () =>
   }).then(r => r.json()).then(d => {
     if (d.success) document.getElementById('att-' + _pendingDelAttId)?.remove();
   });
+});
+
+// ── File size validation (100 MB limit) ──
+const MAX_ATTACH_BYTES = 100 * 1024 * 1024;
+
+document.querySelector('form').addEventListener('submit', function(e) {
+  const totalSize = [...dt.files].reduce((s, f) => s + f.size, 0);
+  if (totalSize > MAX_ATTACH_BYTES) {
+    e.preventDefault();
+    document.getElementById('yadiskModalForm').showModal();
+    return;
+  }
 });
 
 // ── Task type required validation ──

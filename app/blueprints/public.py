@@ -66,14 +66,20 @@ def api_departments():
     return jsonify([{'id': d.id, 'name': d.name, 'head': d.head} for d in depts])
 
 
-@public_bp.route('/api/task-types')
-def api_task_types():
-    """Returns task type list as JSON — queries DB, falls back to hardcoded list."""
+def _get_task_types():
+    """Returns task type list from DB, falls back to hardcoded TASK_TYPES."""
     from models import TaskType
     types = TaskType.query.order_by(TaskType.sort_order, TaskType.label).all()
     if types:
-        return jsonify([{'value': t.slug, 'label': t.label} for t in types])
-    return jsonify([{'value': v, 'label': l} for v, l in TASK_TYPES])
+        return [(t.slug, t.label) for t in types]
+    return TASK_TYPES
+
+
+@public_bp.route('/api/task-types')
+def api_task_types():
+    """Returns task type list as JSON — queries DB, falls back to hardcoded list."""
+    result = _get_task_types()
+    return jsonify([{'value': v, 'label': l} for v, l in result])
 
 
 @public_bp.route('/submit', methods=['GET', 'POST'])
@@ -123,7 +129,7 @@ def submit():
         'dept':  request.args.get('prefill_dept', ''),
     }
     return render_template('public/submit.html', departments=departments,
-                           task_types=EXTERNAL_TASK_TYPES, pub_subtypes=PUB_SUBTYPES,
+                           task_types=_get_task_types(), pub_subtypes=PUB_SUBTYPES,
                            platforms=PLATFORMS, prefill=prefill)
 
 

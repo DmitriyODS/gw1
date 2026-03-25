@@ -17,7 +17,11 @@
       </div>
       <div>
         <label class="label pb-1"><span class="label-text font-medium">Логин <span class="text-error">*</span></span></label>
-        <input type="text" name="username" class="input input-bordered w-full" required value="{{ user.username if user else '' }}">
+        <input type="text" name="username" class="input input-bordered w-full" required
+               pattern="[A-Za-z][A-Za-z0-9_\-]{3,}"
+               title="Минимум 4 символа, должен начинаться с буквы, допустимы буквы, цифры, _ и -"
+               value="{{ user.username if user else '' }}">
+        <p class="text-xs text-base-content/50 mt-0.5">Минимум 4 символа, начинается с буквы</p>
       </div>
       <div>
         <label class="label pb-1"><span class="label-text font-medium">Email <span class="text-error">*</span></span></label>
@@ -30,13 +34,20 @@
             {% else %}<span class="text-error">*</span>{% endif %}
           </span>
         </label>
-        <input type="password" name="password" class="input input-bordered w-full" {% if not user %}required{% endif %}>
+        <input type="password" name="password" class="input input-bordered w-full"
+               {% if not user %}required{% endif %} minlength="6">
+        <p class="text-xs text-base-content/50 mt-0.5">Минимум 6 символов</p>
       </div>
       {% if not (user and user.is_super_admin) %}
       <div>
         <label class="label pb-1"><span class="label-text font-medium">Роль</span></label>
         <select name="role" class="select select-bordered w-full">
-          {% for val in ['manager','admin','staff','tv'] %}
+          {% if current_user.is_super_admin %}
+            {% set available_roles = ['super_admin', 'admin', 'manager', 'staff', 'tv'] %}
+          {% else %}
+            {% set available_roles = ['manager', 'staff', 'tv'] %}
+          {% endif %}
+          {% for val in available_roles %}
           <option value="{{ val }}" {% if user and user.role == val %}selected{% elif not user and val == 'staff' %}selected{% endif %}>
             {{ Role.LABELS.get(val, val) }}
           </option>
@@ -44,11 +55,13 @@
         </select>
       </div>
       {% endif %}
-      {% if user %}
+      {% if user and user.id != current_user.id %}
       <label class="flex items-center gap-3 cursor-pointer">
         <input type="checkbox" name="is_active" class="checkbox checkbox-primary" {% if user.is_active %}checked{% endif %}>
         <span class="label-text">Активен</span>
       </label>
+      {% elif user %}
+      <div class="text-xs text-base-content/50 italic">Нельзя деактивировать свой аккаунт</div>
       {% endif %}
       <div class="flex gap-2 pt-2">
         <button type="submit" class="btn btn-primary">

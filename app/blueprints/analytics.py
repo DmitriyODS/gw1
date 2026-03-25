@@ -566,13 +566,42 @@ def export_excel():
                      as_attachment=True, download_name='tasks_export.xlsx')
 
 
+def _register_cyrillic_font():
+    """Register DejaVuSans TTF for Cyrillic support in ReportLab. Returns font name to use."""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+    font_name = 'DejaVuSans'
+    # Check if already registered
+    try:
+        pdfmetrics.getFont(font_name)
+        return font_name
+    except KeyError:
+        pass
+    # Search paths: system (Debian/Ubuntu after fonts-dejavu-core) + bundled fallback
+    search_paths = [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/TTF/DejaVuSans.ttf',
+        os.path.join(current_app.root_path, 'static', 'fonts', 'DejaVuSans.ttf'),
+    ]
+    for path in search_paths:
+        if os.path.exists(path):
+            pdfmetrics.registerFont(TTFont(font_name, path))
+            return font_name
+    return 'Helvetica'  # fallback (no Cyrillic, but won't crash)
+
+
 @analytics_bp.route('/analytics/export/pdf')
 @login_required
 def export_pdf():
     from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
     from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
     from sqlalchemy.orm import joinedload
+
+    font_name = _register_cyrillic_font()
 
     # Суммарное время на задачу через SQL
     secs_sq = db.session.query(
@@ -587,27 +616,44 @@ def export_pdf():
             .order_by(Task.created_at.desc())
             .all())
 
-    output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=landscape(A4))
-    data = [['ID', 'Заголовок', 'Тип', 'Статус', 'Срочность', 'Заказчик', 'Дедлайн', 'Мин']]
+    cell_style = ParagraphStyle('cell', fontName=font_name, fontSize=7, leading=9)
+    hdr_style  = ParagraphStyle('hdr',  fontName=font_name, fontSize=7, leading=9,
+                                 textColor=colors.white)
+
+    def p(text, style=None):
+        return Paragraph(str(text), style or cell_style)
+
+    headers = ['ID', 'Заголовок', 'Тип', 'Статус', 'Срочность', 'Заказчик', 'Дедлайн', 'Мин']
+    data = [[p(h, hdr_style) for h in headers]]
+
     for t, total_secs in rows:
         data.append([
-            str(t.id), t.title[:50],
-            TYPE_LABELS.get(t.task_type, t.task_type or '')[:20],
-            TaskStatus.LABELS.get(t.status, t.status),
-            Urgency.LABELS.get(t.urgency, t.urgency),
-            t.customer_name or '',
-            t.deadline.strftime('%d.%m.%Y') if t.deadline else '',
-            str(round(total_secs / 60)),
+            p(t.id),
+            p(t.title[:60]),
+            p(TYPE_LABELS.get(t.task_type, t.task_type or '')[:25]),
+            p(TaskStatus.LABELS.get(t.status, t.status)),
+            p(Urgency.LABELS.get(t.urgency, t.urgency)),
+            p(t.customer_name or ''),
+            p(t.deadline.strftime('%d.%m.%Y') if t.deadline else ''),
+            p(str(round(total_secs / 60))),
         ])
-    table = Table(data, repeatRows=1)
+
+    col_widths = [30, 180, 120, 60, 60, 90, 60, 35]
+    table = Table(data, repeatRows=1, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#343a40')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
+
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
+                            leftMargin=20, rightMargin=20,
+                            topMargin=20, bottomMargin=20)
     doc.build([table])
     output.seek(0)
     return send_file(output, mimetype='application/pdf',

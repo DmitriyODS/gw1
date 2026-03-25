@@ -509,6 +509,27 @@ def mark_done(task_id):
 @tasks_bp.route('/uploads/<path:filename>')
 @login_required
 def uploaded_file(filename):
+    from models import TaskAttachment, CommentAttachment, TaskComment
+    # Look up original name from DB for correct download filename
+    att = TaskAttachment.query.filter_by(filename=filename).first()
+    if att and att.original_name:
+        return send_from_directory(
+            current_app.config['UPLOAD_FOLDER'], filename,
+            download_name=att.original_name
+        )
+    catt = CommentAttachment.query.filter_by(filename=filename).first()
+    if catt and catt.original_name:
+        return send_from_directory(
+            current_app.config['UPLOAD_FOLDER'], filename,
+            download_name=catt.original_name
+        )
+    # Legacy: single-file comment attachment
+    legacy = TaskComment.query.filter_by(filename=filename).first()
+    if legacy and legacy.original_name:
+        return send_from_directory(
+            current_app.config['UPLOAD_FOLDER'], filename,
+            download_name=legacy.original_name
+        )
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
 
 
@@ -556,15 +577,15 @@ def add_comment(task_id):
         flash('Комментарий не может быть пустым', 'warning')
         return redirect(url_for('tasks.detail', task_id=task_id))
 
-    # Check total size <= 10 MB
-    MAX_SIZE = 10 * 1024 * 1024
+    # Check total size <= 100 MB
+    MAX_SIZE = 100 * 1024 * 1024
     total_size = 0
     for f in files:
         f.seek(0, 2)
         total_size += f.tell()
         f.seek(0)
     if total_size > MAX_SIZE:
-        flash('Суммарный размер файлов не должен превышать 10 МБ', 'warning')
+        flash('Суммарный размер файлов не должен превышать 100 МБ', 'warning')
         return redirect(url_for('tasks.detail', task_id=task_id))
 
     comment = TaskComment(task_id=task_id, user_id=current_user.id, text=text or None)

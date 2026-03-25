@@ -117,10 +117,12 @@ class User(UserMixin, db.Model):
 
     @property
     def can_manage(self):
-        return self.role in (Role.SUPER_ADMIN, Role.MANAGER)
+        """System management: users, lists, settings (admin+)."""
+        return self.role in (Role.SUPER_ADMIN, Role.ADMIN)
 
     @property
     def can_admin(self):
+        """Task management: delete tasks, admin-pause, delegate (manager+)."""
         return self.role in (Role.SUPER_ADMIN, Role.MANAGER, Role.ADMIN)
 
     @property

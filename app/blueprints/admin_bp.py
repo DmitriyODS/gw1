@@ -1,10 +1,33 @@
 import io
 import json
+import re
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, Response
 from flask_login import login_required, current_user
 from extensions import db
 from models import User, Department, Role, Task, TaskAttachment, TaskComment, TimeLog, TaskStatus
+
+_LOGIN_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_\-]{3,}$')
+
+
+def _validate_user_fields(username, password, is_new):
+    """Returns error message or None."""
+    if not _LOGIN_RE.match(username):
+        return 'Логин: минимум 4 символа, должен начинаться с буквы, допустимы буквы, цифры, _ и -'
+    if is_new and len(password) < 6:
+        return 'Пароль должен содержать минимум 6 символов'
+    if not is_new and password and len(password) < 6:
+        return 'Пароль должен содержать минимум 6 символов'
+    return None
+
+
+def _allowed_roles_for(creator):
+    """Returns set of role values that creator is allowed to assign."""
+    if creator.is_super_admin:
+        return {Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.STAFF, Role.TV}
+    if creator.can_manage:  # admin
+        return {Role.MANAGER, Role.STAFF, Role.TV}
+    return set()
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -24,7 +47,7 @@ def _reset_sequences():
 @admin_bp.route('/users')
 @login_required
 def users():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.list_tasks'))
     all_users = User.query.order_by(User.created_at.desc()).all()
@@ -34,24 +57,31 @@ def users():
 @admin_bp.route('/users/create', methods=['GET', 'POST'])
 @login_required
 def create_user():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
         new_role = request.form.get('role', Role.STAFF)
-        if new_role == Role.SUPER_ADMIN and not current_user.is_super_admin:
-            flash('Недостаточно прав для назначения роли Super Admin', 'danger')
-            return redirect(url_for('admin.users'))
-        if User.query.filter_by(username=request.form['username']).first():
+        err = _validate_user_fields(username, password, is_new=True)
+        if err:
+            flash(err, 'danger')
+            return redirect(url_for('admin.create_user'))
+        allowed = _allowed_roles_for(current_user)
+        if new_role not in allowed:
+            flash('Недостаточно прав для назначения этой роли', 'danger')
+            return redirect(url_for('admin.create_user'))
+        if User.query.filter_by(username=username).first():
             flash('Пользователь с таким логином уже существует', 'danger')
         else:
             user = User(
-                username=request.form['username'].strip(),
+                username=username,
                 email=request.form['email'].strip(),
                 full_name=request.form['full_name'].strip(),
                 role=new_role,
             )
-            user.set_password(request.form['password'])
+            user.set_password(password)
             db.session.add(user)
             db.session.commit()
             flash('Пользователь создан', 'success')
@@ -62,26 +92,40 @@ def create_user():
 @admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_user(user_id):
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     user = User.query.get_or_404(user_id)
     if user.is_super_admin and not current_user.is_super_admin:
         flash('Нельзя редактировать Super Admin', 'danger')
         return redirect(url_for('admin.users'))
-    if request.method == 'POST':
-        new_role = request.form.get('role', user.role)
-        if new_role == Role.SUPER_ADMIN and not current_user.is_super_admin:
-            flash('Недостаточно прав для назначения роли Super Admin', 'danger')
+    # Admin can only edit users whose role is within their allowed set (except editing self)
+    if not current_user.is_super_admin and user.id != current_user.id:
+        if user.role not in _allowed_roles_for(current_user):
+            flash('Недостаточно прав для редактирования этого пользователя', 'danger')
             return redirect(url_for('admin.users'))
-        user.username = request.form['username'].strip()
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        new_role = request.form.get('role', user.role)
+        err = _validate_user_fields(username, password, is_new=False)
+        if err:
+            flash(err, 'danger')
+            return redirect(url_for('admin.edit_user', user_id=user_id))
+        allowed = _allowed_roles_for(current_user)
+        if new_role not in allowed and not user.is_super_admin:
+            flash('Недостаточно прав для назначения этой роли', 'danger')
+            return redirect(url_for('admin.edit_user', user_id=user_id))
+        user.username = username
         user.email = request.form['email'].strip()
         user.full_name = request.form['full_name'].strip()
         if not user.is_super_admin:
             user.role = new_role
-        user.is_active = 'is_active' in request.form
-        if request.form.get('password'):
-            user.set_password(request.form['password'])
+        # Prevent deactivating yourself
+        if user.id != current_user.id:
+            user.is_active = 'is_active' in request.form
+        if password:
+            user.set_password(password)
         db.session.commit()
         flash('Пользователь обновлён', 'success')
         return redirect(url_for('admin.users'))
@@ -91,7 +135,7 @@ def edit_user(user_id):
 @admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 def delete_user(user_id):
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.users'))
     user = User.query.get_or_404(user_id)
@@ -107,7 +151,7 @@ def delete_user(user_id):
 @admin_bp.route('/departments', methods=['GET', 'POST'])
 @login_required
 def departments():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.list_tasks'))
     if request.method == 'POST':
@@ -199,7 +243,7 @@ def build_backup():
 @admin_bp.route('/archive')
 @login_required
 def archive():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.list_tasks'))
     stats = {
@@ -217,7 +261,7 @@ def archive():
 @admin_bp.route('/archive/migrate-review', methods=['POST'])
 @login_required
 def migrate_review():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('admin.archive'))
     now = datetime.utcnow()
@@ -237,7 +281,7 @@ def migrate_review():
 @admin_bp.route('/archive/export')
 @login_required
 def archive_export():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.list_tasks'))
     data = build_backup()
@@ -254,7 +298,7 @@ def archive_export():
 @admin_bp.route('/archive/preview')
 @login_required
 def archive_preview():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'forbidden'}), 403
     data = build_backup()
     return Response(

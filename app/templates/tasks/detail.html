@@ -650,6 +650,27 @@
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Yandex Disk suggestion modal (shown when files exceed 100 MB) -->
+<dialog id="yadiskModal" class="modal">
+  <div class="modal-box max-w-md">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i class="bi bi-cloud-upload text-warning"></i> Файлы превышают 100 МБ
+    </h3>
+    <p class="py-3 text-sm">Суммарный размер файлов превышает 100 МБ.</p>
+    <p class="text-sm text-base-content/70">Рекомендуем загрузить файлы на <strong>Яндекс Диск</strong> и прикрепить ссылку в тексте комментария.</p>
+    <div class="flex flex-col gap-2 mt-3">
+      <a href="https://disk.yandex.ru" target="_blank" rel="noopener"
+         class="btn btn-warning btn-sm gap-2">
+        <i class="bi bi-cloud-arrow-up"></i> Открыть Яндекс Диск
+      </a>
+    </div>
+    <div class="modal-action mt-2">
+      <form method="dialog"><button class="btn btn-ghost btn-sm">Закрыть</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 {% endblock %}
 
 {% block scripts %}
@@ -801,7 +822,7 @@ const commentFilesList = document.getElementById('comment-files-list');
 const commentDropZone = document.getElementById('comment-drop-zone');
 const dropOverlay = document.getElementById('drop-overlay');
 const commentSizeInfo = document.getElementById('comment-size-info');
-const MAX_COMMENT_BYTES = 10 * 1024 * 1024;
+const MAX_COMMENT_BYTES = 100 * 1024 * 1024;
 
 let commentFiles = [];
 
@@ -846,7 +867,7 @@ function renderFiles() {
     commentSizeInfo.textContent = '';
   } else {
     const over = total > MAX_COMMENT_BYTES;
-    commentSizeInfo.textContent = fmtSize(total) + ' / 10 МБ';
+    commentSizeInfo.textContent = fmtSize(total) + ' / 100 МБ';
     commentSizeInfo.classList.toggle('text-error', over);
     commentSizeInfo.classList.toggle('text-base-content/40', !over);
   }
@@ -900,7 +921,7 @@ document.getElementById('comment-text').addEventListener('paste', e => {
 commentForm.addEventListener('submit', e => {
   if (totalBytes() > MAX_COMMENT_BYTES) {
     e.preventDefault();
-    alert('Суммарный размер файлов превышает 10 МБ. Удалите часть файлов.');
+    document.getElementById('yadiskModal').showModal();
   }
 });
 </script>

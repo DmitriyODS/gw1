@@ -9,7 +9,7 @@ lists_bp = Blueprint('lists', __name__, url_prefix='/lists')
 @lists_bp.route('/')
 @login_required
 def index():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.list_tasks'))
     list_type = request.args.get('list', 'task_types')
@@ -24,7 +24,7 @@ def index():
 @lists_bp.route('/task-types', methods=['POST'])
 @login_required
 def create_task_type():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     data = request.get_json() or {}
     slug = data.get('slug', '').strip().lower().replace(' ', '_')
@@ -43,7 +43,7 @@ def create_task_type():
 @lists_bp.route('/task-types/<int:tt_id>', methods=['PUT'])
 @login_required
 def update_task_type(tt_id):
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     tt = TaskType.query.get_or_404(tt_id)
     data = request.get_json() or {}
@@ -58,7 +58,7 @@ def update_task_type(tt_id):
 @lists_bp.route('/task-types/<int:tt_id>', methods=['DELETE'])
 @login_required
 def delete_task_type(tt_id):
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     tt = TaskType.query.get_or_404(tt_id)
     db.session.delete(tt)
@@ -71,7 +71,7 @@ def delete_task_type(tt_id):
 @lists_bp.route('/departments', methods=['POST'])
 @login_required
 def create_department():
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     data = request.get_json() or {}
     name = data.get('name', '').strip()
@@ -89,7 +89,7 @@ def create_department():
 @lists_bp.route('/departments/<int:dept_id>', methods=['PUT'])
 @login_required
 def update_department(dept_id):
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     dept = Department.query.get_or_404(dept_id)
     data = request.get_json() or {}
@@ -108,7 +108,7 @@ def update_department(dept_id):
 @lists_bp.route('/departments/<int:dept_id>', methods=['DELETE'])
 @login_required
 def delete_department(dept_id):
-    if not current_user.can_admin:
+    if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     dept = Department.query.get_or_404(dept_id)
     db.session.delete(dept)

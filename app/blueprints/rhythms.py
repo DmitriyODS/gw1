@@ -2,8 +2,16 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from extensions import db
-from models import Rhythm, RhythmFrequency, Task, TaskStatus, TaskTag, Urgency, Department
+from models import Rhythm, RhythmFrequency, Task, TaskStatus, TaskTag, Urgency, Department, TaskType
 from blueprints.public import TASK_TYPES
+
+
+def _get_task_types():
+    """Returns task type list from DB, falls back to hardcoded TASK_TYPES."""
+    types = TaskType.query.order_by(TaskType.sort_order, TaskType.label).all()
+    if types:
+        return [(t.slug, t.label) for t in types]
+    return TASK_TYPES
 
 rhythms_bp = Blueprint('rhythms', __name__)
 
@@ -19,7 +27,7 @@ def index():
                            RhythmFrequency=RhythmFrequency,
                            TaskTag=TaskTag,
                            Urgency=Urgency,
-                           task_types=TASK_TYPES)
+                           task_types=_get_task_types())
 
 
 @rhythms_bp.route('/rhythms/create', methods=['POST'])

@@ -3,8 +3,16 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from extensions import db
-from models import Plan, PlanGroup, Task, TaskStatus, TaskTag, Urgency, Department
+from models import Plan, PlanGroup, Task, TaskStatus, TaskTag, Urgency, Department, TaskType
 from blueprints.public import TASK_TYPES, PUB_SUBTYPES, PLATFORMS, AUTO_TAGS
+
+
+def _get_task_types():
+    """Returns task type list from DB, falls back to hardcoded TASK_TYPES."""
+    types = TaskType.query.order_by(TaskType.sort_order, TaskType.label).all()
+    if types:
+        return [(t.slug, t.label) for t in types]
+    return TASK_TYPES
 
 plans_bp = Blueprint('plans', __name__)
 
@@ -42,7 +50,7 @@ def index():
                            group_counts=group_counts,
                            now=datetime.utcnow(),
                            TaskTag=TaskTag, Urgency=Urgency,
-                           task_types=TASK_TYPES,
+                           task_types=_get_task_types(),
                            pub_subtypes=PUB_SUBTYPES,
                            platforms=PLATFORMS)
 
@@ -50,6 +58,9 @@ def index():
 @plans_bp.route('/plans/create', methods=['POST'])
 @login_required
 def create():
+    if not request.form.get('task_type'):
+        flash('Укажите тип задачи — это обязательное поле', 'danger')
+        return redirect(url_for('plans.index'))
     plan = _plan_from_form(request.form, created_by_id=current_user.id)
     db.session.add(plan)
     db.session.commit()
@@ -61,6 +72,9 @@ def create():
 @plans_bp.route('/plans/<int:plan_id>/edit', methods=['POST'])
 @login_required
 def edit(plan_id):
+    if not request.form.get('task_type'):
+        flash('Укажите тип задачи — это обязательное поле', 'danger')
+        return redirect(url_for('plans.index'))
     plan = Plan.query.get_or_404(plan_id)
     _plan_from_form(request.form, plan=plan)
     db.session.commit()

@@ -265,7 +265,7 @@
       </a>
     </div>
 
-    {% if current_user.can_admin %}
+    {% if current_user.can_manage %}
     <div class="nav-section-label">Управление</div>
     <div class="nav-card">
       <a href="{{ url_for('admin.users') }}" class="nav-link">

@@ -10,15 +10,18 @@
 gw1/
 ├── app/
 │   ├── blueprints/
-│   │   ├── admin_bp.py      — управление пользователями и отделами
-│   │   ├── analytics.py     — дашборд, учёт времени, TV-режим
+│   │   ├── admin_bp.py      — управление пользователями и отделами (только admin+)
+│   │   ├── analytics.py     — дашборд, учёт времени, TV-режим, экспорт PDF/Excel
 │   │   ├── auth.py          — логин / логаут
+│   │   ├── lists_bp.py      — CRUD для TaskType и Department (только admin+)
 │   │   ├── media_plan.py    — медиаплан
 │   │   ├── plans.py         — планы задач (конвертируются в задачи)
 │   │   ├── profile.py       — профиль, аватар, API статистики по типам
-│   │   ├── public.py        — внешняя форма заявок (без авторизации)
+│   │   ├── public.py        — внешняя форма заявок (без авторизации) + API task-types
 │   │   ├── rhythms.py       — повторяющиеся задачи (ритмы)
-│   │   └── tasks.py         — основной CRUD задач, таймер, канбан
+│   │   └── tasks.py         — основной CRUD задач, таймер, канбан, скачивание файлов
+│   ├── services/
+│   │   └── yandex_disk.py   — заготовка интеграции с Яндекс Диском (не активна)
 │   ├── templates/
 │   │   ├── base.html        — основной layout, сайдбар, topbar
 │   │   ├── analytics/
@@ -30,13 +33,18 @@ gw1/
 │   │   │   ├── detail.html  — карточка задачи
 │   │   │   ├── form.html    — создание/редактирование
 │   │   │   └── _card.html   — фрагмент карточки для канбана
+│   │   ├── admin/
+│   │   │   ├── users.html
+│   │   │   └── user_form.html
 │   │   ├── profile.html
 │   │   └── public/submit.html — внешняя форма заявок
 │   ├── models.py            — все SQLAlchemy-модели
 │   ├── factory.py           — create_app(), CLI-команды
 │   ├── config.py            — Config из env-переменных
 │   ├── extensions.py        — db, login_manager, csrf
+│   ├── decorators.py        — manager_required, admin_required, super_admin_required
 │   └── requirements.txt
+├── nginx/nginx.conf         — только reverse proxy, файлы отдаёт Flask (для auth + правильных имён)
 ├── docker-compose.yml       — dev (flask run --debug, порт 5001)
 ├── docker-compose.prod.yml  — prod (gunicorn 4 workers, nginx, порт 80)
 └── CLAUDE.md
@@ -73,7 +81,7 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 
 | Команда | Что делает |
 |---|---|
-| `init-db` | Создать все таблицы + суперадмин admin/admin123 + базовые отделы |
+| `init-db` | Создать все таблицы + суперадмин admin/admin123 + базовые отделы + типы задач |
 | `migrate-db` | Добавить новые колонки в существующие таблицы (безопасно) |
 | `auto-archive` | Архивировать DONE-задачи старше 7 дней (запускать еженедельно через cron) |
 | `migrate-review` | Перевести все задачи со статусом review → done |
@@ -93,12 +101,31 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 ### Task — основная модель задачи
 Ключевые поля: `title`, `task_type`, `status`, `urgency`, `deadline`, `assigned_to_id`, `created_by_id`, `department_id`, `tags` (JSON), `dynamic_fields` (JSON), `completed_at`, `updated_at`, `is_archived`
 
+### TaskType — типы задач (таблица в БД)
+Поля: `slug`, `label`, `sort_order`. Управляются через раздел «Списки» (`/lists`). При создании нового типа он автоматически появляется во всех формах — задач, планов, ритмов, внешней форме.
+
 ### Роли пользователей (Role)
-- `super_admin` — полный доступ
-- `manager` — управление + аналитика
-- `admin` — управление задачами и пользователями
-- `staff` — сотрудник (стандартный доступ)
-- `tv` — только TV-режим
+| Роль | Задачи | Чужие задачи | Удаление | Аналитика | Пользователи/Списки |
+|------|--------|--------------|----------|-----------|---------------------|
+| `tv` | ❌ | ❌ | ❌ | Только TV | ❌ |
+| `staff` | Свои | ❌ | ❌ | Только свои | ❌ |
+| `manager` | Все | ✅ | ✅ | Все | ❌ |
+| `admin` | Все | ✅ | ✅ | Все | ✅ (до manager) |
+| `super_admin` | Все | ✅ | ✅ | Все | ✅ (все роли) |
+
+**Свойства User:**
+- `can_admin` — super_admin + manager + admin (управление задачами: удаление, пауза, делегирование)
+- `can_manage` — super_admin + admin (системное управление: пользователи, списки, архив)
+- `is_super_admin` — только super_admin
+
+**Ограничения при создании пользователей:**
+- `admin` может создавать/редактировать пользователей с ролью ≤ `manager`
+- `super_admin` может назначать любую роль включая `admin`
+- Нельзя деактивировать свой аккаунт
+
+**Валидация:**
+- Логин: минимум 4 символа, начинается с латинской буквы, допустимы `[A-Za-z0-9_-]`
+- Пароль: минимум 6 символов
 
 ### Статусы задач (TaskStatus)
 `new` → `in_progress` → `paused` / `done`
@@ -110,12 +137,24 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 
 ---
 
-## Типы задач (TASK_TYPES в public.py)
+## Типы задач
 
-Все 23 типа (slug → метка):
-`pub_images`, `banner`, `poster`, `presentation`, `presentation_update`, `text_writing`, `handout`, `placement`, `internal`, `external`, `water_plants`, `exports`, `surveys`, `photo_edit`, `video_edit`, `video_shoot`, `photo_shoot`, `meeting`, `mail_work`, `cloud_work`, `stand_design`, `pub_design`, `branded`
+Хранятся в таблице `task_types` (модель `TaskType`). Управляются через `/lists`. При добавлении нового типа через UI он сразу появляется во всех формах (задачи, планы, ритмы, внешняя форма) — они все используют `/api/task-types` или функцию `_get_task_types()`.
 
-Метки хранятся в `TYPE_LABELS` в `analytics.py`. При добавлении нового типа — обновить оба места.
+Статические метки для аналитики дублируются в `TYPE_LABELS` в `analytics.py` — при добавлении нового типа рекомендуется обновить этот словарь.
+
+---
+
+## Файлы и вложения
+
+- Файлы хранятся в `/app/uploads/` (Docker volume)
+- Имена файлов на диске — UUID-хеши (`uuid4().hex + ext`)
+- Оригинальные имена хранятся в БД (`TaskAttachment.original_name`, `CommentAttachment.original_name`)
+- При скачивании Flask ищет `original_name` в БД и отдаёт с правильным именем через `download_name`
+- Nginx НЕ отдаёт `/uploads/` напрямую — всё через Flask (для авторизации + правильных имён)
+- Лимит файлов в комментарии: **100 МБ** (суммарно)
+- При превышении лимита — модальное окно с предложением загрузить на Яндекс Диск
+- Nginx: `client_max_body_size 110M`
 
 ---
 
@@ -128,9 +167,13 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 | `POST /tasks/<id>/timer/pause` | Поставить таймер на паузу |
 | `POST /tasks/<id>/move` | Переместить задачу (drag-and-drop, кроме in_progress) |
 | `POST /tasks/<id>/done` | Закрыть задачу |
+| `GET /uploads/<filename>` | Скачать файл вложения (с оригинальным именем, требует авторизации) |
 | `GET /analytics/tv/data` | JSON для TV-слайдов |
 | `GET /analytics/time` | Учёт времени (`?mode=day\|week\|month&offset=0`) |
 | `GET /analytics/time/user-detail` | JSON деталей сотрудника для модалки |
+| `GET /analytics/export/pdf` | Экспорт задач в PDF (с поддержкой кириллицы через DejaVuSans) |
+| `GET /analytics/export/excel` | Экспорт задач в Excel |
+| `GET /api/task-types` | JSON списка типов задач из БД (используется в формах) |
 | `GET /api/profile/stats` | JSON статистики по типам для профиля (`?mode=day\|week\|month&offset=0`) |
 | `GET /submit` | Внешняя форма заявок (без авторизации) |
 
@@ -153,7 +196,7 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 - Архивирует DONE-задачи с `completed_at` старше 7 дней
 
 ### Временная зона
-Все datetime в БД хранятся в **UTC**. Конвертация в локальное время через `TZ_OFFSET_HOURS` (по умолчанию 3, т.е. МСК). Фильтры в `factory.py`: `timeformat`, `shorttime`, `localdate`, `hhmm`. Аналитика и профиль используют `_period_bounds()` для правильных границ периодов.
+Все datetime в БД хранятся в **UTC**. Конвертация в локальное время через `TZ_OFFSET_HOURS` (по умолчанию 3, т.е. МСК). Фильтры в `factory.py`: `timeformat`, `shorttime`, `localdate`, `hhmm`.
 
 ### TV-режим (5 слайдов)
 1. Сегодня — статусы задач + типы + время
@@ -167,6 +210,12 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 ### Внешняя форма заявок
 `/submit` — без авторизации. После отправки редирект с `prefill_name/phone/email/dept` в query params — форма предзаполняется для следующей заявки от того же заказчика.
 
+### PDF-экспорт и кириллица
+PDF генерируется через `reportlab`. Для поддержки кириллицы используется шрифт DejaVuSans, устанавливаемый через `fonts-dejavu-core` в Dockerfile. Функция `_register_cyrillic_font()` в `analytics.py` ищет шрифт по нескольким системным путям с fallback.
+
+### Яндекс Диск (заготовка)
+`app/services/yandex_disk.py` — заготовка для загрузки файлов задач на Яндекс Диск. Не активна. Требует: регистрации приложения на oauth.yandex.ru, переменной окружения `YANDEX_DISK_TOKEN`, установки `pip install yadisk`.
+
 ---
 
 ## Стек и зависимости
@@ -175,6 +224,8 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 - **PostgreSQL 15** (через psycopg2-binary)
 - **Flask-SQLAlchemy**, Flask-Login, Flask-WTF (CSRF)
 - **Gunicorn** (prod), встроенный Flask dev-сервер (dev)
+- **openpyxl** — экспорт в Excel
+- **reportlab** — экспорт в PDF (с DejaVuSans для кириллицы)
 - **Frontend**: DaisyUI v5 + Tailwind (CDN), Bootstrap Icons (CDN), Chart.js 4.4, Google Material Icons Round (CDN)
 - Никаких сборщиков (webpack/vite) — всё через CDN
 
@@ -185,6 +236,7 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 - **Нет эмодзи** — используем Bootstrap Icons (`bi-*`) или Material Icons Round (`<span class="material-icons-round">`)
 - Тема: светлая по умолчанию, переключается через `localStorage('tt-theme')`
 - Версия отображается в сайдбаре (`base.html`, строка с `v0.3`)
+- «По типам» на дашборде — горизонтальный bar chart (не doughnut), высота динамическая
 
 ---
 
@@ -196,3 +248,4 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 | `SECRET_KEY` | `dev-secret-key-change-me` | Flask secret key |
 | `UPLOAD_FOLDER` | `/app/uploads` | Путь для загруженных файлов |
 | `TZ_OFFSET_HOURS` | `3` | Смещение от UTC (МСК = 3) |
+| `YANDEX_DISK_TOKEN` | — | OAuth-токен Яндекс Диска (для будущей интеграции) |

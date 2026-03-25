@@ -7,13 +7,12 @@
   .kanban-wrap {
     display: flex; gap: 12px;
     overflow-x: auto; padding-bottom: 12px;
-    align-items: flex-start;
-    min-height: calc(100vh - 230px);
+    align-items: stretch;
+    height: calc(100vh - 180px);
   }
   .kanban-col {
     flex: 0 0 272px;
     display: flex; flex-direction: column;
-    max-height: calc(100vh - 230px);
     border-radius: 16px;
     background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
     border: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
@@ -262,15 +261,15 @@
 
 <!-- Page header -->
 <div class="flex items-center gap-3 mb-4 flex-wrap">
-  <a href="{{ url_for('tasks.create') }}" class="btn btn-primary gap-2 shrink-0">
-    <i class="bi bi-plus-lg"></i> Создать задачу
-  </a>
   <div class="flex-1 relative min-w-48">
     <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10"></i>
     <input type="text" id="task-search" placeholder="Поиск по названию задачи"
            class="input input-bordered w-full rounded-full pl-9 text-sm"
            oninput="onSearchInput()">
   </div>
+  <a href="{{ url_for('tasks.create') }}" class="btn btn-primary gap-2 shrink-0">
+    <i class="bi bi-plus-lg"></i> Создать задачу
+  </a>
 </div>
 
 <!-- Filter bar -->

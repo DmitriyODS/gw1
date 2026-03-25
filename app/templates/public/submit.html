@@ -290,10 +290,20 @@
 
     fetch('/api/departments')
         .then(r => r.json())
-        .then(data => {
-            initSS('dept_wrap', data.map(d => ({ value: String(d.id), label: d.name })));
+        .then(depts => {
+            const deptMap = {};
+            depts.forEach(d => { deptMap[String(d.id)] = d; });
+
+            initSS('dept_wrap', depts.map(d => ({ value: String(d.id), label: d.name })), val => {
+                const dept = deptMap[val];
+                if (dept && dept.head) {
+                    const nameInput = document.querySelector('[name="customer_name"]');
+                    if (!nameInput.value.trim()) nameInput.value = dept.head;
+                }
+            });
+
             if (PREFILL_DEPT) {
-                const dept = data.find(d => String(d.id) === String(PREFILL_DEPT));
+                const dept = depts.find(d => String(d.id) === String(PREFILL_DEPT));
                 if (dept) {
                     const wrap = document.getElementById('dept_wrap');
                     wrap.querySelector('.ss-value').value = dept.id;

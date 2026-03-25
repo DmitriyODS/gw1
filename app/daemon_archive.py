@@ -78,6 +78,8 @@ def run():
                     db.session.rollback()
                 except Exception:
                     pass
+            finally:
+                db.session.remove()
 
             time.sleep(CHECK_INTERVAL)
 

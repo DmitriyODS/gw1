@@ -119,6 +119,8 @@ def create_app():
             ('plans', 'release_date',    'TIMESTAMP'),
             ('plans', 'customer_email',  'VARCHAR(200)'),
             ('tasks', 'updated_at',      'TIMESTAMP'),
+            ('task_comments', 'filename',     'VARCHAR(255)'),
+            ('task_comments', 'original_name','VARCHAR(255)'),
         ]
         for table, col, col_type in cols:
             try:

@@ -236,10 +236,21 @@ class TaskComment(db.Model):
     task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     text = db.Column(db.Text)
-    filename = db.Column(db.String(255))
-    original_name = db.Column(db.String(255))
+    filename = db.Column(db.String(255))      # legacy single-file field
+    original_name = db.Column(db.String(255)) # legacy single-file field
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', backref='comments')
+    attachments = db.relationship('CommentAttachment', backref='comment',
+                                  lazy='dynamic', cascade='all, delete-orphan')
+
+
+class CommentAttachment(db.Model):
+    __tablename__ = 'comment_attachments'
+    id = db.Column(db.Integer, primary_key=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('task_comments.id'), nullable=False)
+    filename = db.Column(db.String(255))
+    original_name = db.Column(db.String(255))
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class TimeLog(db.Model):

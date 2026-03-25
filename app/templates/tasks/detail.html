@@ -335,8 +335,10 @@
       <div class="divide-y divide-base-300">
         {% for comment in task.comments.all() %}
         <div class="px-4 py-3 flex gap-3" id="comment-{{ comment.id }}">
-          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-            {{ comment.user.full_name[:1] }}
+          <div class="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden">
+            <img src="{{ url_for('profile.avatar', user_id=comment.user.id) }}"
+                 class="w-8 h-8 object-cover"
+                 alt="{{ comment.user.full_name[:1] }}">
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
@@ -344,9 +346,19 @@
               <span class="text-xs text-base-content/50">{{ comment.created_at | timeformat }}</span>
             </div>
             {% if comment.text %}<p class="text-sm whitespace-pre-wrap">{{ comment.text }}</p>{% endif %}
-            {% if comment.filename %}
+            {% set catts = comment.attachments.all() %}
+            {% if catts %}
+            <div class="flex flex-wrap gap-2 mt-1">
+              {% for att in catts %}
+              <a href="{{ url_for('tasks.uploaded_file', filename=att.filename) }}" target="_blank"
+                 class="inline-flex items-center gap-1 text-xs text-primary hover:underline bg-base-200 rounded px-2 py-0.5">
+                <i class="bi bi-paperclip"></i> {{ att.original_name }}
+              </a>
+              {% endfor %}
+            </div>
+            {% elif comment.filename %}
             <a href="{{ url_for('tasks.uploaded_file', filename=comment.filename) }}" target="_blank"
-               class="inline-flex items-center gap-1 text-xs text-primary mt-1 hover:underline">
+               class="inline-flex items-center gap-1 text-xs text-primary mt-1 hover:underline bg-base-200 rounded px-2 py-0.5">
               <i class="bi bi-paperclip"></i> {{ comment.original_name }}
             </a>
             {% endif %}
@@ -364,16 +376,25 @@
       </div>
       <div class="px-4 py-3 border-t border-base-300">
         <form method="post" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
-              enctype="multipart/form-data">
+              enctype="multipart/form-data" id="comment-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <textarea name="text" class="textarea textarea-bordered w-full text-sm mb-2" rows="2"
-                    placeholder="Написать комментарий..."></textarea>
+          <div id="comment-drop-zone" class="relative mb-2">
+            <textarea name="text" id="comment-text"
+                      class="textarea textarea-bordered w-full text-sm"
+                      rows="2"
+                      placeholder="Написать комментарий... (или перетащите файлы / вставьте Ctrl+V)"></textarea>
+            <div id="drop-overlay"
+                 class="hidden absolute inset-0 rounded-xl border-2 border-dashed border-primary bg-primary/10 flex items-center justify-center pointer-events-none z-10">
+              <span class="text-primary font-semibold text-sm">Отпустите для прикрепления</span>
+            </div>
+          </div>
+          <div id="comment-files-list" class="flex flex-wrap gap-2 mb-2"></div>
           <div class="flex items-center gap-2">
-            <label class="btn btn-ghost btn-sm gap-1 cursor-pointer">
-              <i class="bi bi-paperclip"></i> Файл
-              <input type="file" name="file" class="hidden" id="comment-file-input">
+            <label class="btn btn-ghost btn-sm gap-1 cursor-pointer shrink-0">
+              <i class="bi bi-paperclip"></i> Файлы
+              <input type="file" name="files" id="comment-file-input" class="hidden" multiple>
             </label>
-            <span id="comment-file-name" class="text-xs text-base-content/50 flex-1 truncate"></span>
+            <span id="comment-size-info" class="text-xs text-base-content/40 flex-1"></span>
             <button type="submit" class="btn btn-primary btn-sm">Отправить</button>
           </div>
         </form>
@@ -688,10 +709,114 @@ function doUnassign(taskId) {
   });
 }
 
-// Show file name in comment form
-document.getElementById('comment-file-input')?.addEventListener('change', function() {
-  const label = document.getElementById('comment-file-name');
-  if (label) label.textContent = this.files[0]?.name || '';
+// ── Comment multi-file handling ──
+const commentForm = document.getElementById('comment-form');
+const commentFileInput = document.getElementById('comment-file-input');
+const commentFilesList = document.getElementById('comment-files-list');
+const commentDropZone = document.getElementById('comment-drop-zone');
+const dropOverlay = document.getElementById('drop-overlay');
+const commentSizeInfo = document.getElementById('comment-size-info');
+const MAX_COMMENT_BYTES = 10 * 1024 * 1024;
+
+let commentFiles = [];
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' Б';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+  return (bytes / 1024 / 1024).toFixed(2) + ' МБ';
+}
+
+function totalBytes() {
+  return commentFiles.reduce((s, f) => s + f.size, 0);
+}
+
+function syncInput() {
+  const dt = new DataTransfer();
+  commentFiles.forEach(f => dt.items.add(f));
+  commentFileInput.files = dt.files;
+}
+
+function renderFiles() {
+  commentFilesList.innerHTML = '';
+  const total = totalBytes();
+
+  commentFiles.forEach((file, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'inline-flex items-center gap-1 bg-base-200 rounded px-2 py-1 text-xs max-w-full';
+    chip.innerHTML =
+      `<i class="bi bi-paperclip shrink-0"></i>` +
+      `<span class="truncate max-w-40">${file.name}</span>` +
+      `<span class="text-base-content/40 shrink-0">${fmtSize(file.size)}</span>` +
+      `<button type="button" class="text-error hover:opacity-70 shrink-0 ml-0.5" data-idx="${idx}">` +
+        `<i class="bi bi-x-lg"></i></button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+      commentFiles.splice(idx, 1);
+      syncInput();
+      renderFiles();
+    });
+    commentFilesList.appendChild(chip);
+  });
+
+  if (commentFiles.length === 0) {
+    commentSizeInfo.textContent = '';
+  } else {
+    const over = total > MAX_COMMENT_BYTES;
+    commentSizeInfo.textContent = fmtSize(total) + ' / 10 МБ';
+    commentSizeInfo.classList.toggle('text-error', over);
+    commentSizeInfo.classList.toggle('text-base-content/40', !over);
+  }
+}
+
+function addFiles(incoming) {
+  for (const f of incoming) {
+    if (!commentFiles.find(e => e.name === f.name && e.size === f.size))
+      commentFiles.push(f);
+  }
+  syncInput();
+  renderFiles();
+}
+
+commentFileInput.addEventListener('change', () => {
+  addFiles(Array.from(commentFileInput.files));
+});
+
+// Drag-and-drop
+commentDropZone.addEventListener('dragenter', e => {
+  e.preventDefault();
+  if (e.dataTransfer.types.includes('Files')) dropOverlay.classList.remove('hidden');
+});
+commentDropZone.addEventListener('dragleave', e => {
+  if (!commentDropZone.contains(e.relatedTarget)) dropOverlay.classList.add('hidden');
+});
+commentDropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
+commentDropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropOverlay.classList.add('hidden');
+  if (e.dataTransfer.files.length) addFiles(Array.from(e.dataTransfer.files));
+});
+
+// Paste from clipboard
+document.getElementById('comment-text').addEventListener('paste', e => {
+  const items = Array.from(e.clipboardData?.items || []);
+  const pastedFiles = items
+    .filter(item => item.kind === 'file')
+    .map(item => item.getAsFile())
+    .filter(Boolean);
+  if (pastedFiles.length) {
+    e.preventDefault();
+    addFiles(pastedFiles);
+  }
+});
+
+// Validate on submit
+commentForm.addEventListener('submit', e => {
+  if (totalBytes() > MAX_COMMENT_BYTES) {
+    e.preventDefault();
+    alert('Суммарный размер файлов превышает 10 МБ. Удалите часть файлов.');
+  }
 });
 </script>
 {% endblock %}

@@ -8,7 +8,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 from sqlalchemy import or_, and_
 from extensions import db
-from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, User
+from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, CommentAttachment, User
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES, AUTO_TAGS
 
 _last_archive_check: datetime = None
@@ -475,18 +475,34 @@ def delete_attachment(task_id, att_id):
 def add_comment(task_id):
     task = Task.query.get_or_404(task_id)
     text = request.form.get('text', '').strip()
-    f = request.files.get('file')
-    if not text and (not f or not f.filename):
+    files = [f for f in request.files.getlist('files') if f and f.filename]
+
+    if not text and not files:
         flash('Комментарий не может быть пустым', 'warning')
         return redirect(url_for('tasks.detail', task_id=task_id))
+
+    # Check total size <= 10 MB
+    MAX_SIZE = 10 * 1024 * 1024
+    total_size = 0
+    for f in files:
+        f.seek(0, 2)
+        total_size += f.tell()
+        f.seek(0)
+    if total_size > MAX_SIZE:
+        flash('Суммарный размер файлов не должен превышать 10 МБ', 'warning')
+        return redirect(url_for('tasks.detail', task_id=task_id))
+
     comment = TaskComment(task_id=task_id, user_id=current_user.id, text=text or None)
-    if f and f.filename:
+    db.session.add(comment)
+    db.session.flush()
+
+    for f in files:
         ext = os.path.splitext(f.filename)[1].lower()
         fname = f'{uuid.uuid4().hex}{ext}'
         f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
-        comment.filename = fname
-        comment.original_name = f.filename
-    db.session.add(comment)
+        att = CommentAttachment(comment_id=comment.id, filename=fname, original_name=f.filename)
+        db.session.add(att)
+
     db.session.commit()
     return redirect(url_for('tasks.detail', task_id=task_id))
 
@@ -497,8 +513,14 @@ def delete_comment(task_id, comment_id):
     comment = TaskComment.query.filter_by(id=comment_id, task_id=task_id).first_or_404()
     if comment.user_id != current_user.id and not current_user.can_admin:
         return jsonify({'error': 'Нет прав'}), 403
+    # Delete legacy single file
     if comment.filename:
         path = os.path.join(current_app.config['UPLOAD_FOLDER'], comment.filename)
+        if os.path.exists(path):
+            os.remove(path)
+    # Delete new multi-file attachments
+    for att in comment.attachments.all():
+        path = os.path.join(current_app.config['UPLOAD_FOLDER'], att.filename)
         if os.path.exists(path):
             os.remove(path)
     db.session.delete(comment)

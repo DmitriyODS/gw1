@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy import func
 from extensions import db
 from models import Plan, PlanGroup, Task, TaskStatus, TaskTag, Urgency, Department
 from blueprints.public import TASK_TYPES, PUB_SUBTYPES, PLATFORMS, AUTO_TAGS
@@ -26,12 +27,12 @@ def index():
     plans = q.order_by(Plan.release_date.asc(), Plan.created_at.desc()).all()
 
     departments = Department.query.order_by(Department.name).all()
-    # Group counts for filter bar
+    # Group counts — 1 запрос вместо N (по одному на группу)
     total_count = Plan.query.filter_by(is_converted=False).count()
-    group_counts = {
-        g.id: Plan.query.filter_by(group_id=g.id, is_converted=False).count()
-        for g in groups
-    }
+    count_rows = db.session.query(Plan.group_id, func.count(Plan.id)).filter(
+        Plan.is_converted == False
+    ).group_by(Plan.group_id).all()
+    group_counts = {gid: cnt for gid, cnt in count_rows}
     return render_template('plans/index.html',
                            plans=plans, groups=groups,
                            active_group=group_id,

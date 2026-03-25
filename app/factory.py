@@ -131,6 +131,25 @@ def create_app():
                 print(f'Added {table}.{col}')
             except Exception as e:
                 print(f'Skipped {table}.{col}: {e}')
+        # Create new indexes (IF NOT EXISTS — безопасно запускать повторно)
+        new_indexes = [
+            ('ix_tasks_assigned_to',  'CREATE INDEX IF NOT EXISTS ix_tasks_assigned_to  ON tasks (assigned_to_id)'),
+            ('ix_tasks_department',   'CREATE INDEX IF NOT EXISTS ix_tasks_department   ON tasks (department_id)'),
+            ('ix_tasks_created_by',   'CREATE INDEX IF NOT EXISTS ix_tasks_created_by   ON tasks (created_by_id)'),
+            ('ix_tasks_completed_at', 'CREATE INDEX IF NOT EXISTS ix_tasks_completed_at ON tasks (completed_at)'),
+            ('ix_tasks_created_at',   'CREATE INDEX IF NOT EXISTS ix_tasks_created_at   ON tasks (created_at)'),
+            ('ix_timelogs_user_ended','CREATE INDEX IF NOT EXISTS ix_timelogs_user_ended ON time_logs (user_id, ended_at)'),
+            ('ix_timelogs_task',      'CREATE INDEX IF NOT EXISTS ix_timelogs_task       ON time_logs (task_id)'),
+            ('ix_timelogs_started_at','CREATE INDEX IF NOT EXISTS ix_timelogs_started_at ON time_logs (started_at)'),
+        ]
+        for name, sql in new_indexes:
+            try:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text(sql))
+                    conn.commit()
+                print(f'Index {name} OK')
+            except Exception as e:
+                print(f'Skipped index {name}: {e}')
         # Create new tables (rhythms etc.)
         db.create_all()
         print('Migration complete')

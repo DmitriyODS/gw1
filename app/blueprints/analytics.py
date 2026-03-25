@@ -65,59 +65,61 @@ def get_range(period):
 def build_stats(period):
     start, end = get_range(period)
 
-    by_status = {}
-    for s in TaskStatus.LABELS:
-        by_status[s] = Task.query.filter(
-            Task.created_at >= start, Task.status == s
-        ).count()
-
-    dept_stats = db.session.query(Department.name, func.count(Task.id)).join(
-        Task, Task.department_id == Department.id
-    ).filter(Task.created_at >= start).group_by(Department.name).order_by(func.count(Task.id).desc()).all()
-
-    raw_type_stats = db.session.query(Task.task_type, func.count(Task.id)).filter(
+    # 1 запрос: количество задач по статусам (вместо 5 отдельных COUNT)
+    status_rows = db.session.query(Task.status, func.count(Task.id)).filter(
         Task.created_at >= start
-    ).group_by(Task.task_type).all()
-    type_stats = [(TYPE_LABELS.get(t, t or 'Не указан'), count) for t, count in raw_type_stats]
+    ).group_by(Task.status).all()
+    by_status = {s: 0 for s in TaskStatus.LABELS}
+    for s, cnt in status_rows:
+        if s in by_status:
+            by_status[s] = cnt
 
-    # Task types by status breakdown
+    # 1 запрос: тип × статус (вместо N_типов × 5 запросов)
+    type_status_rows = db.session.query(
+        Task.task_type, Task.status, func.count(Task.id)
+    ).filter(Task.created_at >= start).group_by(Task.task_type, Task.status).all()
+
+    type_totals = defaultdict(int)
+    _type_by_status_raw = defaultdict(lambda: defaultdict(int))
+    for ttype, s, cnt in type_status_rows:
+        type_totals[ttype] += cnt
+        if s in TaskStatus.LABELS:
+            _type_by_status_raw[ttype][s] = cnt
+
+    raw_type_stats = sorted(type_totals.items(), key=lambda x: x[1], reverse=True)
+    type_stats = [(TYPE_LABELS.get(t, t or 'Не указан'), cnt) for t, cnt in raw_type_stats]
     type_by_status = {}
     for ttype, _ in raw_type_stats:
         label = TYPE_LABELS.get(ttype, ttype or 'Другое')
-        type_by_status[label] = {}
-        for s in TaskStatus.LABELS:
-            type_by_status[label][s] = Task.query.filter(
-                Task.created_at >= start,
-                Task.task_type == ttype,
-                Task.status == s
-            ).count()
+        type_by_status[label] = {s: _type_by_status_raw[ttype].get(s, 0) for s in TaskStatus.LABELS}
 
-    # Department by status breakdown
+    # 1 запрос: отдел × статус (вместо 8 × 5 = 40 запросов)
+    dept_status_rows = db.session.query(
+        Department.name, Task.status, func.count(Task.id)
+    ).join(Task, Task.department_id == Department.id).filter(
+        Task.created_at >= start
+    ).group_by(Department.name, Task.status).all()
+
+    dept_totals = defaultdict(int)
+    _dept_by_status_raw = defaultdict(lambda: defaultdict(int))
+    for dname, s, cnt in dept_status_rows:
+        dept_totals[dname] += cnt
+        if s in TaskStatus.LABELS:
+            _dept_by_status_raw[dname][s] = cnt
+
+    dept_stats = sorted(dept_totals.items(), key=lambda x: x[1], reverse=True)
     dept_by_status = {}
     for dname, _ in dept_stats[:8]:
-        dept_by_status[dname] = {}
-        for s in TaskStatus.LABELS:
-            dept_by_status[dname][s] = db.session.query(func.count(Task.id)).join(
-                Department, Task.department_id == Department.id
-            ).filter(
-                Task.created_at >= start,
-                Department.name == dname,
-                Task.status == s
-            ).scalar() or 0
+        dept_by_status[dname] = {s: _dept_by_status_raw[dname].get(s, 0) for s in TaskStatus.LABELS}
 
-    # Top requesters by customer_name
+    # top_dept_incoming выводится из уже вычисленного dept_stats — запрос не нужен
+    top_dept_incoming = dept_stats[:10]
+
     top_customers = db.session.query(
         Task.customer_name, func.count(Task.id).label('cnt')
     ).filter(
         Task.created_at >= start, Task.customer_name != None, Task.customer_name != ''
     ).group_by(Task.customer_name).order_by(func.count(Task.id).desc()).limit(10).all()
-
-    # Top departments by incoming tasks
-    top_dept_incoming = db.session.query(
-        Department.name, func.count(Task.id).label('cnt')
-    ).join(Task, Task.department_id == Department.id).filter(
-        Task.created_at >= start
-    ).group_by(Department.name).order_by(func.count(Task.id).desc()).limit(10).all()
 
     top_tasks = db.session.query(User.full_name, func.count(Task.id).label('cnt')).join(
         Task, Task.created_by_id == User.id
@@ -196,34 +198,39 @@ def time_report():
                  .order_by(User.full_name)
                  .all()) if can_see_all else [current_user]
 
-    # Done tasks per user in period
-    # assigned_to_id is cleared on done, so use TimeLog to find tasks user worked on
-    rows = []
-    for u in all_users:
-        worked_task_ids = db.session.query(TimeLog.task_id).filter(
-            TimeLog.user_id == u.id,
-            TimeLog.ended_at.isnot(None),
-        ).distinct().subquery()
-        done_cnt = Task.query.filter(
-            Task.id.in_(worked_task_ids),
-            Task.status == TaskStatus.DONE,
-            Task.completed_at >= start,
-            Task.completed_at <= end,
-            Task.completed_at.isnot(None),
-        ).count()
-        secs = int(db.session.query(
-            func.coalesce(func.sum(
-                func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
-            ), 0)
-        ).filter(
-            TimeLog.user_id == u.id,
-            TimeLog.started_at >= start,
-            TimeLog.started_at <= end,
-            TimeLog.ended_at.isnot(None),
-        ).scalar() or 0)
-        rows.append({'id': u.id, 'name': u.full_name, 'done': done_cnt, 'secs': secs})
+    # 1 запрос: суммарное время по пользователям (вместо N запросов)
+    secs_q = db.session.query(
+        TimeLog.user_id,
+        func.coalesce(func.sum(
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+        ), 0).label('secs')
+    ).filter(
+        TimeLog.started_at >= start,
+        TimeLog.started_at <= end,
+        TimeLog.ended_at.isnot(None),
+    ).group_by(TimeLog.user_id).all()
+    secs_map = {r.user_id: int(r.secs) for r in secs_q}
 
-    # Compute score/rank for all users in period
+    # 1 запрос: закрытые задачи по пользователям (вместо N запросов)
+    done_q = db.session.query(
+        TimeLog.user_id,
+        func.count(func.distinct(Task.id)).label('cnt')
+    ).join(Task, TimeLog.task_id == Task.id).filter(
+        TimeLog.ended_at.isnot(None),
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at <= end,
+        Task.completed_at.isnot(None),
+    ).group_by(TimeLog.user_id).all()
+    done_map = {r.user_id: r.cnt for r in done_q}
+
+    rows = [
+        {'id': u.id, 'name': u.full_name,
+         'done': done_map.get(u.id, 0),
+         'secs': secs_map.get(u.id, 0)}
+        for u in all_users
+    ]
+
     all_scores = compute_staff_scores(start, end, limit=None)
     score_map = {s['id']: {'score': s['score'], 'rank': i + 1} for i, s in enumerate(all_scores)}
     total_ranked = len(all_scores)
@@ -234,7 +241,6 @@ def time_report():
 
     rows.sort(key=lambda r: (-r['done'], -r['secs']))
 
-    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
     today_iso = (datetime.utcnow() + timedelta(hours=tz_hours)).strftime('%Y-%m-%d')
     return render_template('analytics/time.html',
         mode=mode, offset=offset, period_label=period_label,
@@ -258,7 +264,6 @@ def time_user_detail():
 
     start, end, period_label = _period_bounds(mode, offset, tz_hours)
 
-    # Done tasks the user worked on in period (assigned_to_id is cleared on done)
     worked_task_ids = db.session.query(TimeLog.task_id).filter(
         TimeLog.user_id == uid,
         TimeLog.ended_at.isnot(None),
@@ -271,7 +276,6 @@ def time_user_detail():
         Task.completed_at.isnot(None),
     ).order_by(Task.completed_at.desc()).all()
 
-    # Time per task in period
     logs = TimeLog.query.filter(
         TimeLog.user_id == uid,
         TimeLog.started_at >= start,
@@ -284,7 +288,6 @@ def time_user_detail():
 
     total_secs = int(sum(time_by_task.values()))
 
-    # Build task list
     by_type = defaultdict(lambda: {'cnt': 0, 'secs': 0})
     tasks_out = []
     for t in done_tasks:
@@ -320,22 +323,35 @@ def build_burnup(period):
     from flask import current_app
     tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
     start, _ = get_range(period)
+    tz_delta = timedelta(hours=tz_hours)
     now_utc = datetime.utcnow()
-    now_local_date = (now_utc + timedelta(hours=tz_hours)).date()
-    days_data = defaultdict(lambda: {'created': 0, 'done': 0})
-    for t in Task.query.filter(Task.created_at >= start).all():
-        local_date = (t.created_at + timedelta(hours=tz_hours)).date()
-        days_data[local_date]['created'] += 1
-    for t in Task.query.filter(
+    now_local_date = (now_utc + tz_delta).date()
+
+    # 1 запрос: созданные задачи по дням (GROUP BY в SQL вместо Python-цикла по всем задачам)
+    created_date_expr = func.date(Task.created_at + tz_delta)
+    created_rows = db.session.query(
+        created_date_expr.label('d'), func.count(Task.id)
+    ).filter(Task.created_at >= start).group_by(created_date_expr).all()
+
+    # 1 запрос: закрытые задачи по дням
+    done_date_expr = func.date(Task.completed_at + tz_delta)
+    done_rows = db.session.query(
+        done_date_expr.label('d'), func.count(Task.id)
+    ).filter(
         Task.status == TaskStatus.DONE,
         Task.completed_at >= start,
         Task.completed_at.isnot(None)
-    ).all():
-        local_date = (t.completed_at + timedelta(hours=tz_hours)).date()
-        days_data[local_date]['done'] += 1
+    ).group_by(done_date_expr).all()
+
+    days_data = defaultdict(lambda: {'created': 0, 'done': 0})
+    for d, cnt in created_rows:
+        days_data[d]['created'] = cnt
+    for d, cnt in done_rows:
+        days_data[d]['done'] = cnt
+
     dates, c_series, d_series = [], [], []
     c_c = c_d = 0
-    cur = (start + timedelta(hours=tz_hours)).date()
+    cur = (start + tz_delta).date()
     while cur <= now_local_date:
         c_c += days_data[cur]['created']
         c_d += days_data[cur]['done']
@@ -368,7 +384,6 @@ def compute_staff_scores(start, end=None, limit=5):
     if end is None:
         end = now
 
-    # N_i: done tasks user worked on (assigned_to_id cleared on done, use TimeLog)
     user_tasks_q = db.session.query(
         TimeLog.user_id,
         User.full_name,
@@ -381,7 +396,6 @@ def compute_staff_scores(start, end=None, limit=5):
         TimeLog.ended_at.isnot(None),
     ).group_by(TimeLog.user_id, User.full_name).all()
 
-    # Total time per user in period
     user_time_q = db.session.query(
         TimeLog.user_id,
         func.coalesce(func.sum(
@@ -424,37 +438,34 @@ def tv_data():
     def period_data(start, end=None):
         if end is None:
             end = now
-        # Status counts
-        status = {}
-        for s in ['new', 'in_progress', 'paused', 'done']:
-            status[s] = Task.query.filter(
-                Task.created_at >= start,
-                Task.created_at <= end,
-                Task.status == s,
-                Task.is_archived == False,
-            ).count()
+        # 1 запрос вместо 4 отдельных COUNT
+        status_rows = db.session.query(Task.status, func.count(Task.id)).filter(
+            Task.created_at >= start,
+            Task.created_at <= end,
+            Task.is_archived == False,
+        ).group_by(Task.status).all()
+        status = {s: 0 for s in ['new', 'in_progress', 'paused', 'done']}
+        for s, cnt in status_rows:
+            if s in status:
+                status[s] = cnt
 
-        # Types (created in period)
         raw_types = db.session.query(Task.task_type, func.count(Task.id)).filter(
             Task.created_at >= start, Task.created_at <= end
         ).group_by(Task.task_type).order_by(func.count(Task.id).desc()).all()
         types = [{'label': TYPE_LABELS.get(t, t or 'Другое'), 'cnt': c} for t, c in raw_types if c > 0]
 
-        # Total time
         total_secs = int(db.session.query(
             func.coalesce(func.sum(
                 func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
             ), 0)
         ).filter(TimeLog.started_at >= start, TimeLog.started_at <= end, TimeLog.ended_at.isnot(None)).scalar() or 0)
 
-        # Departments
         dept_q = db.session.query(Department.name, func.count(Task.id)).join(
             Task, Task.department_id == Department.id
         ).filter(Task.created_at >= start, Task.created_at <= end
         ).group_by(Department.name).order_by(func.count(Task.id).desc()).limit(8).all()
         depts = [{'name': n, 'cnt': c} for n, c in dept_q]
 
-        # Staff scores
         staff = compute_staff_scores(start, end)
 
         return {
@@ -465,26 +476,28 @@ def tv_data():
             'staff': [{'name': s['name'], 'score': s['score'], 'tasks': s['n'], 'secs': s['secs']} for s in staff],
         }
 
-    # Today
     today_start = datetime(now_local.year, now_local.month, now_local.day, 0, 0, 0) - timedelta(hours=tz_hours)
     today_data = period_data(today_start)
 
-    # Current week
     monday_local = (now_local - timedelta(days=now_local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = monday_local - timedelta(hours=tz_hours)
     week_data = period_data(week_start)
 
-    # All time
-    alltime_new = Task.query.filter(Task.status == 'new', Task.is_archived == False).count()
-    alltime_ip  = Task.query.filter(Task.status.in_(['in_progress', 'paused']), Task.is_archived == False).count()
-    alltime_done = Task.query.filter(Task.status == 'done').count()
+    # 1 запрос вместо 3 отдельных COUNT для alltime-статусов
+    alltime_rows = db.session.query(Task.status, func.count(Task.id)).group_by(Task.status).all()
+    alltime_status_map = defaultdict(int)
+    for s, cnt in alltime_rows:
+        alltime_status_map[s] = cnt
+    alltime_new  = alltime_status_map.get('new', 0)
+    alltime_ip   = alltime_status_map.get('in_progress', 0) + alltime_status_map.get('paused', 0)
+    alltime_done = alltime_status_map.get('done', 0)
+
     alltime_types_q = db.session.query(Task.task_type, func.count(Task.id)).group_by(Task.task_type).order_by(func.count(Task.id).desc()).all()
     alltime_types = [{'label': TYPE_LABELS.get(t, t or 'Другое'), 'cnt': c} for t, c in alltime_types_q if c > 0]
     alltime_depts_q = db.session.query(Department.name, func.count(Task.id)).join(
         Task, Task.department_id == Department.id
     ).group_by(Department.name).order_by(func.count(Task.id).desc()).limit(8).all()
     alltime_depts = [{'name': n, 'cnt': c} for n, c in alltime_depts_q]
-    # alltime staff — use beginning of year as start
     year_start = datetime(now_local.year, 1, 1, 0, 0, 0) - timedelta(hours=tz_hours)
     alltime_staff = compute_staff_scores(year_start)
 
@@ -507,6 +520,7 @@ def tv_data():
 def export_excel():
     import openpyxl
     from openpyxl.styles import Font
+    from sqlalchemy.orm import joinedload
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -517,8 +531,21 @@ def export_excel():
     for cell in ws[1]:
         cell.font = Font(bold=True)
 
-    tasks = Task.query.order_by(Task.created_at.desc()).all()
-    for t in tasks:
+    # Суммарное время на задачу через SQL (вместо Python-цикла по time_logs для каждой задачи)
+    secs_sq = db.session.query(
+        TimeLog.task_id,
+        func.coalesce(func.sum(
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+        ), 0).label('secs')
+    ).filter(TimeLog.ended_at.isnot(None)).group_by(TimeLog.task_id).subquery()
+
+    rows = (db.session.query(Task, func.coalesce(secs_sq.c.secs, 0))
+            .outerjoin(secs_sq, Task.id == secs_sq.c.task_id)
+            .options(joinedload(Task.department))
+            .order_by(Task.created_at.desc())
+            .all())
+
+    for t, total_secs in rows:
         ws.append([
             t.id, t.title,
             TYPE_LABELS.get(t.task_type, t.task_type or ''),
@@ -528,7 +555,7 @@ def export_excel():
             t.customer_name or '', t.customer_phone or '',
             t.deadline.strftime('%d.%m.%Y %H:%M') if t.deadline else '',
             t.created_at.strftime('%d.%m.%Y %H:%M'),
-            round(t.total_seconds / 60),
+            round(total_secs / 60),
         ])
 
     output = io.BytesIO()
@@ -545,12 +572,25 @@ def export_pdf():
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
     from reportlab.lib import colors
+    from sqlalchemy.orm import joinedload
+
+    # Суммарное время на задачу через SQL
+    secs_sq = db.session.query(
+        TimeLog.task_id,
+        func.coalesce(func.sum(
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+        ), 0).label('secs')
+    ).filter(TimeLog.ended_at.isnot(None)).group_by(TimeLog.task_id).subquery()
+
+    rows = (db.session.query(Task, func.coalesce(secs_sq.c.secs, 0))
+            .outerjoin(secs_sq, Task.id == secs_sq.c.task_id)
+            .order_by(Task.created_at.desc())
+            .all())
 
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A4))
     data = [['ID', 'Заголовок', 'Тип', 'Статус', 'Срочность', 'Заказчик', 'Дедлайн', 'Мин']]
-    tasks = Task.query.order_by(Task.created_at.desc()).all()
-    for t in tasks:
+    for t, total_secs in rows:
         data.append([
             str(t.id), t.title[:50],
             TYPE_LABELS.get(t.task_type, t.task_type or '')[:20],
@@ -558,7 +598,7 @@ def export_pdf():
             Urgency.LABELS.get(t.urgency, t.urgency),
             t.customer_name or '',
             t.deadline.strftime('%d.%m.%Y') if t.deadline else '',
-            str(round(t.total_seconds / 60)),
+            str(round(total_secs / 60)),
         ])
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([

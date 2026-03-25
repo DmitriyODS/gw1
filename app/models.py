@@ -145,6 +145,11 @@ class Task(db.Model):
         Index('ix_tasks_archived', 'is_archived'),
         Index('ix_tasks_urgency', 'urgency'),
         Index('ix_tasks_deadline', 'deadline'),
+        Index('ix_tasks_assigned_to', 'assigned_to_id'),
+        Index('ix_tasks_department', 'department_id'),
+        Index('ix_tasks_created_by', 'created_by_id'),
+        Index('ix_tasks_completed_at', 'completed_at'),
+        Index('ix_tasks_created_at', 'created_at'),
     )
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(500), nullable=False)
@@ -255,6 +260,11 @@ class CommentAttachment(db.Model):
 
 class TimeLog(db.Model):
     __tablename__ = 'time_logs'
+    __table_args__ = (
+        Index('ix_timelogs_user_ended', 'user_id', 'ended_at'),
+        Index('ix_timelogs_task', 'task_id'),
+        Index('ix_timelogs_started_at', 'started_at'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

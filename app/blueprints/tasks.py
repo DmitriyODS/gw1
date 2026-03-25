@@ -7,6 +7,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, send_from_directory, send_file, current_app)
 from flask_login import login_required, current_user
 from sqlalchemy import or_, and_
+from sqlalchemy.orm import joinedload
 from extensions import db
 from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, CommentAttachment, User
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES, AUTO_TAGS
@@ -42,6 +43,7 @@ tasks_bp = Blueprint('tasks', __name__)
 
 
 def sorted_tasks(query, sort_new_by_updated=False, include_archived_done=False):
+    query = query.options(joinedload(Task.assigned_to), joinedload(Task.department))
     if include_archived_done:
         tasks = query.filter(
             or_(
@@ -88,13 +90,21 @@ def list_tasks():
 @tasks_bp.route('/tasks/<int:task_id>')
 @login_required
 def detail(task_id):
-    task = Task.query.get_or_404(task_id)
-    logs = TimeLog.query.filter_by(task_id=task_id).order_by(TimeLog.started_at.desc()).all()
-    active_log = current_user.active_timer
-    my_active = TimeLog.query.filter_by(task_id=task_id, user_id=current_user.id, ended_at=None).first()
-    subtasks = Task.query.filter_by(parent_task_id=task_id, is_archived=False).all()
+    task = (Task.query
+            .options(joinedload(Task.assigned_to), joinedload(Task.created_by), joinedload(Task.department))
+            .get_or_404(task_id))
+    logs = (TimeLog.query
+            .options(joinedload(TimeLog.user))
+            .filter_by(task_id=task_id)
+            .order_by(TimeLog.started_at.desc()).all())
+    # 1 запрос вместо 2: активный таймер текущего пользователя (для любой задачи и для этой)
+    my_active_logs = TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()
+    active_log = my_active_logs[0] if my_active_logs else None
+    my_active = next((l for l in my_active_logs if l.task_id == task_id), None)
+    subtasks = (Task.query
+                .options(joinedload(Task.assigned_to))
+                .filter_by(parent_task_id=task_id, is_archived=False).all())
     parent_task = Task.query.get(task.parent_task_id) if task.parent_task_id else None
-    # Users available for delegation (active, non-TV, excluding current assignee)
     users = (User.query
              .filter_by(is_active=True)
              .filter(User.role != 'tv')
@@ -278,7 +288,7 @@ def move_task(task_id):
 @tasks_bp.route('/tasks/<int:task_id>/timer/start', methods=['POST'])
 @login_required
 def timer_start(task_id):
-    task = Task.query.get_or_404(task_id)
+    task = Task.query.options(joinedload(Task.assigned_to)).get_or_404(task_id)
     if task.status == TaskStatus.DONE:
         return jsonify({'error': 'Нельзя запустить таймер для завершённой задачи'}), 400
 
@@ -286,7 +296,7 @@ def timer_start(task_id):
     if task.assigned_to_id and task.assigned_to_id != current_user.id:
         return jsonify({
             'taken': True,
-            'by': task.assigned_to.full_name,
+            'by': task.assigned_to.full_name,  # нет доп. запроса — loaded eagerly
         })
 
     # Already running on this task for this user
@@ -297,13 +307,16 @@ def timer_start(task_id):
         return jsonify({'success': True, 'already_running': True,
                         'started_at': my_active_here.started_at.isoformat()})
 
-    # User has active timer on a different task
-    active = current_user.active_timer
+    # User has active timer on a different task — load task joinedload
+    active = (TimeLog.query
+              .options(joinedload(TimeLog.task))
+              .filter_by(user_id=current_user.id, ended_at=None)
+              .first())
     if active and active.task_id != task_id:
         return jsonify({
             'conflict': True,
             'active_task_id': active.task_id,
-            'active_task_title': active.task.title,
+            'active_task_title': active.task.title,  # нет доп. запроса — loaded eagerly
         })
 
     log = TimeLog(task_id=task_id, user_id=current_user.id)
@@ -319,12 +332,17 @@ def timer_start(task_id):
 @login_required
 def timer_force_start(task_id):
     prev_task_status = None
-    active = current_user.active_timer
+    # Загружаем активный таймер вместе с задачей за 1 запрос (вместо 3)
+    active = (TimeLog.query
+              .options(joinedload(TimeLog.task))
+              .filter_by(user_id=current_user.id, ended_at=None)
+              .first())
     if active:
         active.ended_at = datetime.utcnow()
-        prev_task = active.task
-        # Previous task stays assigned to current user (just paused)
-        if not prev_task.active_timers:
+        prev_task = active.task  # нет доп. запроса — loaded eagerly
+        # Проверяем, остались ли активные таймеры у других пользователей (autoflush учтёт ended_at)
+        remaining = TimeLog.query.filter_by(task_id=prev_task.id, ended_at=None).first()
+        if not remaining:
             prev_task.status = TaskStatus.PAUSED
             prev_task.assigned_to_id = current_user.id
             prev_task_status = TaskStatus.PAUSED
@@ -553,7 +571,9 @@ def delete_comment(task_id, comment_id):
 @tasks_bp.route('/tasks/<int:task_id>/card')
 @login_required
 def task_card(task_id):
-    task = Task.query.get_or_404(task_id)
+    task = (Task.query
+            .options(joinedload(Task.assigned_to), joinedload(Task.department))
+            .get_or_404(task_id))
     my_active_task_ids = {
         log.task_id for log in
         TimeLog.query.filter_by(user_id=current_user.id, ended_at=None).all()

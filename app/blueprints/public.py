@@ -111,7 +111,7 @@ def submit():
         db.session.add(task)
         db.session.flush()
 
-        _save_attachments(request.files.getlist('attachments'), task.id)
+        _save_attachments(request.files.getlist('attachments'), task.id, task=task)
 
         db.session.commit()
         flash('Заявка успешно отправлена! Ожидайте обработки.', 'success')
@@ -133,17 +133,49 @@ def submit():
                            platforms=PLATFORMS, prefill=prefill)
 
 
-def _save_attachments(files, task_id):
+def _save_attachments(files, task_id, task=None):
+    """Загрузить вложения задачи на Яндекс Диск (без локального хранения)."""
     allowed = current_app.config['ALLOWED_EXTENSIONS']
-    upload_dir = current_app.config['UPLOAD_FOLDER']
-    for f in files:
-        if f and f.filename:
-            ext = os.path.splitext(f.filename)[1].lower()
-            if allowed is None or ext in allowed:
-                fname = f'{uuid.uuid4().hex}{ext}'
-                f.save(os.path.join(upload_dir, fname))
+    valid_files = [
+        f for f in files
+        if f and f.filename and (allowed is None or os.path.splitext(f.filename)[1].lower() in allowed)
+    ]
+    if not valid_files:
+        return
+
+    ydisk_token = current_app.config.get('YANDEX_DISK_TOKEN')
+    if ydisk_token and task:
+        try:
+            from services.yandex_disk import upload_task_files
+            tz = current_app.config.get('TZ_OFFSET_HOURS', 3)
+            files_info = [(f, f.filename) for f in valid_files]
+            file_results, folder_url = upload_task_files(
+                token=ydisk_token,
+                task=task,
+                files_info=files_info,
+                tz_offset=tz,
+            )
+            for res in file_results:
                 db.session.add(TaskAttachment(
                     task_id=task_id,
-                    filename=fname,
-                    original_name=f.filename
+                    original_name=res['original_name'],
+                    yadisk_path=res['yadisk_path'],
+                    yadisk_url=res['yadisk_url'],
+                    yadisk_folder_url=folder_url,
                 ))
+            return
+        except Exception as e:
+            current_app.logger.warning(f'YDisk task upload failed: {e}')
+
+    # Fallback: локальное сохранение (если YDisk не настроен или ошибка)
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    for f in valid_files:
+        ext = os.path.splitext(f.filename)[1].lower()
+        fname = f'{uuid.uuid4().hex}{ext}'
+        f.seek(0)
+        f.save(os.path.join(upload_dir, fname))
+        db.session.add(TaskAttachment(
+            task_id=task_id,
+            filename=fname,
+            original_name=f.filename,
+        ))

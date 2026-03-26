@@ -16,6 +16,7 @@ class Config:
     }
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/app/uploads')
     ALLOWED_EXTENSIONS = None  # allow all file types
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
+    MAX_CONTENT_LENGTH = 550 * 1024 * 1024  # 550MB (файлы до 500MB + overhead)
     WTF_CSRF_TIME_LIMIT = None
     TZ_OFFSET_HOURS = int(os.environ.get('TZ_OFFSET_HOURS', 3))
+    YANDEX_DISK_TOKEN = os.environ.get('YANDEX_DISK_TOKEN', 'y0__xDNucmSBBipvz8go7yz8BaVcBPY08qSol9gfTloi8DUYooOag')

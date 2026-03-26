@@ -3,6 +3,18 @@
 
 {% block head %}
 <style>
+  @keyframes yd-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(500%); }
+  }
+  .yd-indeterminate {
+    width: 30%;
+    animation: yd-slide 1.4s cubic-bezier(0.4,0,0.6,1) infinite;
+  }
+  body.upload-active .delete-guard {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
   /* ── Datetime-local input styling ── */
   input[type="datetime-local"],
   input[type="date"],
@@ -295,10 +307,18 @@
           <div class="flex flex-col gap-1" id="existing-files">
             {% for a in existing %}
             <div class="flex items-center gap-2 bg-base-200 rounded px-3 py-1.5" id="att-{{ a.id }}">
+              {% if a.yadisk_url %}
+              <i class="bi bi-cloud-check text-warning text-sm"></i>
+              <a href="{{ a.yadisk_url }}" class="flex-1 text-sm truncate no-underline" target="_blank" rel="noopener">{{ a.original_name }}</a>
+              {% elif a.filename %}
               <i class="bi bi-paperclip text-base-content/50 text-sm"></i>
               <a href="{{ url_for('tasks.uploaded_file', filename=a.filename) }}" class="flex-1 text-sm truncate no-underline" target="_blank">{{ a.original_name }}</a>
+              {% else %}
+              <i class="bi bi-paperclip text-base-content/50 text-sm"></i>
+              <span class="flex-1 text-sm truncate">{{ a.original_name }}</span>
+              {% endif %}
               {% if current_user.can_admin %}
-              <button type="button" class="btn btn-ghost btn-xs text-error"
+              <button type="button" class="btn btn-ghost btn-xs text-error delete-guard"
                       onclick="confirmDelAtt({{ a.id }}, {{ task.id }})">
                 <i class="bi bi-x"></i>
               </button>
@@ -318,12 +338,33 @@
         <div id="file-list" class="flex flex-col gap-1 mt-1"></div>
       </div>
 
+      <!-- Прогресс загрузки -->
+      <div id="form-progress-wrap" class="hidden">
+        <div class="flex items-center justify-between mb-1">
+          <span id="form-status-text" class="text-xs text-base-content/70"></span>
+        </div>
+        <div class="w-full bg-base-300 rounded-full h-1.5 overflow-hidden relative">
+          <div id="form-progress-bar"
+               class="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-300"
+               style="width:0%"></div>
+          <div id="form-progress-indet" class="hidden absolute inset-0">
+            <div class="yd-indeterminate h-full rounded-full bg-warning"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Инлайн-ошибка -->
+      <div id="form-upload-error" class="hidden px-3 py-2 rounded-lg bg-error/10 border border-error/30 flex items-start gap-2 text-xs text-error">
+        <i class="bi bi-exclamation-triangle-fill shrink-0 mt-0.5"></i>
+        <span id="form-upload-error-text" class="flex-1"></span>
+        <button type="button" onclick="this.closest('#form-upload-error').classList.add('hidden')" class="shrink-0 hover:opacity-70"><i class="bi bi-x"></i></button>
+      </div>
+
       <div class="flex gap-2 flex-wrap pt-2">
         <button type="submit" class="btn btn-primary" id="submit-btn">
           <i class="bi bi-save"></i> {% if task %}Сохранить{% else %}Создать задачу{% endif %}
         </button>
         <a href="{{ url_for('tasks.detail', task_id=task.id) if task else url_for('tasks.list_tasks') }}"
-           class="btn btn-ghost">Отмена</a>
+           id="cancel-link" class="btn btn-ghost">Отмена</a>
       </div>
     </form>
   </div>
@@ -339,27 +380,6 @@
     <div class="modal-action">
       <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
       <button class="btn btn-error" id="delAttFormConfirmBtn">Удалить</button>
-    </div>
-  </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
-
-<!-- Yandex Disk suggestion modal (shown when files exceed 100 MB) -->
-<dialog id="yadiskModalForm" class="modal">
-  <div class="modal-box max-w-md">
-    <h3 class="font-bold text-lg flex items-center gap-2">
-      <i class="bi bi-cloud-upload text-warning"></i> Файлы превышают 100 МБ
-    </h3>
-    <p class="py-3 text-sm">Суммарный размер прикреплённых файлов превышает 100 МБ.</p>
-    <p class="text-sm text-base-content/70">Рекомендуем загрузить файлы на <strong>Яндекс Диск</strong> и прикрепить ссылку в описании задачи.</p>
-    <div class="flex flex-col gap-2 mt-3">
-      <a href="https://disk.yandex.ru" target="_blank" rel="noopener"
-         class="btn btn-warning btn-sm gap-2">
-        <i class="bi bi-cloud-arrow-up"></i> Открыть Яндекс Диск
-      </a>
-    </div>
-    <div class="modal-action mt-2">
-      <form method="dialog"><button class="btn btn-ghost btn-sm">Закрыть</button></form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -607,42 +627,142 @@ document.getElementById('delAttFormConfirmBtn')?.addEventListener('click', () =>
   });
 });
 
-// ── File size validation (100 MB limit) ──
-const MAX_ATTACH_BYTES = 100 * 1024 * 1024;
+// ── XHR submit с прогрессом ──
+const MAX_ATTACH_BYTES = 500 * 1024 * 1024;
+const theForm         = document.querySelector('form');
+const formSubmitBtn   = document.getElementById('submit-btn');
+const formProgress    = document.getElementById('form-progress-wrap');
+const formBar         = document.getElementById('form-progress-bar');
+const formIndet       = document.getElementById('form-progress-indet');
+const formStatus      = document.getElementById('form-status-text');
+const formErrBox      = document.getElementById('form-upload-error');
+const formErrText     = document.getElementById('form-upload-error-text');
+let formXHR = null;
 
-document.querySelector('form').addEventListener('submit', function(e) {
+function formShowError(msg) {
+  formErrText.textContent = msg;
+  formErrBox.classList.remove('hidden');
+}
+function formHideError() { formErrBox.classList.add('hidden'); }
+
+function formXhrMsg(status) {
+  if (!status) return 'Нет соединения. Проверьте интернет и попробуйте ещё раз.';
+  if (status === 413) return 'Файлы слишком большие для сервера.';
+  if (status >= 500) return 'Ошибка сервера. Попробуйте через несколько минут.';
+  return `Не удалось загрузить (${status}). Попробуйте ещё раз.`;
+}
+
+function formSetPhase1(pct) {
+  formBar.classList.remove('hidden');
+  formIndet.classList.add('hidden');
+  formBar.style.width = pct + '%';
+  formStatus.textContent = `Загрузка: ${pct}%`;
+}
+function formSetPhase2() {
+  formBar.classList.add('hidden');
+  formIndet.classList.remove('hidden');
+  formStatus.textContent = 'Сохранение на Я.Диск...';
+}
+function formResetProgress() {
+  formBar.classList.remove('hidden');
+  formIndet.classList.add('hidden');
+  formBar.style.width = '0%';
+  formStatus.textContent = '';
+}
+
+function formSetUploading(uploading) {
+  formSubmitBtn.disabled = uploading;
+  formProgress.classList.toggle('hidden', !uploading);
+  document.body.classList.toggle('upload-active', uploading);
+  if (uploading) formHideError();
+}
+
+theForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  // Валидация типа задачи
+  const mode = document.getElementById('create-mode-val')?.value || 'task';
+  if (mode !== 'publication') {
+    const typeVal = document.getElementById('task_type_hidden')?.value || '';
+    if (!typeVal) {
+      const trigger = document.querySelector('#type_wrap .ss-trigger');
+      if (trigger) {
+        trigger.classList.add('input-error');
+        trigger.scrollIntoView({behavior: 'smooth', block: 'center'});
+        setTimeout(() => trigger.classList.remove('input-error'), 3000);
+      }
+      let err = document.getElementById('type-required-error');
+      if (!err) {
+        err = document.createElement('div');
+        err.id = 'type-required-error';
+        err.className = 'text-error text-xs mt-1';
+        err.textContent = 'Выберите тип задачи';
+        document.getElementById('type_wrap').after(err);
+      }
+      setTimeout(() => err?.remove(), 3000);
+      return;
+    }
+  }
+
+  // Валидация размера
   const totalSize = [...dt.files].reduce((s, f) => s + f.size, 0);
   if (totalSize > MAX_ATTACH_BYTES) {
-    e.preventDefault();
-    document.getElementById('yadiskModalForm').showModal();
+    formShowError('Суммарный размер файлов не должен превышать 500 МБ.');
     return;
   }
-});
 
-// ── Task type required validation ──
-document.querySelector('form').addEventListener('submit', function(e) {
-  const mode = document.getElementById('create-mode-val')?.value || 'task';
-  if (mode === 'publication') return; // no type field in pub mode
-  const typeVal = document.getElementById('task_type_hidden')?.value || '';
-  if (!typeVal) {
-    e.preventDefault();
-    const trigger = document.querySelector('#type_wrap .ss-trigger');
-    if (trigger) {
-      trigger.classList.add('input-error');
-      trigger.scrollIntoView({behavior: 'smooth', block: 'center'});
-      setTimeout(() => trigger.classList.remove('input-error'), 3000);
+  // Собираем FormData
+  const fd = new FormData(theForm);
+  fd.delete('attachments');
+  [...dt.files].forEach(f => fd.append('attachments', f));
+
+  const xhr = new XMLHttpRequest();
+  formXHR = xhr;
+  formSetUploading(true);
+  formResetProgress();
+  formSetPhase1(0);
+
+  // Фаза 1: браузер → сервер
+  xhr.upload.addEventListener('progress', ev => {
+    if (ev.lengthComputable) formSetPhase1(Math.round(ev.loaded / ev.total * 100));
+  });
+  // Фаза 2: сервер → Я.Диск
+  xhr.upload.addEventListener('load', () => {
+    if (dt.files.length > 0) formSetPhase2();
+  });
+
+  xhr.addEventListener('load', () => {
+    formXHR = null;
+    formSetUploading(false);
+    formResetProgress();
+    if (xhr.status >= 200 && xhr.status < 400) {
+      try {
+        const d = JSON.parse(xhr.responseText);
+        if (d.error) { formShowError(d.error); return; }
+        if (d.redirect) { window.location.href = d.redirect; return; }
+      } catch {}
+      window.location.reload();
+    } else {
+      formShowError(formXhrMsg(xhr.status));
     }
-    // Show inline error
-    let err = document.getElementById('type-required-error');
-    if (!err) {
-      err = document.createElement('div');
-      err.id = 'type-required-error';
-      err.className = 'text-error text-xs mt-1';
-      err.textContent = 'Выберите тип задачи';
-      document.getElementById('type_wrap').after(err);
-    }
-    setTimeout(() => err?.remove(), 3000);
-  }
+  });
+
+  xhr.addEventListener('error', () => {
+    formXHR = null;
+    formSetUploading(false);
+    formResetProgress();
+    formShowError(formXhrMsg(0));
+  });
+
+  xhr.addEventListener('abort', () => {
+    formXHR = null;
+    formSetUploading(false);
+    formResetProgress();
+  });
+
+  xhr.open('POST', theForm.action || window.location.href);
+  xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+  xhr.send(fd);
 });
 
 // Remove error state when type is selected

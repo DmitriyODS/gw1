@@ -193,7 +193,7 @@ def _create_publication(form, files, created_by_id):
     db.session.add(sub1)
     db.session.add(sub2)
     db.session.flush()
-    _save_attachments(files, parent.id)
+    _save_attachments(files, parent.id, task=parent)
     db.session.commit()
     flash('Создана публикация: родительская задача + 2 подзадачи', 'success')
     return parent.id
@@ -202,6 +202,7 @@ def _create_publication(form, files, created_by_id):
 @tasks_bp.route('/tasks/create', methods=['GET', 'POST'])
 @login_required
 def create():
+    is_xhr = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
         if request.form.get('create_mode') == 'publication':
@@ -210,17 +211,24 @@ def create():
                 request.files.getlist('attachments'),
                 current_user.id,
             )
-            return redirect(url_for('tasks.detail', task_id=task_id))
+            url = url_for('tasks.detail', task_id=task_id)
+            return jsonify({'ok': True, 'redirect': url}) if is_xhr else redirect(url)
         if not request.form.get('task_type'):
-            flash('Выберите тип задачи — это обязательное поле', 'warning')
+            msg = 'Выберите тип задачи — это обязательное поле'
+            if is_xhr:
+                return jsonify({'error': msg}), 400
+            flash(msg, 'warning')
             return redirect(url_for('tasks.create', **request.args))
         task = _task_from_form(request.form, created_by_id=current_user.id)
         db.session.add(task)
         db.session.flush()
-        _save_attachments(request.files.getlist('attachments'), task.id)
+        _save_attachments(request.files.getlist('attachments'), task.id, task=task)
         db.session.commit()
+        url = url_for('tasks.detail', task_id=task.id, new=1)
+        if is_xhr:
+            return jsonify({'ok': True, 'redirect': url})
         flash('Задача создана', 'success')
-        return redirect(url_for('tasks.detail', task_id=task.id, new=1))
+        return redirect(url)
     parent_task = None
     parent_id = request.args.get('parent_id')
     if parent_id:
@@ -234,18 +242,25 @@ def create():
 @tasks_bp.route('/tasks/<int:task_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(task_id):
+    is_xhr = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     task = Task.query.get_or_404(task_id)
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
         if not request.form.get('task_type'):
-            flash('Выберите тип задачи — это обязательное поле', 'warning')
+            msg = 'Выберите тип задачи — это обязательное поле'
+            if is_xhr:
+                return jsonify({'error': msg}), 400
+            flash(msg, 'warning')
             return redirect(url_for('tasks.edit', task_id=task_id))
         _task_from_form(request.form, task=task)
-        _save_attachments(request.files.getlist('attachments'), task.id)
+        _save_attachments(request.files.getlist('attachments'), task.id, task=task)
         touch(task)
         db.session.commit()
+        url = url_for('tasks.detail', task_id=task_id)
+        if is_xhr:
+            return jsonify({'ok': True, 'redirect': url})
         flash('Задача обновлена', 'success')
-        return redirect(url_for('tasks.detail', task_id=task_id))
+        return redirect(url)
     return render_template('tasks/form.html', task=task, departments=departments,
                            Urgency=Urgency, TaskTag=TaskTag, task_types=TASK_TYPES,
                            pub_subtypes=PUB_SUBTYPES, platforms=PLATFORMS)
@@ -558,9 +573,20 @@ def download_zip(task_id):
 def delete_attachment(task_id, att_id):
     from models import TaskAttachment
     att = TaskAttachment.query.filter_by(id=att_id, task_id=task_id).first_or_404()
-    path = os.path.join(current_app.config['UPLOAD_FOLDER'], att.filename)
-    if os.path.exists(path):
-        os.remove(path)
+    # Удаляем локальный файл (если есть)
+    if att.filename:
+        path = os.path.join(current_app.config['UPLOAD_FOLDER'], att.filename)
+        if os.path.exists(path):
+            os.remove(path)
+    # Удаляем с Я.Диска (если есть)
+    if att.yadisk_path:
+        token = current_app.config.get('YANDEX_DISK_TOKEN')
+        if token:
+            try:
+                from services.yandex_disk import delete_file
+                delete_file(token, att.yadisk_path)
+            except Exception as e:
+                current_app.logger.warning(f'YDisk delete failed: {e}')
     db.session.delete(att)
     db.session.commit()
     return jsonify({'success': True})
@@ -569,38 +595,80 @@ def delete_attachment(task_id, att_id):
 @tasks_bp.route('/tasks/<int:task_id>/comments', methods=['POST'])
 @login_required
 def add_comment(task_id):
+    is_xhr = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    def _error(msg, status=400):
+        if is_xhr:
+            return jsonify({'error': msg}), status
+        flash(msg, 'warning')
+        return redirect(url_for('tasks.detail', task_id=task_id))
+
+    def _ok():
+        if is_xhr:
+            return jsonify({'ok': True})
+        return redirect(url_for('tasks.detail', task_id=task_id))
+
     task = Task.query.get_or_404(task_id)
     text = request.form.get('text', '').strip()
     files = [f for f in request.files.getlist('files') if f and f.filename]
 
     if not text and not files:
-        flash('Комментарий не может быть пустым', 'warning')
-        return redirect(url_for('tasks.detail', task_id=task_id))
-
-    # Check total size <= 100 MB
-    MAX_SIZE = 100 * 1024 * 1024
-    total_size = 0
-    for f in files:
-        f.seek(0, 2)
-        total_size += f.tell()
-        f.seek(0)
-    if total_size > MAX_SIZE:
-        flash('Суммарный размер файлов не должен превышать 100 МБ', 'warning')
-        return redirect(url_for('tasks.detail', task_id=task_id))
+        return _error('Комментарий не может быть пустым')
 
     comment = TaskComment(task_id=task_id, user_id=current_user.id, text=text or None)
     db.session.add(comment)
     db.session.flush()
 
-    for f in files:
-        ext = os.path.splitext(f.filename)[1].lower()
-        fname = f'{uuid.uuid4().hex}{ext}'
-        f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
-        att = CommentAttachment(comment_id=comment.id, filename=fname, original_name=f.filename)
-        db.session.add(att)
+    if files:
+        ydisk_token = current_app.config.get('YANDEX_DISK_TOKEN')
+        if ydisk_token:
+            try:
+                from services.yandex_disk import upload_comment_files
+                tz = current_app.config.get('TZ_OFFSET_HOURS', 3)
+                files_info = [(f, f.filename) for f in files]
+                file_results, folder_url = upload_comment_files(
+                    token=ydisk_token,
+                    task=task,
+                    user=current_user,
+                    files_info=files_info,
+                    tz_offset=tz,
+                )
+                for res in file_results:
+                    att = CommentAttachment(
+                        comment_id=comment.id,
+                        original_name=res['original_name'],
+                        yadisk_url=res['yadisk_url'],
+                        yadisk_path=res['yadisk_path'],
+                        yadisk_folder_url=folder_url,
+                    )
+                    db.session.add(att)
+            except Exception as e:
+                current_app.logger.error(f'YDisk comment upload failed: {e}')
+                # Fallback: сохранить локально если YDisk недоступен
+                for f in files:
+                    ext = os.path.splitext(f.filename)[1].lower()
+                    fname = f'{uuid.uuid4().hex}{ext}'
+                    f.seek(0)
+                    f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
+                    db.session.add(CommentAttachment(
+                        comment_id=comment.id,
+                        filename=fname,
+                        original_name=f.filename,
+                    ))
+        else:
+            # YDisk не настроен — сохраняем локально
+            for f in files:
+                ext = os.path.splitext(f.filename)[1].lower()
+                fname = f'{uuid.uuid4().hex}{ext}'
+                f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
+                db.session.add(CommentAttachment(
+                    comment_id=comment.id,
+                    filename=fname,
+                    original_name=f.filename,
+                ))
 
     db.session.commit()
-    return redirect(url_for('tasks.detail', task_id=task_id))
+    return _ok()
 
 
 @tasks_bp.route('/tasks/<int:task_id>/comments/<int:comment_id>/delete', methods=['POST'])
@@ -609,16 +677,31 @@ def delete_comment(task_id, comment_id):
     comment = TaskComment.query.filter_by(id=comment_id, task_id=task_id).first_or_404()
     if comment.user_id != current_user.id and not current_user.can_admin:
         return jsonify({'error': 'Нет прав'}), 403
-    # Delete legacy single file
+
+    atts = comment.attachments.all()
+
+    # Удаляем с Я.Диска (папки комментариев)
+    ydisk_paths = [a.yadisk_path for a in atts if a.yadisk_path]
+    if ydisk_paths:
+        token = current_app.config.get('YANDEX_DISK_TOKEN')
+        if token:
+            try:
+                from services.yandex_disk import delete_comment_files
+                delete_comment_files(token, ydisk_paths)
+            except Exception as e:
+                current_app.logger.warning(f'YDisk comment delete failed: {e}')
+
+    # Удаляем локальные файлы
     if comment.filename:
         path = os.path.join(current_app.config['UPLOAD_FOLDER'], comment.filename)
         if os.path.exists(path):
             os.remove(path)
-    # Delete new multi-file attachments
-    for att in comment.attachments.all():
-        path = os.path.join(current_app.config['UPLOAD_FOLDER'], att.filename)
-        if os.path.exists(path):
-            os.remove(path)
+    for att in atts:
+        if att.filename:
+            path = os.path.join(current_app.config['UPLOAD_FOLDER'], att.filename)
+            if os.path.exists(path):
+                os.remove(path)
+
     db.session.delete(comment)
     db.session.commit()
     return jsonify({'success': True})

@@ -1,109 +1,231 @@
 """
-Yandex Disk integration stub.
+Yandex Disk integration via REST API (без сторонних зависимостей).
 
-Планируемый функционал:
-- Подключение к Яндекс Диску через OAuth-токен
-- Создание папок под задачи (структура: /GrooveWork/tasks/<task_id>/)
-- Загрузка файлов задачи в соответствующую папку
-- Получение публичной ссылки на папку
+Структура папок на диске:
+  Текущая работа
+    └── ГГГГ.ММ.ДД
+          └── <название задачи>
+                ├── <ФИО сотрудника>   ← комментарии
+                │     └── чч-мм-сс
+                │           └── files...
+                └── Вложения задачи    ← прикреплённые к задаче файлы
+                      └── files...
 
-Для активации потребуется:
-- Зарегистрировать приложение на https://oauth.yandex.ru
-- Добавить переменную окружения YANDEX_DISK_TOKEN в .env
-- Установить зависимость: pip install yadisk
+Файлы не хранятся локально — загружаются напрямую на Яндекс Диск.
 """
 
-# import os
-# import yadisk  # pip install yadisk
+import json
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timedelta
+
+DISK_API = 'https://cloud-api.yandex.net/v1/disk'
+ROOT_FOLDER = 'Текущая работа'
+TASK_ATTACH_FOLDER = 'Вложения задачи'
 
 
-TASK_FOLDER_PREFIX = '/GrooveWork/tasks'
+# ── Базовые запросы ──────────────────────────────────────────────────────────
+
+def _request(token, method, endpoint, params=None, data=None, raw_url=None):
+    url = raw_url or (DISK_API + endpoint)
+    if params:
+        url = url + '?' + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    req = urllib.request.Request(url, method=method)
+    req.add_header('Authorization', f'OAuth {token}')
+    req.add_header('Accept', 'application/json')
+    if data is not None:
+        body = json.dumps(data).encode('utf-8')
+        req.add_header('Content-Type', 'application/json')
+        req.data = body
+    with urllib.request.urlopen(req) as resp:
+        content = resp.read()
+        return json.loads(content.decode('utf-8')) if content else {}
 
 
-class YandexDiskService:
-    """Service for uploading task files to Yandex Disk."""
-
-    def __init__(self, token: str | None = None):
-        """
-        Initialize service with OAuth token.
-
-        Args:
-            token: Yandex Disk OAuth token. If None, read from env YANDEX_DISK_TOKEN.
-        """
-        # self.token = token or os.environ.get('YANDEX_DISK_TOKEN')
-        # self.client = yadisk.YaDisk(token=self.token) if self.token else None
-        self.token = token
-        self.client = None  # placeholder
-
-    def is_configured(self) -> bool:
-        """Returns True if the service has a valid token."""
-        return bool(self.token)
-
-    def ensure_task_folder(self, task_id: int) -> str:
-        """
-        Create folder for task if it doesn't exist.
-
-        Args:
-            task_id: Task ID used as folder name.
-
-        Returns:
-            Path to the task folder on Yandex Disk.
-        """
-        folder_path = f'{TASK_FOLDER_PREFIX}/{task_id}'
-        # if self.client:
-        #     if not self.client.exists(TASK_FOLDER_PREFIX):
-        #         self.client.mkdir(TASK_FOLDER_PREFIX)
-        #     if not self.client.exists(folder_path):
-        #         self.client.mkdir(folder_path)
-        raise NotImplementedError('Yandex Disk integration is not yet configured.')
-        return folder_path
-
-    def upload_file(self, local_path: str, task_id: int, filename: str) -> str:
-        """
-        Upload a file to the task folder on Yandex Disk.
-
-        Args:
-            local_path: Local file path to upload.
-            task_id: Task ID to determine target folder.
-            filename: Original filename to use on Yandex Disk.
-
-        Returns:
-            Public URL of the uploaded file.
-        """
-        folder_path = self.ensure_task_folder(task_id)
-        remote_path = f'{folder_path}/{filename}'
-        # self.client.upload(local_path, remote_path, overwrite=True)
-        # self.client.publish(remote_path)
-        # meta = self.client.get_meta(remote_path)
-        # return meta.public_url
-        raise NotImplementedError('Yandex Disk integration is not yet configured.')
-
-    def upload_task_attachments(self, task_id: int, upload_folder: str) -> str:
-        """
-        Upload all attachments of a task to Yandex Disk.
-
-        Args:
-            task_id: Task ID.
-            upload_folder: Local folder where files are stored.
-
-        Returns:
-            Public URL to the task folder on Yandex Disk.
-        """
-        from models import TaskAttachment
-        folder_path = self.ensure_task_folder(task_id)
-        attachments = TaskAttachment.query.filter_by(task_id=task_id).all()
-        for att in attachments:
-            import os
-            local_path = os.path.join(upload_folder, att.filename)
-            if os.path.exists(local_path):
-                self.upload_file(local_path, task_id, att.original_name or att.filename)
-        # Publish folder and return public URL
-        # self.client.publish(folder_path)
-        # meta = self.client.get_meta(folder_path)
-        # return meta.public_url
-        raise NotImplementedError('Yandex Disk integration is not yet configured.')
+def _folder_exists(token, path):
+    try:
+        _request(token, 'GET', '/resources', params={'path': path})
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise
 
 
-# Singleton instance — initialize with token when ready
-# from flask import current_app
-# yadisk_service = YandexDiskService(token=current_app.config.get('YANDEX_DISK_TOKEN'))
+def _ensure_folder(token, path):
+    if not _folder_exists(token, path):
+        try:
+            _request(token, 'PUT', '/resources', params={'path': path})
+        except urllib.error.HTTPError as e:
+            if e.code != 409:  # 409 = уже существует (race condition)
+                raise
+
+
+def _sanitize(name):
+    """Убрать символы, недопустимые в именах папок/файлов YDisk."""
+    sanitized = re.sub(r'[\\:*?"<>|/]', '_', name).strip()
+    return sanitized[:100] or 'unnamed'
+
+
+# ── Загрузка одного файла ─────────────────────────────────────────────────────
+
+def _upload_fileobj(token, fileobj, remote_path):
+    """Загрузить файловый объект (Werkzeug FileStorage или любой file-like) на YDisk."""
+    resp = _request(token, 'GET', '/resources/upload', params={
+        'path': remote_path,
+        'overwrite': 'true',
+    })
+    upload_url = resp['href']
+    fileobj.seek(0)
+    data = fileobj.read()
+    req = urllib.request.Request(upload_url, data=data, method='PUT')
+    req.add_header('Content-Type', 'application/octet-stream')
+    with urllib.request.urlopen(req):
+        pass  # 201 Created или 200 OK
+
+
+def _publish_file(token, path):
+    """Опубликовать файл/папку и вернуть публичную ссылку."""
+    _request(token, 'PUT', '/resources/publish', params={'path': path})
+    resp = _request(token, 'GET', '/resources', params={
+        'path': path,
+        'fields': 'public_url',
+    })
+    return resp.get('public_url')
+
+
+# ── Публичный API ─────────────────────────────────────────────────────────────
+
+def delete_resource(token, path):
+    """Удалить файл или папку с Яндекс Диска безвозвратно. Молча игнорирует 404."""
+    try:
+        _request(token, 'DELETE', '/resources', params={
+            'path': path,
+            'permanently': 'true',
+        })
+    except urllib.error.HTTPError as e:
+        if e.code not in (404, 204):
+            raise
+
+
+def delete_comment_files(token, yadisk_paths):
+    """
+    Удалить файлы комментария с Я.Диска.
+    Все файлы одного комментария лежат в одной папке — удаляем её целиком.
+    yadisk_paths: список путей вида 'Текущая работа/.../чч-мм-сс/file.ext'
+    """
+    if not yadisk_paths:
+        return
+    # Уникальные папки (убираем имя файла)
+    folders = {'/'.join(p.split('/')[:-1]) for p in yadisk_paths if '/' in p}
+    for folder in folders:
+        if folder:
+            delete_resource(token, folder)
+
+
+def delete_file(token, yadisk_path):
+    """Удалить один файл с Я.Диска."""
+    if yadisk_path:
+        delete_resource(token, yadisk_path)
+
+
+def upload_comment_files(token, task, user, files_info, tz_offset=3):
+    """
+    Загрузить файлы комментария на Яндекс Диск.
+
+    Структура:
+      Текущая работа / ГГГГ.ММ.ДД / Название задачи / ФИО / чч-мм-сс / файлы
+
+    Args:
+        token: OAuth-токен
+        task: объект Task
+        user: объект User
+        files_info: список (fileobj, original_name) — fileobj это Werkzeug FileStorage
+        tz_offset: смещение от UTC (МСК = 3)
+
+    Returns:
+        file_results: список {'original_name': ..., 'yadisk_url': ..., 'yadisk_path': ...}
+        folder_url: публичная ссылка на папку с файлами этого комментария
+    """
+    now_local = datetime.utcnow() + timedelta(hours=tz_offset)
+    date_str = now_local.strftime('%Y.%m.%d')
+    time_str = now_local.strftime('%H-%M-%S')
+
+    task_folder_name = _sanitize(task.title)
+    user_folder_name = _sanitize(user.full_name)
+
+    root_path    = ROOT_FOLDER
+    date_path    = f'{root_path}/{date_str}'
+    task_path    = f'{date_path}/{task_folder_name}'
+    user_path    = f'{task_path}/{user_folder_name}'
+    comment_path = f'{user_path}/{time_str}'
+
+    _ensure_folder(token, root_path)
+    _ensure_folder(token, date_path)
+    _ensure_folder(token, task_path)
+    _ensure_folder(token, user_path)
+    _ensure_folder(token, comment_path)
+
+    file_results = []
+    for fileobj, original_name in files_info:
+        remote_path = f'{comment_path}/{_sanitize(original_name)}'
+        _upload_fileobj(token, fileobj, remote_path)
+        file_url = _publish_file(token, remote_path)
+        file_results.append({
+            'original_name': original_name,
+            'yadisk_url': file_url,
+            'yadisk_path': remote_path,
+        })
+
+    folder_url = _publish_file(token, comment_path)
+    return file_results, folder_url
+
+
+def upload_task_files(token, task, files_info, tz_offset=3):
+    """
+    Загрузить вложения задачи на Яндекс Диск.
+
+    Структура:
+      Текущая работа / ГГГГ.ММ.ДД / Название задачи / Вложения задачи / файлы
+
+    Args:
+        token: OAuth-токен
+        task: объект Task
+        files_info: список (fileobj, original_name)
+        tz_offset: смещение от UTC
+
+    Returns:
+        file_results: список {'original_name': ..., 'yadisk_url': ..., 'yadisk_path': ...}
+        folder_url: публичная ссылка на папку вложений
+    """
+    now_local = datetime.utcnow() + timedelta(hours=tz_offset)
+    date_str = now_local.strftime('%Y.%m.%d')
+
+    task_folder_name = _sanitize(task.title)
+    attach_folder_name = _sanitize(TASK_ATTACH_FOLDER)
+
+    root_path   = ROOT_FOLDER
+    date_path   = f'{root_path}/{date_str}'
+    task_path   = f'{date_path}/{task_folder_name}'
+    attach_path = f'{task_path}/{attach_folder_name}'
+
+    _ensure_folder(token, root_path)
+    _ensure_folder(token, date_path)
+    _ensure_folder(token, task_path)
+    _ensure_folder(token, attach_path)
+
+    file_results = []
+    for fileobj, original_name in files_info:
+        remote_path = f'{attach_path}/{_sanitize(original_name)}'
+        _upload_fileobj(token, fileobj, remote_path)
+        file_url = _publish_file(token, remote_path)
+        file_results.append({
+            'original_name': original_name,
+            'yadisk_url': file_url,
+            'yadisk_path': remote_path,
+        })
+
+    folder_url = _publish_file(token, attach_path)
+    return file_results, folder_url

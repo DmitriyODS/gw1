@@ -248,6 +248,9 @@ class TaskAttachment(db.Model):
     filename = db.Column(db.String(255))
     original_name = db.Column(db.String(255))
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    yadisk_path = db.Column(db.String(1000), nullable=True)        # путь к файлу на Яндекс Диске
+    yadisk_url = db.Column(db.String(1000), nullable=True)         # публичная ссылка на файл
+    yadisk_folder_url = db.Column(db.String(1000), nullable=True)  # публичная ссылка на папку
 
 
 class TaskComment(db.Model):
@@ -271,6 +274,9 @@ class CommentAttachment(db.Model):
     filename = db.Column(db.String(255))
     original_name = db.Column(db.String(255))
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    yadisk_path = db.Column(db.String(1000), nullable=True)        # путь к файлу на Яндекс Диске
+    yadisk_url = db.Column(db.String(1000), nullable=True)         # публичная ссылка на файл
+    yadisk_folder_url = db.Column(db.String(1000), nullable=True)  # публичная ссылка на папку
 
 
 class TimeLog(db.Model):

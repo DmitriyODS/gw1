@@ -133,6 +133,12 @@ def create_app():
             ('task_comments', 'original_name','VARCHAR(255)'),
             ('rhythms',       'trigger_time', 'VARCHAR(5)'),
             ('departments',   'head',         "VARCHAR(200) NOT NULL DEFAULT ''"),
+            ('comment_attachments', 'yadisk_path',       'VARCHAR(1000)'),
+            ('comment_attachments', 'yadisk_url',        'VARCHAR(1000)'),
+            ('comment_attachments', 'yadisk_folder_url', 'VARCHAR(1000)'),
+            ('task_attachments',    'yadisk_path',       'VARCHAR(1000)'),
+            ('task_attachments',    'yadisk_url',        'VARCHAR(1000)'),
+            ('task_attachments',    'yadisk_folder_url', 'VARCHAR(1000)'),
         ]
         for table, col, col_type in cols:
             try:

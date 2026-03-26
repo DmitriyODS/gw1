@@ -3,6 +3,19 @@
 
 {% block head %}
 <style>
+  @keyframes yd-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(500%); }
+  }
+  .yd-indeterminate {
+    width: 30%;
+    animation: yd-slide 1.4s cubic-bezier(0.4,0,0.6,1) infinite;
+  }
+  /* Блокировка кнопок удаления во время загрузки */
+  body.upload-active .delete-guard {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
   .task-tag-badge {
     display: inline-block; font-size: 0.7rem; font-weight: 600;
     padding: 2px 8px; border-radius: 20px; white-space: nowrap;
@@ -243,21 +256,40 @@
     <!-- Attachments -->
     {% set atts = task.attachments.all() %}
     {% if atts %}
+    {% set has_local = atts | selectattr('filename') | selectattr('yadisk_url', 'equalto', none) | list | length > 0 %}
+    {% set folder_url = atts | selectattr('yadisk_folder_url') | map(attribute='yadisk_folder_url') | first | default(none) %}
     <div class="card bg-base-100 shadow-sm mb-4">
       <div class="flex justify-between items-center px-4 py-2 border-b border-base-300">
         <span class="font-semibold text-sm"><i class="bi bi-paperclip"></i> Вложения ({{ atts|length }})</span>
-        <a href="{{ url_for('tasks.download_zip', task_id=task.id) }}" class="btn btn-outline btn-sm btn-xs py-0">
-          <i class="bi bi-file-zip"></i> ZIP
-        </a>
+        <div class="flex gap-1">
+          {% if folder_url %}
+          <a href="{{ folder_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm btn-xs py-0 text-warning border-warning">
+            <i class="bi bi-cloud-fill"></i> Я.Диск
+          </a>
+          {% endif %}
+          {% if has_local %}
+          <a href="{{ url_for('tasks.download_zip', task_id=task.id) }}" class="btn btn-outline btn-sm btn-xs py-0">
+            <i class="bi bi-file-zip"></i> ZIP
+          </a>
+          {% endif %}
+        </div>
       </div>
       <ul class="divide-y divide-base-300">
         {% for att in atts %}
         <li class="flex items-center gap-2 px-4 py-2" id="att-{{ att.id }}">
+          {% if att.yadisk_url %}
+          <a href="{{ att.yadisk_url }}" target="_blank" rel="noopener" class="flex-1 text-sm truncate flex items-center gap-1">
+            <i class="bi bi-cloud-check text-warning"></i> {{ att.original_name }}
+          </a>
+          {% elif att.filename %}
           <a href="{{ url_for('tasks.uploaded_file', filename=att.filename) }}" target="_blank" class="flex-1 text-sm truncate">
             {{ att.original_name }}
           </a>
+          {% else %}
+          <span class="flex-1 text-sm truncate text-base-content/40">{{ att.original_name }}</span>
+          {% endif %}
           {% if current_user.can_admin %}
-          <button type="button" class="btn btn-ghost btn-xs text-error"
+          <button type="button" class="btn btn-ghost btn-xs text-error delete-guard"
                   onclick="confirmDeleteAtt({{ att.id }}, {{ task.id }})">
             <i class="bi bi-x"></i>
           </button>
@@ -393,13 +425,27 @@
             {% if comment.text %}<p class="text-sm whitespace-pre-wrap">{{ comment.text }}</p>{% endif %}
             {% set catts = comment.attachments.all() %}
             {% if catts %}
+            {% set c_folder_url = catts | selectattr('yadisk_folder_url') | map(attribute='yadisk_folder_url') | first | default(none) %}
             <div class="flex flex-wrap gap-2 mt-1">
               {% for att in catts %}
+              {% if att.yadisk_url %}
+              <a href="{{ att.yadisk_url }}" target="_blank" rel="noopener"
+                 class="inline-flex items-center gap-1 text-xs text-primary hover:underline bg-base-200 rounded px-2 py-0.5">
+                <i class="bi bi-cloud-check"></i> {{ att.original_name }}
+              </a>
+              {% elif att.filename %}
               <a href="{{ url_for('tasks.uploaded_file', filename=att.filename) }}" target="_blank"
                  class="inline-flex items-center gap-1 text-xs text-primary hover:underline bg-base-200 rounded px-2 py-0.5">
                 <i class="bi bi-paperclip"></i> {{ att.original_name }}
               </a>
+              {% endif %}
               {% endfor %}
+              {% if c_folder_url %}
+              <a href="{{ c_folder_url }}" target="_blank" rel="noopener"
+                 class="inline-flex items-center gap-1 text-xs text-warning hover:underline bg-warning/10 rounded px-2 py-0.5">
+                <i class="bi bi-folder2-open"></i> Папка на Яндекс Диске
+              </a>
+              {% endif %}
             </div>
             {% elif comment.filename %}
             <a href="{{ url_for('tasks.uploaded_file', filename=comment.filename) }}" target="_blank"
@@ -409,7 +455,7 @@
             {% endif %}
           </div>
           {% if comment.user_id == current_user.id or current_user.can_admin %}
-          <button type="button" class="btn btn-ghost btn-xs text-error self-start"
+          <button type="button" class="btn btn-ghost btn-xs text-error self-start delete-guard"
                   onclick="confirmDeleteComment({{ comment.id }}, {{ task.id }})">
             <i class="bi bi-x"></i>
           </button>
@@ -420,8 +466,7 @@
         {% endfor %}
       </div>
       <div class="px-4 py-3 border-t border-base-300 shrink-0">
-        <form method="post" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
-              enctype="multipart/form-data" id="comment-form">
+        <form id="comment-form" data-action="{{ url_for('tasks.add_comment', task_id=task.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div id="comment-drop-zone" class="relative mb-2">
             <textarea name="text" id="comment-text"
@@ -434,13 +479,39 @@
             </div>
           </div>
           <div id="comment-files-list" class="flex flex-wrap gap-2 mb-2"></div>
+
+          <!-- Прогресс загрузки -->
+          <div id="upload-progress-wrap" class="hidden mb-2">
+            <div class="flex items-center justify-between mb-1">
+              <span id="upload-status-text" class="text-xs text-base-content/70"></span>
+              <button type="button" id="cancel-upload-btn"
+                      class="text-xs text-error hover:underline flex items-center gap-1">
+                <i class="bi bi-x-circle"></i> Отменить
+              </button>
+            </div>
+            <div class="w-full bg-base-300 rounded-full h-1.5 overflow-hidden relative">
+              <div id="upload-progress-bar"
+                   class="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-300"
+                   style="width:0%"></div>
+              <div id="upload-progress-indet" class="hidden absolute inset-0">
+                <div class="yd-indeterminate h-full rounded-full bg-warning"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Инлайн-ошибка -->
+          <div id="upload-error" class="hidden mb-2 px-3 py-2 rounded-lg bg-error/10 border border-error/30 flex items-start gap-2 text-xs text-error">
+            <i class="bi bi-exclamation-triangle-fill shrink-0 mt-0.5"></i>
+            <span id="upload-error-text" class="flex-1"></span>
+            <button type="button" onclick="hideUploadError()" class="shrink-0 hover:opacity-70"><i class="bi bi-x"></i></button>
+          </div>
+
           <div class="flex items-center gap-2">
-            <label class="btn btn-ghost btn-sm gap-1 cursor-pointer shrink-0">
+            <label class="btn btn-ghost btn-sm gap-1 cursor-pointer shrink-0" id="file-label">
               <i class="bi bi-paperclip"></i> Файлы
               <input type="file" name="files" id="comment-file-input" class="hidden" multiple>
             </label>
             <span id="comment-size-info" class="text-xs text-base-content/40 flex-1"></span>
-            <button type="submit" class="btn btn-primary btn-sm">Отправить</button>
+            <button type="submit" id="comment-submit-btn" class="btn btn-primary btn-sm">Отправить</button>
           </div>
         </form>
       </div>
@@ -650,27 +721,6 @@
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
-<!-- Yandex Disk suggestion modal (shown when files exceed 100 MB) -->
-<dialog id="yadiskModal" class="modal">
-  <div class="modal-box max-w-md">
-    <h3 class="font-bold text-lg flex items-center gap-2">
-      <i class="bi bi-cloud-upload text-warning"></i> Файлы превышают 100 МБ
-    </h3>
-    <p class="py-3 text-sm">Суммарный размер файлов превышает 100 МБ.</p>
-    <p class="text-sm text-base-content/70">Рекомендуем загрузить файлы на <strong>Яндекс Диск</strong> и прикрепить ссылку в тексте комментария.</p>
-    <div class="flex flex-col gap-2 mt-3">
-      <a href="https://disk.yandex.ru" target="_blank" rel="noopener"
-         class="btn btn-warning btn-sm gap-2">
-        <i class="bi bi-cloud-arrow-up"></i> Открыть Яндекс Диск
-      </a>
-    </div>
-    <div class="modal-action mt-2">
-      <form method="dialog"><button class="btn btn-ghost btn-sm">Закрыть</button></form>
-    </div>
-  </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
-
 {% endblock %}
 
 {% block scripts %}
@@ -815,21 +865,31 @@ async function adminUnpause(taskId) {
   else alert(d.error || 'Ошибка');
 }
 
-// ── Comment multi-file handling ──
-const commentForm = document.getElementById('comment-form');
+// ── Comment multi-file handling + XHR upload ──
+const commentForm      = document.getElementById('comment-form');
 const commentFileInput = document.getElementById('comment-file-input');
 const commentFilesList = document.getElementById('comment-files-list');
-const commentDropZone = document.getElementById('comment-drop-zone');
-const dropOverlay = document.getElementById('drop-overlay');
-const commentSizeInfo = document.getElementById('comment-size-info');
-const MAX_COMMENT_BYTES = 100 * 1024 * 1024;
+const commentDropZone  = document.getElementById('comment-drop-zone');
+const dropOverlay      = document.getElementById('drop-overlay');
+const commentSizeInfo  = document.getElementById('comment-size-info');
+const progressWrap     = document.getElementById('upload-progress-wrap');
+const progressBar      = document.getElementById('upload-progress-bar');
+const progressIndet    = document.getElementById('upload-progress-indet');
+const statusText       = document.getElementById('upload-status-text');
+const cancelBtn        = document.getElementById('cancel-upload-btn');
+const submitBtn        = document.getElementById('comment-submit-btn');
+const fileLabel        = document.getElementById('file-label');
+const uploadError      = document.getElementById('upload-error');
+const uploadErrorText  = document.getElementById('upload-error-text');
+const MAX_COMMENT_BYTES = 500 * 1024 * 1024;
 
 let commentFiles = [];
+let currentXHR = null;
 
 function fmtSize(bytes) {
   if (bytes < 1024) return bytes + ' Б';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
-  return (bytes / 1024 / 1024).toFixed(2) + ' МБ';
+  return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
 }
 
 function totalBytes() {
@@ -845,7 +905,6 @@ function syncInput() {
 function renderFiles() {
   commentFilesList.innerHTML = '';
   const total = totalBytes();
-
   commentFiles.forEach((file, idx) => {
     const chip = document.createElement('div');
     chip.className = 'inline-flex items-center gap-1 bg-base-200 rounded px-2 py-1 text-xs max-w-full';
@@ -853,7 +912,7 @@ function renderFiles() {
       `<i class="bi bi-paperclip shrink-0"></i>` +
       `<span class="truncate max-w-40">${file.name}</span>` +
       `<span class="text-base-content/40 shrink-0">${fmtSize(file.size)}</span>` +
-      `<button type="button" class="text-error hover:opacity-70 shrink-0 ml-0.5" data-idx="${idx}">` +
+      `<button type="button" class="text-error hover:opacity-70 shrink-0 ml-0.5 delete-guard" data-idx="${idx}">` +
         `<i class="bi bi-x-lg"></i></button>`;
     chip.querySelector('button').addEventListener('click', () => {
       commentFiles.splice(idx, 1);
@@ -862,12 +921,11 @@ function renderFiles() {
     });
     commentFilesList.appendChild(chip);
   });
-
   if (commentFiles.length === 0) {
     commentSizeInfo.textContent = '';
   } else {
     const over = total > MAX_COMMENT_BYTES;
-    commentSizeInfo.textContent = fmtSize(total) + ' / 100 МБ';
+    commentSizeInfo.textContent = fmtSize(total) + ' / 500 МБ';
     commentSizeInfo.classList.toggle('text-error', over);
     commentSizeInfo.classList.toggle('text-base-content/40', !over);
   }
@@ -882,9 +940,57 @@ function addFiles(incoming) {
   renderFiles();
 }
 
-commentFileInput.addEventListener('change', () => {
-  addFiles(Array.from(commentFileInput.files));
-});
+function showUploadError(msg) {
+  uploadErrorText.textContent = msg;
+  uploadError.classList.remove('hidden');
+}
+function hideUploadError() {
+  uploadError.classList.add('hidden');
+  uploadErrorText.textContent = '';
+}
+function xhrErrorMsg(status) {
+  if (!status) return 'Нет соединения. Проверьте интернет и попробуйте ещё раз.';
+  if (status === 413) return 'Файлы слишком большие для сервера.';
+  if (status >= 500) return 'Ошибка сервера. Попробуйте через несколько минут.';
+  return `Не удалось загрузить (${status}). Попробуйте ещё раз.`;
+}
+
+function setUploading(uploading) {
+  progressWrap.classList.toggle('hidden', !uploading);
+  submitBtn.disabled = uploading;
+  fileLabel.classList.toggle('opacity-40', uploading);
+  fileLabel.classList.toggle('pointer-events-none', uploading);
+  // Блокируем/разблокируем кнопки удаления
+  document.body.classList.toggle('upload-active', uploading);
+  if (uploading) hideUploadError();
+}
+
+// Фаза 1: детерминированный прогресс (браузер → сервер)
+function setPhase1(pct) {
+  progressBar.classList.remove('hidden');
+  progressIndet.classList.add('hidden');
+  progressBar.style.width = pct + '%';
+  statusText.textContent = `Загрузка: ${pct}%`;
+  cancelBtn.classList.remove('hidden');
+}
+
+// Фаза 2: indeterminate (сервер сохраняет на Я.Диск)
+function setPhase2() {
+  progressBar.classList.add('hidden');
+  progressIndet.classList.remove('hidden');
+  statusText.textContent = 'Сохранение на Я.Диск...';
+  cancelBtn.classList.add('hidden'); // сервер уже получил файлы, отмена невозможна
+}
+
+function resetProgress() {
+  progressBar.classList.remove('hidden');
+  progressIndet.classList.add('hidden');
+  progressBar.style.width = '0%';
+  statusText.textContent = '';
+  cancelBtn.classList.remove('hidden');
+}
+
+commentFileInput.addEventListener('change', () => addFiles(Array.from(commentFileInput.files)));
 
 // Drag-and-drop
 commentDropZone.addEventListener('dragenter', e => {
@@ -894,10 +1000,7 @@ commentDropZone.addEventListener('dragenter', e => {
 commentDropZone.addEventListener('dragleave', e => {
   if (!commentDropZone.contains(e.relatedTarget)) dropOverlay.classList.add('hidden');
 });
-commentDropZone.addEventListener('dragover', e => {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'copy';
-});
+commentDropZone.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 commentDropZone.addEventListener('drop', e => {
   e.preventDefault();
   dropOverlay.classList.add('hidden');
@@ -907,22 +1010,82 @@ commentDropZone.addEventListener('drop', e => {
 // Paste from clipboard
 document.getElementById('comment-text').addEventListener('paste', e => {
   const items = Array.from(e.clipboardData?.items || []);
-  const pastedFiles = items
-    .filter(item => item.kind === 'file')
-    .map(item => item.getAsFile())
-    .filter(Boolean);
-  if (pastedFiles.length) {
-    e.preventDefault();
-    addFiles(pastedFiles);
-  }
+  const pastedFiles = items.filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+  if (pastedFiles.length) { e.preventDefault(); addFiles(pastedFiles); }
 });
 
-// Validate on submit
+// Отмена (только в Фазе 1)
+cancelBtn.addEventListener('click', () => {
+  if (currentXHR) { currentXHR.abort(); currentXHR = null; }
+  setUploading(false);
+  resetProgress();
+});
+
+// XHR submit
 commentForm.addEventListener('submit', e => {
-  if (totalBytes() > MAX_COMMENT_BYTES) {
-    e.preventDefault();
-    document.getElementById('yadiskModal').showModal();
+  e.preventDefault();
+  hideUploadError();
+
+  const text = document.getElementById('comment-text').value.trim();
+  if (!text && commentFiles.length === 0) {
+    showUploadError('Введите текст или прикрепите файлы.');
+    return;
   }
+  if (totalBytes() > MAX_COMMENT_BYTES) {
+    showUploadError('Суммарный размер файлов не должен превышать 500 МБ.');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('csrf_token', document.querySelector('[name="csrf_token"]').value);
+  fd.append('text', text);
+  commentFiles.forEach(f => fd.append('files', f));
+
+  const xhr = new XMLHttpRequest();
+  currentXHR = xhr;
+  setUploading(true);
+  setPhase1(0);
+
+  // Фаза 1: браузер → сервер (реальный прогресс)
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) setPhase1(Math.round(e.loaded / e.total * 100));
+  });
+  // Фаза 2: сервер сохраняет на Я.Диск (indeterminate)
+  xhr.upload.addEventListener('load', () => {
+    if (commentFiles.length > 0) setPhase2();
+  });
+
+  xhr.addEventListener('load', () => {
+    currentXHR = null;
+    setUploading(false);
+    resetProgress();
+    if (xhr.status >= 200 && xhr.status < 400) {
+      try {
+        const d = JSON.parse(xhr.responseText);
+        if (d.error) { showUploadError(d.error); return; }
+      } catch {}
+      location.reload();
+    } else {
+      showUploadError(xhrErrorMsg(xhr.status));
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    currentXHR = null;
+    setUploading(false);
+    resetProgress();
+    showUploadError(xhrErrorMsg(0));
+  });
+
+  xhr.addEventListener('abort', () => {
+    currentXHR = null;
+    setUploading(false);
+    resetProgress();
+  });
+
+  xhr.open('POST', commentForm.dataset.action);
+  xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+  xhr.send(fd);
 });
 </script>
 {% endblock %}

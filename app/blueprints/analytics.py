@@ -379,7 +379,8 @@ def tv_mode():
 
 
 def compute_staff_scores(start, end=None, limit=5):
-    """Compute employee ranking using formula R_i = 0.5*(N_i/N_max) + 0.5*(T_i/T_max), scaled to 0-100."""
+    """Compute employee ranking using formula R_i = 0.5*(N_i/N_max) + 0.5*(S_i/S_max), scaled to 0-100.
+    N_i — кол-во закрытых задач в периоде, S_i — суммарное время работы по этим задачам."""
     now = datetime.utcnow()
     if end is None:
         end = now
@@ -396,14 +397,18 @@ def compute_staff_scores(start, end=None, limit=5):
         TimeLog.ended_at.isnot(None),
     ).group_by(TimeLog.user_id, User.full_name).all()
 
+    # Считаем суммарное время только по закрытым задачам того же периода,
+    # чтобы периоды задач и времени совпадали.
     user_time_q = db.session.query(
         TimeLog.user_id,
         func.coalesce(func.sum(
             func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
         ), 0).label('secs')
-    ).filter(
-        TimeLog.started_at >= start,
-        TimeLog.started_at <= end,
+    ).join(Task, TimeLog.task_id == Task.id).filter(
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at <= end,
+        Task.completed_at.isnot(None),
         TimeLog.ended_at.isnot(None),
     ).group_by(TimeLog.user_id).all()
 
@@ -413,8 +418,8 @@ def compute_staff_scores(start, end=None, limit=5):
     for u in user_tasks_q:
         n_i = u.cnt
         total_secs = time_map.get(u.user_id, 0)
-        t_i = total_secs / n_i if n_i > 0 else 0
-        staff.append({'id': u.user_id, 'name': u.full_name, 'n': n_i, 't': t_i, 'secs': int(total_secs)})
+        # t = суммарное время (больше = лучше), не среднее
+        staff.append({'id': u.user_id, 'name': u.full_name, 'n': n_i, 't': total_secs, 'secs': int(total_secs)})
 
     if not staff:
         return []

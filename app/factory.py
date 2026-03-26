@@ -29,6 +29,7 @@ def create_app():
     from blueprints.rhythms import rhythms_bp
     from blueprints.plans import plans_bp
     from blueprints.lists_bp import lists_bp
+    from blueprints.mail_bp import mail_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(public_bp)
@@ -40,6 +41,7 @@ def create_app():
     app.register_blueprint(rhythms_bp)
     app.register_blueprint(plans_bp)
     app.register_blueprint(lists_bp)
+    app.register_blueprint(mail_bp)
 
     @app.context_processor
     def inject_avatar_v():
@@ -139,6 +141,8 @@ def create_app():
             ('task_attachments',    'yadisk_path',       'VARCHAR(1000)'),
             ('task_attachments',    'yadisk_url',        'VARCHAR(1000)'),
             ('task_attachments',    'yadisk_folder_url', 'VARCHAR(1000)'),
+            ('users', 'mail_user',     'VARCHAR(200)'),
+            ('users', 'mail_password', 'VARCHAR(200)'),
         ]
         for table, col, col_type in cols:
             try:

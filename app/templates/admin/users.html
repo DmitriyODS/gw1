@@ -16,10 +16,13 @@
     border-bottom: 1px solid var(--color-base-200);
     vertical-align: middle;
   }
+  @media (max-width: 639px) {
+    .users-table td, .users-table th { padding: 8px 10px; }
+  }
   .users-table tr:last-child td { border-bottom: none; }
   .users-table tr:hover td { background: var(--color-base-200); }
   .user-avatar-sm {
-    width: 32px; height: 32px; border-radius: 50%;
+    width: 32px; height: 32px; min-width: 32px; border-radius: 50%;
     object-fit: cover; background: var(--color-primary);
     flex-shrink: 0;
   }
@@ -51,39 +54,51 @@
       <div class="text-sm font-semibold text-base-content/60">{{ users | length }} пользователей</div>
     </div>
 
-    <table class="users-table">
+    <div style="overflow-x: auto;">
+    <table class="users-table" style="min-width: 480px;">
       <thead>
         <tr>
-          <th style="width:44px"></th>
+          <th style="width:44px; min-width:44px;"></th>
           <th>Имя</th>
-          <th>Логин</th>
+          <th class="hidden sm:table-cell">Логин</th>
           <th class="hidden sm:table-cell">Email</th>
-          <th>Роль</th>
-          <th>Статус</th>
-          {% if current_user.can_admin %}<th style="width:90px"></th>{% endif %}
+          <th class="hidden sm:table-cell">Роль</th>
+          <th class="hidden sm:table-cell">Статус</th>
+          {% if current_user.can_admin %}<th style="width:80px"></th>{% endif %}
         </tr>
       </thead>
       <tbody>
       {% for u in users %}
       {% set role_colors = {'super_admin':'error','manager':'warning','admin':'info','staff':'neutral','tv':'neutral'} %}
       <tr>
-        <td style="padding-right:0;">
+        <td style="padding-right:0; width:44px; min-width:44px;">
           <img class="user-avatar-sm"
                src="{{ url_for('profile.avatar', user_id=u.id) }}"
                alt="{{ u.full_name[:1] }}">
         </td>
         <td>
           <div class="font-semibold">{{ u.full_name }}</div>
-          <div class="text-xs text-base-content/50 sm:hidden">{{ u.email }}</div>
+          <div class="sm:hidden flex items-center gap-2 mt-1 flex-wrap">
+            <span class="badge badge-{{ role_colors.get(u.role, 'neutral') }} badge-sm">{{ Role.LABELS.get(u.role, u.role) }}</span>
+            {% if u.is_active %}
+            <span class="inline-flex items-center gap-1 text-xs" style="color: var(--color-success);">
+              <span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Активен
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 text-xs text-base-content/40">
+              <span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Откл.
+            </span>
+            {% endif %}
+          </div>
         </td>
-        <td><span class="login-badge">{{ u.username }}</span></td>
+        <td class="hidden sm:table-cell"><span class="login-badge">{{ u.username }}</span></td>
         <td class="hidden sm:table-cell text-base-content/60">{{ u.email or '—' }}</td>
-        <td>
+        <td class="hidden sm:table-cell">
           <span class="badge badge-{{ role_colors.get(u.role, 'neutral') }} badge-sm">
             {{ Role.LABELS.get(u.role, u.role) }}
           </span>
         </td>
-        <td>
+        <td class="hidden sm:table-cell">
           {% if u.is_active %}
           <span class="inline-flex items-center gap-1 text-xs font-semibold" style="color: var(--color-success);">
             <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
@@ -123,6 +138,7 @@
       {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
 </div>
 {% endblock %}

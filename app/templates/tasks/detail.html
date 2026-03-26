@@ -339,6 +339,11 @@
                 <i class="bi bi-arrow-counterclockwise"></i> Снять с паузы
               </button>
               {% endif %}
+              <button class="btn btn-success btn-sm"
+                      {% if not task.can_close %}disabled title="Не все подзадачи выполнены"{% endif %}
+                      onclick="document.getElementById('doneModal').showModal()">
+                <i class="bi bi-check-circle"></i> Закрыть задачу
+              </button>
             {% endif %}
             {% else %}
               {% if (is_free or is_mine) and not my_active %}

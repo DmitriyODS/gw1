@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru" data-theme="light">
 <head>
-  <script>(function(){var t=localStorage.getItem('tt-theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
+  <script>(function(){var t=localStorage.getItem('tt-theme')||'light';document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('tt-color')||'blue';document.documentElement.setAttribute('data-color',c);})();</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -12,20 +12,63 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <style>
-    :root, [data-theme="light"], [data-theme="dark"] {
-      --color-primary: oklch(54.7% 0.191 257);
+    /* ── Light theme ── */
+    [data-theme="light"] {
+      --color-base-100: #ffffff;
+      --color-base-200: #f0f8ff;
+      --color-base-300: #c8e0f5;
+      --color-base-content: oklch(18% 0.048 252);
+      --color-primary: oklch(52% 0.200 254);
       --color-primary-content: #ffffff;
+      --color-secondary: oklch(47% 0.268 290);
+      --color-secondary-content: #ffffff;
+      --color-neutral: oklch(28% 0.040 250);
+      --color-neutral-content: #ffffff;
+      --color-info: oklch(63% 0.170 234);
+      --color-info-content: #ffffff;
+      --color-success: oklch(59% 0.168 148);
+      --color-success-content: #ffffff;
+      --color-warning: oklch(72% 0.162 66);
+      --color-warning-content: oklch(20% 0.06 65);
+      --color-error: oklch(57% 0.215 27);
+      --color-error-content: #ffffff;
     }
 
-    body { background: #eef1f8; margin: 0; }
-    [data-theme="dark"] body { background: #191e2a; }
+    /* ── Dark theme ── */
+    [data-theme="dark"] {
+      --color-base-100: oklch(24% 0.068 252);
+      --color-base-200: oklch(20% 0.062 252);
+      --color-base-300: oklch(32% 0.072 252);
+      --color-base-content: oklch(87% 0.022 238);
+      --color-primary: oklch(62% 0.185 254);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(65% 0.232 290);
+      --color-secondary-content: #ffffff;
+      --color-neutral: oklch(40% 0.055 250);
+      --color-neutral-content: oklch(90% 0.018 238);
+      --color-info: oklch(67% 0.168 234);
+      --color-info-content: #ffffff;
+      --color-success: oklch(64% 0.162 148);
+      --color-success-content: #ffffff;
+      --color-warning: oklch(77% 0.150 66);
+      --color-warning-content: oklch(20% 0.06 65);
+      --color-error: oklch(63% 0.200 27);
+      --color-error-content: #ffffff;
+    }
+
+    body { background: #E1EFFB; margin: 0; }
+    [data-theme="dark"] body { background: #002C5B; }
 
     /* ── Sidebar island ── */
     #sidebar {
       width: 240px; flex-shrink: 0;
-      background: var(--color-base-100);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-      border-radius: 18px;
+      background: color-mix(in oklch, var(--color-base-100) 78%, transparent);
+      backdrop-filter: blur(24px) saturate(1.6);
+      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      box-shadow: 0 4px 32px rgba(0,0,0,0.10),
+                  inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
+      border: 1px solid color-mix(in oklch, white 22%, transparent);
+      border-radius: 20px;
       display: flex; flex-direction: column;
       position: fixed; top: 10px; left: 10px; bottom: 10px; z-index: 50;
       transition: transform 0.25s ease;
@@ -155,10 +198,13 @@
     /* User dropdown panel */
     #user-menu-panel {
       position: absolute; bottom: calc(100% - 12px); left: 10px; right: 10px;
-      background: var(--color-base-100);
-      border: 1px solid var(--color-base-300);
-      border-radius: 14px;
-      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+      background: color-mix(in oklch, var(--color-base-100) 82%, transparent);
+      backdrop-filter: blur(20px) saturate(1.5);
+      -webkit-backdrop-filter: blur(20px) saturate(1.5);
+      border: 1px solid color-mix(in oklch, white 22%, transparent);
+      border-radius: 16px;
+      box-shadow: 0 -4px 28px rgba(0,0,0,0.12),
+                  inset 0 1px 0 color-mix(in oklch, white 25%, transparent);
       overflow: hidden; z-index: 200;
     }
     #user-menu-panel.hidden { display: none; }
@@ -177,9 +223,13 @@
     /* ── Main island ── */
     .main-wrap { margin-left: 262px; padding: 10px 10px 10px 0; min-height: 100vh; box-sizing: border-box; }
     .main-island {
-      background: var(--color-base-100);
-      border-radius: 18px;
-      box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+      background: color-mix(in oklch, var(--color-base-100) 88%, transparent);
+      backdrop-filter: blur(12px) saturate(1.2);
+      -webkit-backdrop-filter: blur(12px) saturate(1.2);
+      border-radius: 20px;
+      box-shadow: 0 2px 24px rgba(0,0,0,0.06),
+                  inset 0 1px 0 color-mix(in oklch, white 18%, transparent);
+      border: 1px solid color-mix(in oklch, white 18%, transparent);
       padding: 24px;
       min-height: calc(100vh - 20px);
       box-sizing: border-box;
@@ -204,6 +254,20 @@
     .urgency-border-slow      { border-left: 4px solid color-mix(in oklch, var(--color-base-content) 25%, transparent); }
     .timer-mono { font-family: 'Courier New', monospace; font-size: 1.4rem; font-weight: bold; }
 
+    /* ── Dark mode island elevation ── */
+    [data-theme="dark"] #sidebar {
+      box-shadow: 0 4px 32px rgba(0,0,0,0.55);
+      border: 1px solid oklch(30% 0.065 252);
+    }
+    [data-theme="dark"] .main-island {
+      box-shadow: 0 2px 28px rgba(0,0,0,0.45);
+      border: 1px solid oklch(28% 0.060 252);
+    }
+    [data-theme="dark"] #sidebar-toggle {
+      border-color: oklch(32% 0.068 252);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+
     /* ── Mobile ── */
     @media (max-width: 1023px) {
       #sidebar { transform: translateX(calc(-100% - 20px)); }
@@ -212,6 +276,72 @@
       #sidebar-toggle { display: flex; }
       .main-wrap { margin-left: 0; padding: 10px; }
       .main-island { padding: 16px; min-height: calc(100vh - 20px); }
+    }
+
+    /* ── Color scheme: Monochrome ── */
+    [data-theme="light"][data-color="mono"] {
+      --color-base-200: #f4f4f4;
+      --color-base-300: #d0d0d0;
+      --color-primary: oklch(28% 0.008 260);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(50% 0.008 260);
+      --color-secondary-content: #ffffff;
+    }
+    [data-theme="light"][data-color="mono"] body { background: #e2e2e2; }
+
+    [data-theme="dark"][data-color="mono"] {
+      --color-base-100: oklch(22% 0.005 240);
+      --color-base-200: oklch(18% 0.005 240);
+      --color-base-300: oklch(28% 0.005 240);
+      --color-base-content: oklch(88% 0.005 240);
+      --color-primary: oklch(73% 0.008 240);
+      --color-primary-content: oklch(15% 0.005 240);
+      --color-secondary: oklch(62% 0.008 240);
+      --color-secondary-content: oklch(15% 0.005 240);
+    }
+    [data-theme="dark"][data-color="mono"] body { background: oklch(13% 0.003 240); }
+    [data-theme="dark"][data-color="mono"] #sidebar { border-color: oklch(32% 0.005 240); }
+    [data-theme="dark"][data-color="mono"] .main-island { border-color: oklch(30% 0.005 240); }
+
+    /* ── Color scheme: Island Groove ── */
+    [data-theme="light"][data-color="groove"] {
+      --color-base-200: #edfdf5;
+      --color-base-300: #b2dfc9;
+      --color-primary: oklch(54% 0.180 155);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(58% 0.140 85);
+      --color-secondary-content: #ffffff;
+      --color-info: oklch(60% 0.175 215);
+    }
+    [data-theme="light"][data-color="groove"] body { background: #cff0de; }
+
+    [data-theme="dark"][data-color="groove"] {
+      --color-base-100: oklch(21% 0.042 155);
+      --color-base-200: oklch(17% 0.038 155);
+      --color-base-300: oklch(29% 0.050 155);
+      --color-base-content: oklch(87% 0.022 160);
+      --color-primary: oklch(65% 0.170 155);
+      --color-primary-content: oklch(12% 0.025 155);
+      --color-secondary: oklch(68% 0.140 85);
+      --color-secondary-content: oklch(12% 0.025 85);
+      --color-info: oklch(65% 0.160 215);
+    }
+    [data-theme="dark"][data-color="groove"] body { background: oklch(14% 0.030 155); }
+    [data-theme="dark"][data-color="groove"] #sidebar { border-color: oklch(30% 0.060 155); }
+    [data-theme="dark"][data-color="groove"] .main-island { border-color: oklch(28% 0.055 155); }
+
+    /* ── Color scheme swatches ── */
+    .color-swatch-btn {
+      border: 2px solid var(--color-base-300);
+      cursor: pointer; background: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .color-swatch-btn.swatch-active {
+      border-color: var(--color-primary);
+      background: color-mix(in oklch, var(--color-primary) 8%, var(--color-base-100));
+    }
+    .color-swatch-btn:hover:not(.swatch-active) {
+      background: var(--color-base-200);
     }
   </style>
   {% block head %}{% endblock %}
@@ -255,6 +385,12 @@
       <a href="{{ url_for('media_plan.index') }}" class="nav-link">
         <i class="bi bi-calendar3"></i> Медиаплан
       </a>
+      {% if current_user.mail_user %}
+      <a href="{{ url_for('mail.inbox') }}" class="nav-link" id="nav-mail">
+        <i class="bi bi-envelope"></i> Почта
+        <span id="nav-mail-badge" class="ml-auto badge badge-primary badge-xs hidden"></span>
+      </a>
+      {% endif %}
     </div>
 
     <div class="nav-section-label">Аналитика</div>
@@ -317,6 +453,10 @@
         <i class="bi bi-person"></i>
         Мой профиль
       </a>
+      <button onclick="openSettings()" class="user-menu-item">
+        <i class="bi bi-gear"></i>
+        Настройки
+      </button>
       <hr class="user-menu-sep">
       <a href="{{ url_for('auth.logout') }}" class="user-menu-item" style="color: var(--color-error);">
         <i class="bi bi-box-arrow-right"></i>
@@ -376,6 +516,65 @@ function toggleTheme() {
   applyTheme(next);
 }
 applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+
+// ── Color scheme ──────────────────────────────────────────────────────────────
+function applyColorScheme(c) {
+  c = c || 'blue';
+  document.documentElement.setAttribute('data-color', c);
+  document.querySelectorAll('.color-swatch-btn').forEach(btn => {
+    btn.classList.toggle('swatch-active', btn.dataset.color === c);
+  });
+}
+function setColorScheme(c) {
+  localStorage.setItem('tt-color', c);
+  applyColorScheme(c);
+}
+applyColorScheme(localStorage.getItem('tt-color') || 'blue');
+
+// ── Settings modal ────────────────────────────────────────────────────────────
+function openSettings() {
+  closeUserMenu();
+  document.getElementById('settings-status').textContent = '';
+  document.getElementById('settings-mail-password').value = '';
+  document.getElementById('settings-modal').showModal();
+  applyColorScheme(localStorage.getItem('tt-color') || 'blue');
+}
+
+async function saveSettings() {
+  const mailUser     = document.getElementById('settings-mail-user').value.trim();
+  const mailPassword = document.getElementById('settings-mail-password').value;
+  const status       = document.getElementById('settings-status');
+
+  status.textContent = 'Сохранение…';
+  status.className   = 'text-sm text-base-content/60';
+
+  const fd = new FormData();
+  fd.append('mail_user', mailUser);
+  if (mailPassword) fd.append('mail_password', mailPassword);
+
+  try {
+    const r = await fetch('/api/user/settings', {
+      method: 'POST',
+      headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
+      body: fd,
+    });
+    const d = await r.json();
+    if (d.error) {
+      status.textContent = d.error;
+      status.className = 'text-sm text-error';
+    } else {
+      status.textContent = 'Сохранено';
+      status.className = 'text-sm text-success';
+      setTimeout(() => {
+        document.getElementById('settings-modal').close();
+        location.reload();
+      }, 700);
+    }
+  } catch(e) {
+    status.textContent = 'Ошибка сети';
+    status.className = 'text-sm text-error';
+  }
+}
 
 // ── Active nav link (longest-match to avoid /analytics prefix conflict) ──
 (function() {
@@ -523,6 +722,87 @@ async function syncTopbarTimer() {
 {% block scripts %}{% endblock %}
 
 {% if current_user.is_authenticated %}
+<!-- Settings modal -->
+<dialog id="settings-modal" class="modal">
+  <div class="modal-box max-w-sm p-0 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-base-300">
+      <span class="font-bold text-base flex items-center gap-2">
+        <i class="bi bi-gear"></i> Настройки
+      </span>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+
+    <!-- Mail credentials -->
+    <div class="px-5 pt-4 pb-3">
+      <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-3 flex items-center gap-1.5">
+        <i class="bi bi-envelope"></i> Почта
+      </div>
+      <div class="flex flex-col gap-2.5">
+        <label class="flex flex-col gap-1">
+          <span class="text-xs text-base-content/60">Логин (IMAP/SMTP)</span>
+          <input type="text" id="settings-mail-user" class="input input-bordered input-sm w-full"
+                 placeholder="firstname.lastname"
+                 value="{{ current_user.mail_user or '' }}">
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-xs text-base-content/60">Пароль</span>
+          <input type="password" id="settings-mail-password" class="input input-bordered input-sm w-full"
+                 placeholder="{{ '••••••••' if current_user.mail_password else 'Не задан' }}">
+        </label>
+        {% if not current_user.mail_user %}
+        <p class="text-xs text-base-content/40">После сохранения раздел «Почта» появится в меню</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Color scheme -->
+    <div class="px-5 pt-1 pb-4 border-t border-base-200">
+      <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-3 flex items-center gap-1.5 pt-3">
+        <i class="bi bi-palette"></i> Цветовая схема
+      </div>
+      <div class="flex gap-2">
+        <button onclick="setColorScheme('blue')" data-color="blue"
+                class="color-swatch-btn flex-1 flex flex-col items-center gap-2 p-3 rounded-xl">
+          <div class="flex gap-1 items-end">
+            <div style="width:13px;height:30px;border-radius:5px;background:oklch(52% 0.200 254)"></div>
+            <div style="width:13px;height:22px;border-radius:5px;background:#f0f8ff;border:1px solid #c8e0f5"></div>
+          </div>
+          <span class="text-xs font-semibold">Синяя</span>
+        </button>
+        <button onclick="setColorScheme('mono')" data-color="mono"
+                class="color-swatch-btn flex-1 flex flex-col items-center gap-2 p-3 rounded-xl">
+          <div class="flex gap-1 items-end">
+            <div style="width:13px;height:30px;border-radius:5px;background:oklch(28% 0.008 260)"></div>
+            <div style="width:13px;height:22px;border-radius:5px;background:#f4f4f4;border:1px solid #d0d0d0"></div>
+          </div>
+          <span class="text-xs font-semibold">Однотонная</span>
+        </button>
+        <button onclick="setColorScheme('groove')" data-color="groove"
+                class="color-swatch-btn flex-1 flex flex-col items-center gap-2 p-3 rounded-xl">
+          <div class="flex gap-1 items-end">
+            <div style="width:13px;height:30px;border-radius:5px;background:oklch(54% 0.180 155)"></div>
+            <div style="width:13px;height:22px;border-radius:5px;background:#edfdf5;border:1px solid #b2dfc9"></div>
+          </div>
+          <span class="text-xs font-semibold">Island Groove</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between px-5 py-3 bg-base-200 border-t border-base-300">
+      <span id="settings-status" class="text-sm text-base-content/60"></span>
+      <div class="flex gap-2">
+        <form method="dialog">
+          <button class="btn btn-ghost btn-sm">Отмена</button>
+        </form>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Release notes modal -->
 <dialog id="releaseNotesModal" class="modal">
   <div class="modal-box max-w-lg max-h-[80vh] overflow-y-auto">

@@ -233,6 +233,25 @@ def profile_stats_api():
     })
 
 
+# ── User settings API ─────────────────────────────────────────────────────────
+
+@profile_bp.route('/api/user/settings', methods=['POST'])
+@login_required
+def save_user_settings():
+    mail_user     = request.form.get('mail_user', '').strip() or None
+    mail_password = request.form.get('mail_password', '').strip()
+
+    current_user.mail_user = mail_user
+    if mail_user is None:
+        current_user.mail_password = None
+    elif mail_password:
+        current_user.mail_password = mail_password
+    # mail_user set but password empty → keep existing password
+
+    db.session.commit()
+    return jsonify({'success': True, 'has_mail': bool(mail_user)})
+
+
 # ── Avatar upload / reset ─────────────────────────────────────────────────────
 
 @profile_bp.route('/profile/avatar', methods=['POST'])

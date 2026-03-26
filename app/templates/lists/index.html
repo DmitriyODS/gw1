@@ -69,7 +69,7 @@
     <table class="lists-table">
       <thead>
         <tr>
-          <th>Slug</th>
+          <th class="hidden sm:table-cell">Slug</th>
           <th>Название</th>
           <th style="width:100px"></th>
         </tr>
@@ -77,7 +77,7 @@
       <tbody id="items-tbody">
         {% for tt in task_types %}
         <tr id="row-tt-{{ tt.id }}">
-          <td><span class="slug-badge">{{ tt.slug }}</span></td>
+          <td class="hidden sm:table-cell"><span class="slug-badge">{{ tt.slug }}</span></td>
           <td class="font-medium">{{ tt.label }}</td>
           <td>
             <div class="flex items-center gap-1 justify-end">
@@ -101,7 +101,7 @@
       <thead>
         <tr>
           <th>Название</th>
-          <th>Начальник отдела</th>
+          <th class="hidden sm:table-cell">Начальник отдела</th>
           <th style="width:100px"></th>
         </tr>
       </thead>
@@ -109,7 +109,7 @@
         {% for dept in departments %}
         <tr id="row-dept-{{ dept.id }}">
           <td class="font-medium">{{ dept.name }}</td>
-          <td class="opacity-60">{{ dept.head or '—' }}</td>
+          <td class="hidden sm:table-cell opacity-60">{{ dept.head or '—' }}</td>
           <td>
             <div class="flex items-center gap-1 justify-end">
               <button class="btn btn-ghost btn-xs gap-1" onclick="openEditModal({{ dept.id }}, '{{ dept.name | e }}', '{{ dept.head | e }}')">

@@ -179,9 +179,16 @@
         <h3 class="font-bold text-lg" id="modal-name">...</h3>
         <div class="text-sm text-base-content/50" id="modal-period">...</div>
       </div>
-      <form method="dialog">
-        <button class="btn btn-ghost btn-sm btn-circle"><i class="bi bi-x-lg"></i></button>
-      </form>
+      <div class="flex items-center gap-2">
+        <a id="modal-excel-btn" href="#" target="_blank"
+           class="btn btn-outline btn-sm gap-1" title="Скачать Excel">
+          <i class="bi bi-file-earmark-excel"></i>
+          <span class="hidden sm:inline">Excel</span>
+        </a>
+        <form method="dialog">
+          <button class="btn btn-ghost btn-sm btn-circle"><i class="bi bi-x-lg"></i></button>
+        </form>
+      </div>
     </div>
 
     <!-- Summary -->
@@ -335,6 +342,8 @@ async function openDetail(userId) {
 
   document.getElementById('modal-name').textContent = d.user_name;
   document.getElementById('modal-period').textContent = d.period_label;
+  document.getElementById('modal-excel-btn').href =
+    `/analytics/export/user-stats-excel?user_id=${userId}&mode=${currentMode}&offset=${currentOffset}`;
   document.getElementById('modal-total-tasks').textContent = d.total_tasks;
   document.getElementById('modal-total-time').textContent = fmtDur(d.total_secs);
 

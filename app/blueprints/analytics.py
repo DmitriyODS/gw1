@@ -239,7 +239,12 @@ def time_report():
         row['score'] = info['score'] if info else None
         row['rank'] = info['rank'] if info else None
 
-    rows.sort(key=lambda r: (-r['done'], -r['secs']))
+    rows.sort(key=lambda r: (
+        0 if r['score'] is not None else 1,  # с рейтингом — выше
+        -(r['score'] or 0),
+        -r['done'],
+        -r['secs'],
+    ))
 
     today_iso = (datetime.utcnow() + timedelta(hours=tz_hours)).strftime('%Y-%m-%d')
     return render_template('analytics/time.html',
@@ -569,6 +574,95 @@ def export_excel():
     return send_file(output,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True, download_name='tasks_export.xlsx')
+
+
+@analytics_bp.route('/analytics/export/user-stats-excel')
+@login_required
+def export_user_stats_excel():
+    import openpyxl
+    from openpyxl.styles import Font
+
+    uid = request.args.get('user_id', type=int)
+    mode = request.args.get('mode', 'week')
+    offset = request.args.get('offset', 0, type=int)
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+
+    if not uid:
+        uid = current_user.id
+    if not current_user.can_admin and uid != current_user.id:
+        return jsonify({'error': 'Нет прав'}), 403
+
+    user = User.query.get_or_404(uid)
+    start, end, period_label = _period_bounds(mode, offset, tz_hours)
+
+    worked_task_ids = db.session.query(TimeLog.task_id).filter(
+        TimeLog.user_id == uid,
+        TimeLog.ended_at.isnot(None),
+    ).distinct().subquery()
+    done_tasks = Task.query.filter(
+        Task.id.in_(worked_task_ids),
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at <= end,
+        Task.completed_at.isnot(None),
+    ).order_by(Task.completed_at.desc()).all()
+
+    logs = TimeLog.query.filter(
+        TimeLog.user_id == uid,
+        TimeLog.started_at >= start,
+        TimeLog.started_at <= end,
+        TimeLog.ended_at.isnot(None),
+    ).all()
+    time_by_task = defaultdict(float)
+    for log in logs:
+        time_by_task[log.task_id] += (log.ended_at - log.started_at).total_seconds()
+
+    by_type = defaultdict(lambda: {'cnt': 0, 'secs': 0})
+    for t in done_tasks:
+        secs = int(time_by_task.get(t.id, 0))
+        type_label = TYPE_LABELS.get(t.task_type, t.task_type or 'Не указан')
+        by_type[type_label]['cnt'] += 1
+        by_type[type_label]['secs'] += secs
+
+    wb = openpyxl.Workbook()
+
+    ws1 = wb.active
+    ws1.title = 'Задачи'
+    ws1.append(['ID', 'Заголовок', 'Тип', 'Отдел', 'Закрыта', 'Время (мин)'])
+    for cell in ws1[1]:
+        cell.font = Font(bold=True)
+    for t in done_tasks:
+        secs = int(time_by_task.get(t.id, 0))
+        ws1.append([
+            t.id,
+            t.title,
+            TYPE_LABELS.get(t.task_type, t.task_type or ''),
+            t.department.name if t.department else '',
+            (t.completed_at + timedelta(hours=tz_hours)).strftime('%d.%m.%Y %H:%M') if t.completed_at else '',
+            round(secs / 60),
+        ])
+
+    ws2 = wb.create_sheet('По типам')
+    ws2.append(['Тип задачи', 'Кол-во задач', 'Время (мин)', 'Время (ч)'])
+    for cell in ws2[1]:
+        cell.font = Font(bold=True)
+    for type_label, data in sorted(by_type.items(), key=lambda x: x[1]['cnt'], reverse=True):
+        ws2.append([
+            type_label,
+            data['cnt'],
+            round(data['secs'] / 60),
+            round(data['secs'] / 3600, 1),
+        ])
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    safe_name = user.full_name.replace(' ', '_')
+    mode_labels = {'day': 'день', 'week': 'неделя', 'month': 'месяц'}
+    filename = f'stats_{safe_name}_{mode_labels.get(mode, mode)}.xlsx'
+    return send_file(output,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=filename)
 
 
 def _register_cyrillic_font():

@@ -1,0 +1,709 @@
+{% extends 'base.html' %}
+{% block title %}Почта — Groove Work{% endblock %}
+
+{% block head %}
+<style>
+  /* ── Layout ── */
+  .mail-wrap {
+    display: flex;
+    height: calc(100vh - 112px);
+    min-height: 480px;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid var(--color-base-300);
+  }
+
+  /* ── Left panel: message list ── */
+  .mail-list-panel {
+    width: 340px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-base-300);
+    overflow: hidden;
+  }
+  .mail-list-toolbar {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-base-300);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .mail-search {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--color-base-300);
+    background: var(--color-base-200);
+    color: var(--color-base-content);
+    font-size: 0.83rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .mail-search:focus { border-color: var(--color-primary); background: var(--color-base-100); }
+  .mail-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .mail-item {
+    padding: 11px 14px;
+    border-bottom: 1px solid color-mix(in oklch, var(--color-base-300) 60%, transparent);
+    cursor: pointer;
+    transition: background 0.1s;
+    position: relative;
+  }
+  .mail-item:hover   { background: color-mix(in oklch, var(--color-primary) 6%, var(--color-base-100)); }
+  .mail-item.active  { background: color-mix(in oklch, var(--color-primary) 11%, var(--color-base-100)); }
+  .mail-item.unread .mail-item-from  { font-weight: 700; }
+  .mail-item.unread .mail-item-subj  { font-weight: 600; color: var(--color-base-content); }
+  .mail-unread-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+  .mail-item.unread .mail-unread-dot { background: var(--color-primary); }
+  .mail-item-from  { font-size: 0.83rem; color: var(--color-base-content); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mail-item-subj  { font-size: 0.8rem; color: color-mix(in oklch, var(--color-base-content) 65%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .mail-item-date  { font-size: 0.72rem; color: color-mix(in oklch, var(--color-base-content) 40%, transparent); white-space: nowrap; flex-shrink: 0; }
+
+  /* ── Right panel: message view ── */
+  .mail-view-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mail-view-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--color-base-300);
+    flex-shrink: 0;
+  }
+  .mail-view-subject {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    line-height: 1.35;
+  }
+  .mail-meta-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+  }
+  .mail-meta-label { color: color-mix(in oklch, var(--color-base-content) 40%, transparent); min-width: 44px; }
+  .mail-meta-value { color: var(--color-base-content); }
+  .mail-view-body   { flex: 1; overflow-y: auto; padding: 0; }
+  .mail-body-iframe {
+    width: 100%; height: 100%; border: none;
+    background: white;
+  }
+  .mail-text-body {
+    padding: 20px 24px;
+    font-size: 0.88rem;
+    white-space: pre-wrap;
+    line-height: 1.65;
+    color: var(--color-base-content);
+  }
+  .mail-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: color-mix(in oklch, var(--color-base-content) 30%, transparent);
+    gap: 10px;
+  }
+
+  /* Attachments */
+  .mail-attachments {
+    padding: 10px 20px;
+    border-top: 1px solid var(--color-base-300);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--color-base-100);
+  }
+  .att-chip {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--color-base-200); border: 1px solid var(--color-base-300);
+    border-radius: 8px; padding: 5px 10px;
+    font-size: 0.78rem; text-decoration: none;
+    color: var(--color-base-content);
+    transition: background 0.12s;
+  }
+  .att-chip:hover { background: var(--color-base-300); color: var(--color-base-content); }
+
+  /* Loading skeleton */
+  .skeleton-line {
+    background: color-mix(in oklch, var(--color-base-content) 8%, var(--color-base-100));
+    border-radius: 4px; height: 12px; margin-bottom: 8px;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
+  }
+
+  /* Compose modal */
+  .compose-to-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 0; border-bottom: 1px solid var(--color-base-200);
+  }
+  .compose-label { font-size: 0.8rem; color: color-mix(in oklch, var(--color-base-content) 45%, transparent); width: 52px; flex-shrink: 0; }
+  .compose-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-size: 0.88rem; color: var(--color-base-content);
+  }
+  .compose-body {
+    width: 100%; min-height: 200px; border: none; outline: none; resize: vertical;
+    font-size: 0.88rem; background: transparent;
+    color: var(--color-base-content); line-height: 1.65;
+    padding: 12px 0;
+  }
+  .compose-sig {
+    font-size: 0.78rem;
+    color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+    border-top: 1px solid var(--color-base-200);
+    padding-top: 10px; margin-top: 4px; line-height: 1.7;
+  }
+
+  /* Pagination */
+  .mail-list-footer {
+    border-top: 1px solid var(--color-base-300);
+    padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 0.78rem;
+    color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+    flex-shrink: 0;
+  }
+
+  /* Dark mode iframe */
+  [data-theme="dark"] .mail-body-iframe { background: #fff; }
+
+  @media (max-width: 900px) {
+    .mail-list-panel { width: 280px; }
+  }
+  @media (max-width: 640px) {
+    .mail-wrap { flex-direction: column; height: auto; }
+    .mail-list-panel { width: 100%; height: 260px; border-right: none; border-bottom: 1px solid var(--color-base-300); }
+    .mail-view-panel { height: 400px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Toolbar -->
+<div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+  <h1 class="text-lg font-bold flex items-center gap-2">
+    <i class="bi bi-envelope opacity-60"></i> Почта
+    <span class="text-xs font-normal text-base-content/40">{{ from_email }}</span>
+  </h1>
+  <div class="flex gap-2">
+    <button onclick="refreshMail()" id="refresh-btn"
+            class="btn btn-ghost btn-sm gap-1" title="Обновить">
+      <i class="bi bi-arrow-clockwise" id="refresh-icon"></i>
+      Обновить
+    </button>
+    {% if current_user.can_manage %}
+    <a href="/mail/test" target="_blank" class="btn btn-ghost btn-sm gap-1" title="Диагностика подключения">
+      <i class="bi bi-wrench"></i>
+    </a>
+    {% endif %}
+    <button onclick="openCompose()" class="btn btn-primary btn-sm gap-1">
+      <i class="bi bi-pencil-square"></i> Написать
+    </button>
+  </div>
+</div>
+
+<!-- Two-panel layout -->
+<div class="mail-wrap">
+
+  <!-- LEFT: message list -->
+  <div class="mail-list-panel">
+    <!-- Folder tabs -->
+    <div class="flex flex-shrink-0 border-b border-base-300">
+      <button onclick="setFolder('inbox')" id="tab-inbox"
+        class="flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5
+               border-b-2 border-primary text-primary transition-colors">
+        <i class="bi bi-inbox"></i> Входящие
+      </button>
+      <button onclick="setFolder('sent')" id="tab-sent"
+        class="flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5
+               border-b-2 border-transparent text-base-content/50 hover:text-base-content transition-colors">
+        <i class="bi bi-send"></i> Отправленные
+      </button>
+    </div>
+    <div class="mail-list-toolbar">
+      <input type="search" class="mail-search" placeholder="Поиск по письмам…"
+             oninput="filterMessages(this.value)" id="search-input">
+    </div>
+
+    <div class="mail-list-scroll" id="mail-list">
+      <!-- Skeletons while loading -->
+      {% for _ in range(8) %}
+      <div class="mail-item">
+        <div class="skeleton-line" style="width:65%"></div>
+        <div class="skeleton-line" style="width:90%;height:10px"></div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="mail-list-footer" id="list-footer">
+      <span id="list-count">Загрузка…</span>
+      <div class="flex gap-1">
+        <button class="btn btn-ghost btn-xs" id="prev-btn" onclick="changePage(-1)" disabled>
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <span id="page-label" class="px-1">1</span>
+        <button class="btn btn-ghost btn-xs" id="next-btn" onclick="changePage(1)" disabled>
+          <i class="bi bi-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: message view -->
+  <div class="mail-view-panel" id="mail-view">
+    <div class="mail-empty-state">
+      <i class="bi bi-envelope-open" style="font-size:2.8rem;opacity:0.25"></i>
+      <span class="text-sm">Выберите письмо из списка</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Compose modal ── -->
+<dialog id="compose-modal" class="modal">
+  <div class="modal-box max-w-2xl w-full p-0 overflow-hidden">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-base-300">
+      <span class="font-bold text-base">Новое письмо</span>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+
+    <!-- Fields -->
+    <div class="px-5 py-2">
+      <div class="compose-to-row">
+        <span class="compose-label">Кому</span>
+        <input type="email" id="compose-to" class="compose-input" placeholder="адрес@домен.ru" required>
+      </div>
+      <div class="compose-to-row">
+        <span class="compose-label">Копия</span>
+        <input type="email" id="compose-cc" class="compose-input" placeholder="необязательно">
+      </div>
+      <div class="compose-to-row">
+        <span class="compose-label">Тема</span>
+        <input type="text" id="compose-subject" class="compose-input" placeholder="Тема письма">
+      </div>
+    </div>
+
+    <!-- Body + signature -->
+    <div class="px-5 pb-2 border-t border-base-200">
+      <textarea id="compose-body" class="compose-body"
+                placeholder="Текст письма…"></textarea>
+      <div class="compose-sig">
+        — <br>
+        С уважением,<br>
+        <strong>Управление информационной политики МГТУ им. Н.Э. Баумана</strong><br>
+        Отдел региональных коммуникаций (Калуга)<br>
+        Моб.: +7 (991) 328-29-64, +7 (910) 912-52-99<br>
+        <a href="https://kf.bmstu.ru" class="text-primary">kf.bmstu.ru</a> | info.kf@bmstu.ru
+      </div>
+    </div>
+
+    <!-- Attachments -->
+    <div class="px-5 pb-3 border-t border-base-200">
+      <label class="flex items-center gap-2 cursor-pointer mt-2">
+        <input type="file" id="compose-files" multiple class="hidden" onchange="updateFileList()">
+        <span class="btn btn-ghost btn-xs gap-1">
+          <i class="bi bi-paperclip"></i> Прикрепить файлы
+        </span>
+      </label>
+      <div id="compose-file-list" class="flex flex-wrap gap-2 mt-2"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-between px-5 py-3 bg-base-200 border-t border-base-300">
+      <div id="compose-status" class="text-sm text-base-content/60"></div>
+      <div class="flex gap-2">
+        <form method="dialog">
+          <button class="btn btn-ghost btn-sm">Отмена</button>
+        </form>
+        <button class="btn btn-primary btn-sm gap-1" onclick="sendMail()" id="send-btn">
+          <i class="bi bi-send"></i> Отправить
+        </button>
+      </div>
+    </div>
+
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let _messages   = [];
+let _filtered   = [];
+let _page       = 1;
+let _perPage    = 30;
+let _total      = 0;
+let _activeUid  = null;
+let _loading    = false;
+let _folder     = 'inbox';   // 'inbox' | 'sent'
+
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => loadMessages(false));
+
+// ── Folder switch ──────────────────────────────────────────────────────────
+function setFolder(folder) {
+  if (_folder === folder) return;
+  _folder    = folder;
+  _page      = 1;
+  _activeUid = null;
+  _messages  = [];
+  _filtered  = [];
+  // Reset view panel
+  document.getElementById('mail-view').innerHTML = `
+    <div class="mail-empty-state">
+      <i class="bi bi-${folder === 'sent' ? 'send' : 'envelope-open'}"
+         style="font-size:2.8rem;opacity:0.25"></i>
+      <span class="text-sm">Выберите письмо из списка</span>
+    </div>`;
+  // Update tab styles
+  ['inbox','sent'].forEach(f => {
+    const btn = document.getElementById('tab-' + f);
+    if (!btn) return;
+    const active = f === folder;
+    btn.className = [
+      'flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5',
+      'border-b-2 transition-colors',
+      active ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content',
+    ].join(' ');
+  });
+  loadMessages(false);
+}
+
+// ── Load message list ──────────────────────────────────────────────────────
+async function loadMessages(forceRefresh) {
+  if (_loading) return;
+  _loading = true;
+  if (forceRefresh) {
+    const icon = document.getElementById('refresh-icon');
+    icon.classList.add('animate-spin');
+  }
+
+  const url = `/mail/list?folder=${_folder}&page=${_page}&refresh=${forceRefresh ? 1 : 0}`;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.error) {
+      renderError(d.error);
+      return;
+    }
+    _messages = d.messages || [];
+    _total    = d.total || 0;
+    _filtered = _messages;
+    renderList(_filtered);
+    updatePager(d.has_more);
+  } catch (e) {
+    renderError('Ошибка сети: ' + e.message);
+  } finally {
+    _loading = false;
+    document.getElementById('refresh-icon').classList.remove('animate-spin');
+  }
+}
+
+function refreshMail() {
+  _page = 1;
+  loadMessages(true);
+}
+
+function changePage(delta) {
+  _page += delta;
+  if (_page < 1) _page = 1;
+  loadMessages(false);
+}
+
+// ── Render list ────────────────────────────────────────────────────────────
+function renderList(items) {
+  const el = document.getElementById('mail-list');
+  if (!items.length) {
+    el.innerHTML = '<div class="py-12 text-center text-sm text-base-content/40">Нет писем за этот период</div>';
+    document.getElementById('list-count').textContent = '0 писем';
+    return;
+  }
+  const isSent = _folder === 'sent';
+  el.innerHTML = items.map(m => {
+    const displayName = isSent ? formatSender(m.to || '—') : formatSender(m.from);
+    const dotHtml     = isSent
+      ? '<div style="width:7px;flex-shrink:0"></div>'
+      : '<div class="mail-unread-dot mt-1"></div>';
+    return `
+    <div class="mail-item ${(!isSent && m.unread) ? 'unread' : ''} ${m.uid === _activeUid ? 'active' : ''}"
+         id="mi-${m.uid}" onclick="openMessage('${m.uid}')">
+      <div class="flex items-start gap-2">
+        ${dotHtml}
+        <div class="flex-1 min-w-0">
+          <div class="flex justify-between items-baseline gap-1">
+            <div class="mail-item-from">${isSent ? '<span class="opacity-50 text-xs mr-0.5">→</span>' : ''}${escHtml(displayName)}</div>
+            <div class="mail-item-date">${escHtml(m.date.split(' ').pop())}</div>
+          </div>
+          <div class="mail-item-subj">${escHtml(m.subject)}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('list-count').textContent = `${_total} писем`;
+}
+
+function updatePager(hasMore) {
+  document.getElementById('prev-btn').disabled = _page <= 1;
+  document.getElementById('next-btn').disabled = !hasMore;
+  document.getElementById('page-label').textContent = _page;
+}
+
+function renderError(msg) {
+  const diagLink = `{{ '<a href="/mail/test" target="_blank" class="link link-primary">Диагностика</a>' if current_user.can_manage else '' }}`;
+  document.getElementById('mail-list').innerHTML =
+    `<div class="px-4 py-6 text-sm text-error text-center">
+       <i class="bi bi-exclamation-circle mb-2" style="font-size:1.5rem;display:block"></i>
+       ${escHtml(msg)}
+       ${diagLink ? '<div class="mt-2 text-base-content/50">' + diagLink + '</div>' : ''}
+     </div>`;
+  document.getElementById('list-count').textContent = 'Ошибка';
+}
+
+// ── Filter / search ────────────────────────────────────────────────────────
+function filterMessages(q) {
+  q = q.toLowerCase();
+  const isSent = _folder === 'sent';
+  _filtered = q
+    ? _messages.filter(m =>
+        m.subject.toLowerCase().includes(q) ||
+        (isSent ? (m.to || '') : m.from).toLowerCase().includes(q))
+    : _messages;
+  renderList(_filtered);
+}
+
+// ── Open message ───────────────────────────────────────────────────────────
+async function openMessage(uid) {
+  if (_activeUid === uid) return;
+  _activeUid = uid;
+
+  // Highlight in list
+  document.querySelectorAll('.mail-item').forEach(el => el.classList.remove('active'));
+  const item = document.getElementById(`mi-${uid}`);
+  if (item) { item.classList.add('active'); item.classList.remove('unread'); }
+
+  // Show loading in view panel
+  document.getElementById('mail-view').innerHTML = `
+    <div class="mail-view-header">
+      <div class="skeleton-line" style="width:70%;height:18px"></div>
+      <div class="skeleton-line" style="width:50%"></div>
+      <div class="skeleton-line" style="width:40%"></div>
+    </div>
+    <div class="mail-view-body p-6">
+      ${[80,95,60,85,70].map(w=>`<div class="skeleton-line" style="width:${w}%"></div>`).join('')}
+    </div>`;
+
+  try {
+    const r = await fetch(`/mail/message/${uid}?folder=${_folder}`);
+    const d = await r.json();
+    if (d.error) {
+      showViewError(d.error);
+      return;
+    }
+    renderMessage(d);
+  } catch (e) {
+    showViewError('Ошибка загрузки: ' + e.message);
+  }
+}
+
+function renderMessage(d) {
+  const isSent       = _folder === 'sent';
+  const replySubject = d.subject.startsWith('Re:') ? d.subject : `Re: ${d.subject}`;
+  const fwdSubject   = d.subject.startsWith('Fwd:') ? d.subject : `Fwd: ${d.subject}`;
+  const replyToAddr  = d.reply_to || extractEmail(d.from);
+
+  let bodyHtml = '';
+  if (d.html_body) {
+    const safe = (d.html_body || '').replace(/`/g, '&#96;');
+    bodyHtml = `<iframe class="mail-body-iframe" sandbox="allow-same-origin"
+                        srcdoc="${safe.replace(/"/g, '&quot;')}"
+                        onload="autoResizeIframe(this)"></iframe>`;
+  } else if (d.text_body) {
+    bodyHtml = `<div class="mail-text-body">${escHtml(d.text_body)}</div>`;
+  } else {
+    bodyHtml = `<div class="mail-text-body text-base-content/40 italic">Тело письма пустое</div>`;
+  }
+
+  let attHtml = '';
+  if (d.attachments && d.attachments.length) {
+    attHtml = `<div class="mail-attachments">
+      <i class="bi bi-paperclip text-base-content/40 flex-shrink-0"></i>
+      ${d.attachments.map((a, i) => `
+        <a class="att-chip" href="/mail/attachment/${d.uid}/${i}?folder=${_folder}" download="${escHtml(a.name)}">
+          <i class="bi bi-file-earmark"></i>
+          ${escHtml(a.name)}
+          <span class="opacity-40">${fmtSize(a.size)}</span>
+        </a>`).join('')}
+    </div>`;
+  }
+
+  document.getElementById('mail-view').innerHTML = `
+    <div class="mail-view-header">
+      <div class="mail-view-subject">${escHtml(d.subject)}</div>
+      ${metaRow('От', d.from)}
+      ${metaRow('Кому', d.to)}
+      ${d.cc ? metaRow('Копия', d.cc) : ''}
+      ${metaRow('Дата', d.date)}
+      <div class="mt-3 flex gap-2">
+        ${isSent
+          ? `<button onclick="openCompose('${escHtml(extractEmail(d.to))}', '${escHtml(fwdSubject)}')"
+                     class="btn btn-outline btn-xs gap-1">
+               <i class="bi bi-forward"></i> Переслать
+             </button>`
+          : `<button onclick="openReply('${escHtml(replyToAddr)}', '${escHtml(replySubject)}')"
+                     class="btn btn-outline btn-xs gap-1">
+               <i class="bi bi-reply"></i> Ответить
+             </button>`
+        }
+      </div>
+    </div>
+    <div class="mail-view-body">${bodyHtml}</div>
+    ${attHtml}`;
+}
+
+function metaRow(label, value) {
+  return `<div class="mail-meta-row">
+    <span class="mail-meta-label">${label}</span>
+    <span class="mail-meta-value">${escHtml(value || '—')}</span>
+  </div>`;
+}
+
+function showViewError(msg) {
+  document.getElementById('mail-view').innerHTML =
+    `<div class="mail-empty-state"><i class="bi bi-exclamation-circle text-error" style="font-size:2rem"></i>
+     <span class="text-sm text-error">${escHtml(msg)}</span></div>`;
+}
+
+function autoResizeIframe(iframe) {
+  try {
+    const h = iframe.contentDocument.body.scrollHeight;
+    iframe.style.height = Math.max(h + 40, 300) + 'px';
+  } catch(e) {
+    iframe.style.height = '500px';
+  }
+}
+
+// ── Compose ────────────────────────────────────────────────────────────────
+function openCompose(to, subject) {
+  document.getElementById('compose-to').value      = to      || '';
+  document.getElementById('compose-cc').value      = '';
+  document.getElementById('compose-subject').value = subject || '';
+  document.getElementById('compose-body').value    = '';
+  document.getElementById('compose-file-list').innerHTML = '';
+  document.getElementById('compose-files').value  = '';
+  document.getElementById('compose-status').textContent  = '';
+  document.getElementById('compose-modal').showModal();
+  setTimeout(() => {
+    const el = to ? document.getElementById('compose-subject') : document.getElementById('compose-to');
+    el.focus();
+  }, 80);
+}
+
+function openReply(to, subject) {
+  openCompose(to, subject);
+}
+
+function updateFileList() {
+  const files = document.getElementById('compose-files').files;
+  const container = document.getElementById('compose-file-list');
+  container.innerHTML = [...files].map(f =>
+    `<span class="att-chip"><i class="bi bi-file-earmark"></i>${escHtml(f.name)}
+     <span class="opacity-40">${fmtSize(f.size)}</span></span>`
+  ).join('');
+}
+
+async function sendMail() {
+  const to      = document.getElementById('compose-to').value.trim();
+  const cc      = document.getElementById('compose-cc').value.trim();
+  const subject = document.getElementById('compose-subject').value.trim();
+  const body    = document.getElementById('compose-body').value.trim();
+  const status  = document.getElementById('compose-status');
+  const btn     = document.getElementById('send-btn');
+
+  if (!to)      { status.textContent = 'Укажите получателя'; status.className = 'text-sm text-error'; return; }
+  if (!subject) { status.textContent = 'Укажите тему';       status.className = 'text-sm text-error'; return; }
+
+  btn.disabled = true;
+  status.textContent = 'Отправка…';
+  status.className   = 'text-sm text-base-content/60';
+
+  const fd = new FormData();
+  fd.append('to', to);
+  if (cc) fd.append('cc', cc);
+  fd.append('subject', subject);
+  fd.append('body', body);
+  const files = document.getElementById('compose-files').files;
+  for (const f of files) fd.append('attachments', f);
+
+  try {
+    const r = await fetch('/mail/send', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: fd,
+    });
+    const d = await r.json();
+    if (d.error) {
+      status.textContent = d.error;
+      status.className   = 'text-sm text-error';
+    } else {
+      status.textContent = 'Письмо отправлено';
+      status.className   = 'text-sm text-success';
+      setTimeout(() => document.getElementById('compose-modal').close(), 1200);
+    }
+  } catch (e) {
+    status.textContent = 'Ошибка сети';
+    status.className   = 'text-sm text-error';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function formatSender(raw) {
+  // "Name <email>" → "Name"
+  const m = raw.match(/^(.+?)\s*<[^>]+>$/);
+  return m ? m[1].trim().replace(/^"(.*)"$/, '$1') : raw;
+}
+
+function extractEmail(raw) {
+  const m = raw.match(/<([^>]+)>/);
+  return m ? m[1] : raw;
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' Б';
+  if (bytes < 1024*1024) return Math.round(bytes/1024) + ' КБ';
+  return (bytes/(1024*1024)).toFixed(1) + ' МБ';
+}
+</script>
+{% endblock %}

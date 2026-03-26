@@ -102,6 +102,8 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), nullable=False, default=Role.STAFF)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    mail_user     = db.Column(db.String(200), nullable=True)
+    mail_password = db.Column(db.String(200), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

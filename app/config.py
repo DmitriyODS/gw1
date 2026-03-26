@@ -20,3 +20,19 @@ class Config:
     WTF_CSRF_TIME_LIMIT = None
     TZ_OFFSET_HOURS = int(os.environ.get('TZ_OFFSET_HOURS', 3))
     YANDEX_DISK_TOKEN = os.environ.get('YANDEX_DISK_TOKEN', 'y0__xDNucmSBBipvz8go7yz8BaVcBPY08qSol9gfTloi8DUYooOag')
+
+    # ── Почта (IMAP/SMTP) ──
+    MAIL_IMAP_HOST   = os.environ.get('MAIL_IMAP_HOST',   'mail.bmstu.ru')
+    MAIL_IMAP_PORT   = int(os.environ.get('MAIL_IMAP_PORT', 993))
+    MAIL_SMTP_HOST   = os.environ.get('MAIL_SMTP_HOST',   'mail.bmstu.ru')
+    MAIL_SMTP_PORT   = int(os.environ.get('MAIL_SMTP_PORT', 465))
+    MAIL_USER        = os.environ.get('MAIL_USER',        'osipovskiy.ds')
+    MAIL_PASSWORD    = os.environ.get('MAIL_PASSWORD',    'BmstuOsipo2025')
+    MAIL_FROM_EMAIL  = os.environ.get('MAIL_FROM_EMAIL',  'info.kf@bmstu.ru')
+    MAIL_FROM_NAME   = os.environ.get('MAIL_FROM_NAME',   'Отдел региональных коммуникаций (Калуга) МГТУ им. Н.Э. Баумана')
+    # Для корпоративных серверов с внутренними сертификатами — False
+    MAIL_VERIFY_SSL  = os.environ.get('MAIL_VERIFY_SSL',  'false').lower() == 'true'
+    MAIL_INBOX_FOLDER = os.environ.get('MAIL_INBOX_FOLDER', 'info.kf')
+    MAIL_SENT_FOLDER  = os.environ.get('MAIL_SENT_FOLDER',  'Sent')
+    # SMTP: 'ssl' = SMTP_SSL (порт 465), 'starttls' = SMTP+STARTTLS (порт 587)
+    MAIL_SMTP_MODE   = os.environ.get('MAIL_SMTP_MODE',   'ssl')

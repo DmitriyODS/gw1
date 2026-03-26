@@ -624,35 +624,99 @@ def export_user_stats_excel():
         by_type[type_label]['cnt'] += 1
         by_type[type_label]['secs'] += secs
 
+    def _fmt_secs(secs):
+        """Convert seconds to human-readable string: Xч Yмин Zсек"""
+        secs = int(secs)
+        h = secs // 3600
+        m = (secs % 3600) // 60
+        s = secs % 60
+        if h > 0:
+            return f'{h}ч {m:02d}мин {s:02d}сек'
+        if m > 0:
+            return f'{m}мин {s:02d}сек'
+        return f'{s}сек'
+
+    now_local = (datetime.utcnow() + timedelta(hours=tz_hours)).strftime('%d.%m.%Y %H:%M')
+
     wb = openpyxl.Workbook()
+    from openpyxl.styles import Alignment, PatternFill
+    from openpyxl.utils import get_column_letter
 
     ws1 = wb.active
     ws1.title = 'Задачи'
-    ws1.append(['ID', 'Заголовок', 'Тип', 'Отдел', 'Закрыта', 'Время (мин)'])
-    for cell in ws1[1]:
+
+    # Report header
+    ws1.append([f'Отчёт по задачам: {user.full_name}'])
+    ws1['A1'].font = Font(bold=True, size=13)
+    ws1.append([f'Период: {period_label}   |   Дата выгрузки: {now_local}'])
+    ws1['A2'].font = Font(italic=True)
+    ws1.append([])  # empty row
+
+    # Column headers
+    header_row = 4
+    ws1.append(['ID', 'Заголовок', 'Тип', 'Отдел', 'Закрыта', 'Время'])
+    for cell in ws1[header_row]:
         cell.font = Font(bold=True)
+
+    total_secs = 0
     for t in done_tasks:
         secs = int(time_by_task.get(t.id, 0))
+        total_secs += secs
         ws1.append([
             t.id,
             t.title,
             TYPE_LABELS.get(t.task_type, t.task_type or ''),
             t.department.name if t.department else '',
             (t.completed_at + timedelta(hours=tz_hours)).strftime('%d.%m.%Y %H:%M') if t.completed_at else '',
-            round(secs / 60),
+            _fmt_secs(secs),
         ])
 
-    ws2 = wb.create_sheet('По типам')
-    ws2.append(['Тип задачи', 'Кол-во задач', 'Время (мин)', 'Время (ч)'])
-    for cell in ws2[1]:
+    # Totals row
+    ws1.append(['', f'Итого задач: {len(done_tasks)}', '', '', '', _fmt_secs(total_secs)])
+    total_row = ws1.max_row
+    for cell in ws1[total_row]:
         cell.font = Font(bold=True)
+
+    # Column widths
+    ws1.column_dimensions['A'].width = 6
+    ws1.column_dimensions['B'].width = 40
+    ws1.column_dimensions['C'].width = 28
+    ws1.column_dimensions['D'].width = 22
+    ws1.column_dimensions['E'].width = 18
+    ws1.column_dimensions['F'].width = 18
+
+    ws2 = wb.create_sheet('По типам')
+
+    # Report header
+    ws2.append([f'Статистика по типам: {user.full_name}'])
+    ws2['A1'].font = Font(bold=True, size=13)
+    ws2.append([f'Период: {period_label}   |   Дата выгрузки: {now_local}'])
+    ws2['A2'].font = Font(italic=True)
+    ws2.append([])
+
+    ws2.append(['Тип задачи', 'Кол-во задач', 'Время'])
+    for cell in ws2[4]:
+        cell.font = Font(bold=True)
+
+    total2_cnt = 0
+    total2_secs = 0
     for type_label, data in sorted(by_type.items(), key=lambda x: x[1]['cnt'], reverse=True):
+        total2_cnt += data['cnt']
+        total2_secs += data['secs']
         ws2.append([
             type_label,
             data['cnt'],
-            round(data['secs'] / 60),
-            round(data['secs'] / 3600, 1),
+            _fmt_secs(data['secs']),
         ])
+
+    # Totals
+    ws2.append(['Итого', total2_cnt, _fmt_secs(total2_secs)])
+    for cell in ws2[ws2.max_row]:
+        cell.font = Font(bold=True)
+
+    ws2.column_dimensions['A'].width = 35
+    ws2.column_dimensions['B'].width = 14
+    ws2.column_dimensions['C'].width = 18
 
     output = io.BytesIO()
     wb.save(output)

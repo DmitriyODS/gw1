@@ -62,12 +62,12 @@
     /* ── Sidebar island ── */
     #sidebar {
       width: 240px; flex-shrink: 0;
-      background: color-mix(in oklch, var(--color-base-100) 78%, transparent);
-      backdrop-filter: blur(24px) saturate(1.6);
-      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      background: color-mix(in oklch, var(--color-base-100) 58%, transparent);
+      backdrop-filter: blur(40px) saturate(2.2) brightness(1.04);
+      -webkit-backdrop-filter: blur(40px) saturate(2.2) brightness(1.04);
       box-shadow: 0 4px 32px rgba(0,0,0,0.10),
-                  inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
-      border: 1px solid color-mix(in oklch, white 22%, transparent);
+                  inset 0 1px 0 color-mix(in oklch, white 42%, transparent);
+      border: 1px solid color-mix(in oklch, white 32%, transparent);
       border-radius: 20px;
       display: flex; flex-direction: column;
       position: fixed; top: 10px; left: 10px; bottom: 10px; z-index: 50;
@@ -86,14 +86,14 @@
     .sidebar-logo-btn {
       display: flex; align-items: center; gap: 9px;
       width: 100%; border: none;
-      background: var(--color-primary);
-      color: white; border-radius: 12px;
+      background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
+      color: var(--color-base-content); border-radius: 12px;
       padding: 10px 14px;
-      font-weight: 800; font-size: 0.9rem;
+      font-weight: 700; font-size: 0.9rem;
       text-decoration: none; cursor: pointer;
-      transition: opacity 0.15s;
+      transition: background 0.15s;
     }
-    .sidebar-logo-btn:hover { opacity: 0.88; color: white; }
+    .sidebar-logo-btn:hover { background: color-mix(in oklch, var(--color-base-content) 10%, var(--color-base-100)); color: var(--color-base-content); }
     .sidebar-version {
       font-size: 0.58rem; opacity: 0.55; font-weight: 400; margin-left: auto;
     }
@@ -223,28 +223,50 @@
     /* ── Main island ── */
     .main-wrap { margin-left: 262px; padding: 10px 10px 10px 0; min-height: 100vh; box-sizing: border-box; }
     .main-island {
-      background: color-mix(in oklch, var(--color-base-100) 88%, transparent);
-      backdrop-filter: blur(12px) saturate(1.2);
-      -webkit-backdrop-filter: blur(12px) saturate(1.2);
+      background: color-mix(in oklch, var(--color-base-100) 70%, transparent);
+      backdrop-filter: blur(28px) saturate(1.8);
+      -webkit-backdrop-filter: blur(28px) saturate(1.8);
       border-radius: 20px;
       box-shadow: 0 2px 24px rgba(0,0,0,0.06),
-                  inset 0 1px 0 color-mix(in oklch, white 18%, transparent);
-      border: 1px solid color-mix(in oklch, white 18%, transparent);
+                  inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
+      border: 1px solid color-mix(in oklch, white 26%, transparent);
       padding: 24px;
       min-height: calc(100vh - 20px);
       box-sizing: border-box;
     }
 
-    /* Mobile toggle */
-    #sidebar-toggle {
-      display: none; position: fixed; top: 18px; left: 18px; z-index: 60;
-      width: 36px; height: 36px; border-radius: 9px;
-      background: var(--color-base-100); border: 1px solid var(--color-base-300);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      cursor: pointer; align-items: center; justify-content: center;
-      color: var(--color-base-content); font-size: 1.1rem; transition: all 0.12s;
+    /* Mobile topbar */
+    #mobile-topbar {
+      display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 48;
+      height: 52px;
+      background: color-mix(in oklch, var(--color-base-100) 72%, transparent);
+      backdrop-filter: blur(32px) saturate(2.0);
+      -webkit-backdrop-filter: blur(32px) saturate(2.0);
+      border-bottom: 1px solid color-mix(in oklch, white 22%, transparent);
+      box-shadow: 0 1px 16px rgba(0,0,0,0.08);
+      align-items: center; padding: 0 14px; gap: 10px;
     }
-    #sidebar-toggle:hover { background: var(--color-base-200); }
+    [data-theme="dark"] #mobile-topbar {
+      border-bottom-color: color-mix(in oklch, white 8%, transparent);
+    }
+    [data-glass="off"] #mobile-topbar {
+      background: var(--color-base-100) !important;
+      backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+      border-bottom: 1px solid var(--color-base-300) !important;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.07) !important;
+    }
+    #sidebar-toggle {
+      display: flex; width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+      background: color-mix(in oklch, var(--color-base-content) 6%, var(--color-base-100));
+      border: 1px solid color-mix(in oklch, var(--color-base-300) 80%, transparent);
+      cursor: pointer; align-items: center; justify-content: center;
+      color: var(--color-base-content); font-size: 1.1rem; transition: background 0.12s;
+    }
+    #sidebar-toggle:hover { background: color-mix(in oklch, var(--color-base-content) 12%, var(--color-base-100)); }
+    .topbar-title {
+      font-size: 0.9rem; font-weight: 700; opacity: 0.65;
+      color: var(--color-base-content);
+    }
 
     /* Task styles */
     .task-overdue { background-color: color-mix(in oklch, var(--color-error) 8%, var(--color-base-100)) !important; border-left: 4px solid var(--color-error) !important; }
@@ -256,26 +278,26 @@
 
     /* ── Dark mode island elevation ── */
     [data-theme="dark"] #sidebar {
-      background: color-mix(in oklch, var(--color-base-100) 82%, transparent);
+      background: color-mix(in oklch, var(--color-base-100) 62%, transparent);
       box-shadow: 0 4px 40px rgba(0,0,0,0.55),
+                  inset 0 1px 0 color-mix(in oklch, white 10%, transparent);
+      border-color: color-mix(in oklch, white 13%, transparent);
+    }
+    [data-theme="dark"] .main-island {
+      background: color-mix(in oklch, var(--color-base-100) 72%, transparent);
+      box-shadow: 0 2px 32px rgba(0,0,0,0.45),
                   inset 0 1px 0 color-mix(in oklch, white 8%, transparent);
       border-color: color-mix(in oklch, white 9%, transparent);
     }
-    [data-theme="dark"] .main-island {
-      background: color-mix(in oklch, var(--color-base-100) 90%, transparent);
-      box-shadow: 0 2px 32px rgba(0,0,0,0.45),
-                  inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
-      border-color: color-mix(in oklch, white 7%, transparent);
-    }
     [data-theme="dark"] #user-menu-panel {
-      background: color-mix(in oklch, var(--color-base-200) 88%, transparent);
-      border-color: color-mix(in oklch, white 8%, transparent);
+      background: color-mix(in oklch, var(--color-base-200) 70%, transparent);
+      border-color: color-mix(in oklch, white 10%, transparent);
       box-shadow: 0 -4px 28px rgba(0,0,0,0.4),
-                  inset 0 1px 0 color-mix(in oklch, white 7%, transparent);
+                  inset 0 1px 0 color-mix(in oklch, white 8%, transparent);
     }
     [data-theme="dark"] #sidebar-toggle {
-      border-color: oklch(32% 0.068 252);
-      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      background: color-mix(in oklch, var(--color-base-content) 8%, var(--color-base-100));
+      border-color: color-mix(in oklch, var(--color-base-300) 60%, transparent);
     }
 
     /* ── Mobile ── */
@@ -283,9 +305,9 @@
       #sidebar { transform: translateX(calc(-100% - 20px)); }
       #sidebar.open { transform: translateX(0); }
       #sidebar-overlay.open { display: block; }
-      #sidebar-toggle { display: flex; }
-      .main-wrap { margin-left: 0; padding: 10px; }
-      .main-island { padding: 16px; min-height: calc(100vh - 20px); }
+      #mobile-topbar { display: flex; }
+      .main-wrap { margin-left: 0; padding: 62px 10px 10px; }
+      .main-island { padding: 16px; min-height: calc(100vh - 72px); }
     }
 
     /* ── Global: border-radius system ── */
@@ -326,6 +348,46 @@
     .btn-ghost:hover { transform: translateY(-1px) !important; }
     .btn-ghost:active { transform: translateY(0) !important; }
 
+    /* ── Global: btn-success follows theme ── */
+    .btn-success {
+      background: linear-gradient(155deg,
+        color-mix(in oklch, var(--color-success) 88%, white 12%),
+        var(--color-success)) !important;
+      border-color: transparent !important;
+      color: var(--color-success-content) !important;
+      box-shadow: 0 2px 10px color-mix(in oklch, var(--color-success) 38%, transparent),
+                  inset 0 1px 0 color-mix(in oklch, white 20%, transparent) !important;
+      transition: box-shadow 0.15s, transform 0.1s !important;
+    }
+    .btn-success:hover:not(:disabled) {
+      box-shadow: 0 4px 18px color-mix(in oklch, var(--color-success) 52%, transparent),
+                  inset 0 1px 0 color-mix(in oklch, white 25%, transparent) !important;
+      transform: translateY(-1px) !important;
+    }
+    .btn-success:active:not(:disabled) {
+      transform: translateY(0) !important;
+      box-shadow: 0 1px 6px color-mix(in oklch, var(--color-success) 33%, transparent) !important;
+    }
+    .btn-outline.btn-success {
+      background: transparent !important;
+      color: var(--color-success) !important;
+      border-color: var(--color-success) !important;
+      box-shadow: none !important;
+    }
+    .btn-outline.btn-success:hover:not(:disabled) {
+      background: color-mix(in oklch, var(--color-success) 12%, transparent) !important;
+      transform: translateY(-1px) !important;
+    }
+    [data-glass="off"] .btn-success {
+      background: var(--color-success) !important;
+      box-shadow: none !important;
+      transition: background 0.18s !important;
+    }
+    [data-glass="off"] .btn-success:hover:not(:disabled) {
+      background: color-mix(in oklch, var(--color-success) 85%, black) !important;
+      transform: none !important; box-shadow: none !important;
+    }
+
     /* ── Global: Input glass ── */
     .input, .select, .textarea {
       background: color-mix(in oklch, var(--color-base-100) 85%, transparent) !important;
@@ -342,18 +404,18 @@
 
     /* ── Global: Modal glass ── */
     .modal-box {
-      background: color-mix(in oklch, var(--color-base-100) 88%, transparent) !important;
-      backdrop-filter: blur(24px) saturate(1.4) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
-      border: 1px solid color-mix(in oklch, white 20%, transparent) !important;
+      background: color-mix(in oklch, var(--color-base-100) 68%, transparent) !important;
+      backdrop-filter: blur(52px) saturate(2.4) brightness(1.04) !important;
+      -webkit-backdrop-filter: blur(52px) saturate(2.4) brightness(1.04) !important;
+      border: 1px solid color-mix(in oklch, white 30%, transparent) !important;
       box-shadow: 0 8px 48px rgba(0,0,0,0.15),
-                  inset 0 1px 0 color-mix(in oklch, white 20%, transparent) !important;
+                  inset 0 1px 0 color-mix(in oklch, white 32%, transparent) !important;
     }
     [data-theme="dark"] .modal-box {
-      background: color-mix(in oklch, var(--color-base-200) 90%, transparent) !important;
-      border-color: color-mix(in oklch, white 8%, transparent) !important;
+      background: color-mix(in oklch, var(--color-base-200) 70%, transparent) !important;
+      border-color: color-mix(in oklch, white 12%, transparent) !important;
       box-shadow: 0 8px 48px rgba(0,0,0,0.5),
-                  inset 0 1px 0 color-mix(in oklch, white 6%, transparent) !important;
+                  inset 0 1px 0 color-mix(in oklch, white 8%, transparent) !important;
     }
 
     /* ── Color scheme: Monochrome ── */
@@ -364,6 +426,8 @@
       --color-primary-content: #ffffff;
       --color-secondary: oklch(50% 0.008 260);
       --color-secondary-content: #ffffff;
+      --color-success: oklch(44% 0.055 145);
+      --color-success-content: #ffffff;
     }
     [data-theme="light"][data-color="mono"] body { background: #e2e2e2; }
 
@@ -376,6 +440,8 @@
       --color-primary-content: oklch(15% 0.005 240);
       --color-secondary: oklch(62% 0.008 240);
       --color-secondary-content: oklch(15% 0.005 240);
+      --color-success: oklch(62% 0.055 145);
+      --color-success-content: oklch(15% 0.005 240);
     }
     [data-theme="dark"][data-color="mono"] body { background: oklch(13% 0.003 240); }
     [data-theme="dark"][data-color="mono"] #sidebar { border-color: oklch(32% 0.005 240); }
@@ -383,30 +449,40 @@
 
     /* ── Color scheme: Blue + Black ── */
     [data-theme="light"][data-color="blue-black"] {
-      --color-base-200: #f0f0f5;
-      --color-base-300: #d4d4e2;
-      --color-base-content: oklch(12% 0.020 254);
-      --color-primary: oklch(50% 0.210 254);
+      --color-base-100: #ffffff;
+      --color-base-200: #ebebf5;
+      --color-base-300: #c2c2dc;
+      --color-base-content: oklch(8% 0.030 254);
+      --color-primary: oklch(48% 0.230 254);
       --color-primary-content: #ffffff;
-      --color-secondary: oklch(16% 0.028 254);
+      --color-secondary: oklch(14% 0.035 254);
       --color-secondary-content: #ffffff;
-      --color-neutral: oklch(14% 0.020 254);
+      --color-neutral: oklch(12% 0.025 254);
+      --color-neutral-content: #ffffff;
+      --color-success: oklch(52% 0.185 195);
+      --color-success-content: #ffffff;
     }
-    [data-theme="light"][data-color="blue-black"] body { background: #d6d6e8; }
+    [data-theme="light"][data-color="blue-black"] body { background: #c8c8e0; }
 
     [data-theme="dark"][data-color="blue-black"] {
-      --color-base-100: oklch(11% 0.032 254);
-      --color-base-200: oklch(8% 0.026 254);
-      --color-base-300: oklch(16% 0.038 254);
-      --color-base-content: oklch(90% 0.018 254);
-      --color-primary: oklch(64% 0.200 254);
+      --color-base-100: oklch(12% 0.035 254);
+      --color-base-200: oklch(8% 0.028 254);
+      --color-base-300: oklch(22% 0.048 254);
+      --color-base-content: oklch(97% 0.008 254);
+      --color-primary: oklch(66% 0.230 254);
       --color-primary-content: #ffffff;
-      --color-secondary: oklch(22% 0.038 254);
-      --color-secondary-content: oklch(88% 0.016 254);
+      --color-secondary: oklch(26% 0.050 254);
+      --color-secondary-content: oklch(96% 0.010 254);
+      --color-neutral: oklch(20% 0.040 254);
+      --color-neutral-content: oklch(96% 0.010 254);
+      --color-info: oklch(68% 0.185 220);
+      --color-info-content: #ffffff;
+      --color-success: oklch(60% 0.195 195);
+      --color-success-content: #ffffff;
     }
-    [data-theme="dark"][data-color="blue-black"] body { background: oklch(5% 0.020 254); }
-    [data-theme="dark"][data-color="blue-black"] #sidebar { border-color: color-mix(in oklch, white 6%, transparent); }
-    [data-theme="dark"][data-color="blue-black"] .main-island { border-color: color-mix(in oklch, white 5%, transparent); }
+    [data-theme="dark"][data-color="blue-black"] body { background: oklch(5% 0.022 254); }
+    [data-theme="dark"][data-color="blue-black"] #sidebar { border-color: color-mix(in oklch, white 12%, transparent); }
+    [data-theme="dark"][data-color="blue-black"] .main-island { border-color: color-mix(in oklch, white 10%, transparent); }
 
     /* ── Color scheme: Orange + Gray ── */
     [data-theme="light"][data-color="orange"] {
@@ -417,6 +493,8 @@
       --color-secondary: oklch(54% 0.012 50);
       --color-secondary-content: #ffffff;
       --color-info: oklch(60% 0.160 220);
+      --color-success: oklch(54% 0.165 140);
+      --color-success-content: #ffffff;
     }
     [data-theme="light"][data-color="orange"] body { background: #f0e2d2; }
 
@@ -429,6 +507,8 @@
       --color-primary-content: oklch(12% 0.030 50);
       --color-secondary: oklch(60% 0.010 50);
       --color-secondary-content: oklch(12% 0.010 50);
+      --color-success: oklch(64% 0.160 140);
+      --color-success-content: oklch(12% 0.030 50);
     }
     [data-theme="dark"][data-color="orange"] body { background: oklch(11% 0.015 50); }
     [data-theme="dark"][data-color="orange"] #sidebar { border-color: color-mix(in oklch, oklch(64% 0.195 50) 12%, transparent); }
@@ -443,6 +523,8 @@
       --color-secondary: oklch(58% 0.140 85);
       --color-secondary-content: #ffffff;
       --color-info: oklch(60% 0.175 215);
+      --color-success: oklch(58% 0.190 130);
+      --color-success-content: #ffffff;
     }
     [data-theme="light"][data-color="groove"] body { background: #cff0de; }
 
@@ -456,6 +538,8 @@
       --color-secondary: oklch(68% 0.140 85);
       --color-secondary-content: oklch(12% 0.025 85);
       --color-info: oklch(65% 0.160 215);
+      --color-success: oklch(68% 0.185 130);
+      --color-success-content: oklch(12% 0.025 155);
     }
     [data-theme="dark"][data-color="groove"] body { background: oklch(14% 0.030 155); }
     [data-theme="dark"][data-color="groove"] #sidebar { border-color: oklch(30% 0.060 155); }
@@ -483,10 +567,82 @@
       --color-primary-content: oklch(18% 0.060 96);
       --color-secondary: oklch(76% 0.160 75);
       --color-secondary-content: oklch(18% 0.040 75);
+      --color-success: oklch(72% 0.175 128);
+      --color-success-content: oklch(18% 0.060 96);
     }
     [data-theme="dark"][data-color="yellow"] body { background: oklch(13% 0.022 95); }
     [data-theme="dark"][data-color="yellow"] #sidebar { border-color: color-mix(in oklch, oklch(78% 0.190 96) 15%, transparent); }
     [data-theme="dark"][data-color="yellow"] .main-island { border-color: color-mix(in oklch, oklch(78% 0.190 96) 12%, transparent); }
+
+    /* ── Color scheme: Classic ── */
+    [data-theme="light"][data-color="classic"] {
+      --color-base-100: #ffffff;
+      --color-base-200: #f3f5f9;
+      --color-base-300: #dce0ed;
+      --color-base-content: oklch(12% 0.012 248);
+      --color-primary: oklch(50% 0.225 234);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(44% 0.010 248);
+      --color-secondary-content: #ffffff;
+      --color-neutral: oklch(18% 0.010 248);
+      --color-neutral-content: #ffffff;
+      --color-success: oklch(50% 0.175 168);
+      --color-success-content: #ffffff;
+    }
+    [data-theme="light"][data-color="classic"] body { background: #e4e8f3; }
+
+    [data-theme="dark"][data-color="classic"] {
+      --color-base-100: oklch(15% 0.004 248);
+      --color-base-200: oklch(11% 0.003 248);
+      --color-base-300: oklch(22% 0.006 248);
+      --color-base-content: oklch(93% 0.005 248);
+      --color-primary: oklch(61% 0.225 234);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(72% 0.010 248);
+      --color-secondary-content: oklch(10% 0.003 248);
+      --color-neutral: oklch(28% 0.007 248);
+      --color-neutral-content: oklch(93% 0.005 248);
+      --color-success: oklch(62% 0.170 168);
+      --color-success-content: #ffffff;
+    }
+    [data-theme="dark"][data-color="classic"] body { background: oklch(7% 0.003 248); }
+    [data-theme="dark"][data-color="classic"] #sidebar { border-color: color-mix(in oklch, white 8%, transparent); }
+    [data-theme="dark"][data-color="classic"] .main-island { border-color: color-mix(in oklch, white 7%, transparent); }
+
+    /* ── Color scheme: Purple Gray ── */
+    [data-theme="light"][data-color="purple"] {
+      --color-base-100: #ffffff;
+      --color-base-200: #f7f5fc;
+      --color-base-300: #ddd6f2;
+      --color-base-content: oklch(16% 0.028 292);
+      --color-primary: oklch(53% 0.228 292);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(55% 0.070 260);
+      --color-secondary-content: #ffffff;
+      --color-neutral: oklch(35% 0.050 270);
+      --color-neutral-content: #ffffff;
+      --color-success: oklch(52% 0.180 190);
+      --color-success-content: #ffffff;
+    }
+    [data-theme="light"][data-color="purple"] body { background: #ece7f7; }
+
+    [data-theme="dark"][data-color="purple"] {
+      --color-base-100: oklch(19% 0.022 292);
+      --color-base-200: oklch(15% 0.018 292);
+      --color-base-300: oklch(26% 0.028 292);
+      --color-base-content: oklch(88% 0.014 292);
+      --color-primary: oklch(68% 0.215 292);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(60% 0.065 260);
+      --color-secondary-content: oklch(12% 0.018 260);
+      --color-neutral: oklch(30% 0.035 270);
+      --color-neutral-content: oklch(88% 0.014 292);
+      --color-success: oklch(64% 0.175 190);
+      --color-success-content: #ffffff;
+    }
+    [data-theme="dark"][data-color="purple"] body { background: oklch(11% 0.014 292); }
+    [data-theme="dark"][data-color="purple"] #sidebar { border-color: color-mix(in oklch, oklch(53% 0.228 292) 14%, transparent); }
+    [data-theme="dark"][data-color="purple"] .main-island { border-color: color-mix(in oklch, oklch(53% 0.228 292) 12%, transparent); }
 
     /* ── Flat mode (no glass) ── */
     [data-glass="off"] #sidebar,
@@ -523,6 +679,30 @@
     [data-glass="off"] .select,
     [data-glass="off"] .textarea {
       background: var(--color-base-100) !important;
+    }
+
+    /* ── Flat mode: button overrides ── */
+    [data-glass="off"] .btn-primary {
+      background: var(--color-primary) !important;
+      box-shadow: none !important;
+      transition: background 0.18s !important;
+    }
+    [data-glass="off"] .btn-primary:hover:not(:disabled) {
+      background: color-mix(in oklch, var(--color-primary) 85%, black) !important;
+      box-shadow: none !important; transform: none !important;
+    }
+    [data-glass="off"] .btn-primary:active:not(:disabled) {
+      background: color-mix(in oklch, var(--color-primary) 78%, black) !important;
+      transform: none !important; box-shadow: none !important;
+    }
+    [data-glass="off"] .btn-ghost:hover { transform: none !important; }
+    [data-glass="off"] .btn-ghost:active { transform: none !important; }
+    [data-glass="off"] .input:focus,
+    [data-glass="off"] .select:focus,
+    [data-glass="off"] .textarea:focus {
+      box-shadow: none !important;
+      border-color: var(--color-primary) !important;
+      background: color-mix(in oklch, var(--color-primary) 5%, var(--color-base-100)) !important;
     }
 
     /* ── Color scheme swatches ── */
@@ -674,7 +854,10 @@
   </div>
 </aside>
 
-<button id="sidebar-toggle" onclick="openSidebar()"><i class="bi bi-list"></i></button>
+<div id="mobile-topbar">
+  <button id="sidebar-toggle" onclick="openSidebar()"><i class="bi bi-list"></i></button>
+  <span class="topbar-title">Groove Work</span>
+</div>
 
 <main class="main-wrap">
   <div class="main-island">
@@ -710,6 +893,25 @@ function toggleTheme() {
   localStorage.setItem('tt-theme', next);
   applyTheme(next);
 }
+function applyAndSaveTheme(t) {
+  localStorage.setItem('tt-theme', t);
+  applyTheme(t);
+  _updateThemeBtns(t);
+}
+function _updateThemeBtns(t) {
+  const light = document.getElementById('btn-theme-light');
+  const dark = document.getElementById('btn-theme-dark');
+  if (!light || !dark) return;
+  [light, dark].forEach(b => {
+    b.style.borderColor = '';
+    b.style.background = '';
+    b.style.color = '';
+  });
+  const active = t === 'dark' ? dark : light;
+  active.style.borderColor = 'var(--color-primary)';
+  active.style.background = 'color-mix(in oklch, var(--color-primary) 12%, transparent)';
+  active.style.color = 'var(--color-primary)';
+}
 applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
 
 // ── Color scheme ──────────────────────────────────────────────────────────────
@@ -740,6 +942,7 @@ function openSettings() {
   document.getElementById('settings-glass').checked = localStorage.getItem('tt-glass') !== 'off';
   document.getElementById('settings-modal').showModal();
   applyColorScheme(localStorage.getItem('tt-color') || 'blue');
+  _updateThemeBtns(document.documentElement.getAttribute('data-theme') || 'light');
 }
 
 async function saveSettings() {
@@ -926,8 +1129,9 @@ async function syncTopbarTimer() {
 {% if current_user.is_authenticated %}
 <!-- Settings modal -->
 <dialog id="settings-modal" class="modal">
-  <div class="modal-box max-w-sm p-0 overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-3.5 border-b border-base-300">
+  <div class="modal-box max-w-lg p-0 overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-base-300">
       <span class="font-bold text-base flex items-center gap-2">
         <i class="bi bi-gear"></i> Настройки
       </span>
@@ -936,103 +1140,147 @@ async function syncTopbarTimer() {
       </form>
     </div>
 
-    <!-- Mail credentials -->
-    <div class="px-5 pt-4 pb-3">
-      <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-3 flex items-center gap-1.5">
-        <i class="bi bi-envelope"></i> Почта
+    <div class="overflow-y-auto" style="max-height:calc(90vh - 128px)">
+
+      <!-- Section 1: Mail & Client -->
+      <div class="px-6 py-5">
+        <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-4 flex items-center gap-1.5">
+          <i class="bi bi-envelope"></i> Почта и клиент
+        </div>
+        <div class="flex flex-col gap-3">
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-base-content/55">Логин (IMAP/SMTP)</span>
+            <input type="text" id="settings-mail-user" class="input input-bordered w-full"
+                   placeholder="firstname.lastname"
+                   value="{{ current_user.mail_user or '' }}">
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-base-content/55">Пароль</span>
+            <input type="password" id="settings-mail-password" class="input input-bordered w-full"
+                   placeholder="{{ '••••••••' if current_user.mail_password else 'Не задан' }}">
+          </label>
+          {% if not current_user.mail_user %}
+          <p class="text-xs text-base-content/40">После сохранения раздел «Почта» появится в меню</p>
+          {% endif %}
+        </div>
       </div>
-      <div class="flex flex-col gap-2.5">
-        <label class="flex flex-col gap-1">
-          <span class="text-xs text-base-content/60">Логин (IMAP/SMTP)</span>
-          <input type="text" id="settings-mail-user" class="input input-bordered input-sm w-full"
-                 placeholder="firstname.lastname"
-                 value="{{ current_user.mail_user or '' }}">
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-xs text-base-content/60">Пароль</span>
-          <input type="password" id="settings-mail-password" class="input input-bordered input-sm w-full"
-                 placeholder="{{ '••••••••' if current_user.mail_password else 'Не задан' }}">
-        </label>
-        {% if not current_user.mail_user %}
-        <p class="text-xs text-base-content/40">После сохранения раздел «Почта» появится в меню</p>
-        {% endif %}
+
+      <!-- Divider -->
+      <div class="border-t border-base-300"></div>
+
+      <!-- Section 2: Appearance -->
+      <div class="px-6 py-5">
+        <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-4 flex items-center gap-1.5">
+          <i class="bi bi-palette"></i> Оформление
+        </div>
+
+        <!-- Light / Dark -->
+        <div class="text-xs text-base-content/45 mb-2 font-medium">Тема</div>
+        <div class="flex gap-2 mb-5">
+          <button id="btn-theme-light" onclick="applyAndSaveTheme('light')"
+                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all"
+                  style="border-color:var(--color-base-300);color:color-mix(in oklch,var(--color-base-content) 55%,transparent)">
+            <i class="bi bi-sun-fill"></i> Светлая
+          </button>
+          <button id="btn-theme-dark" onclick="applyAndSaveTheme('dark')"
+                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all"
+                  style="border-color:var(--color-base-300);color:color-mix(in oklch,var(--color-base-content) 55%,transparent)">
+            <i class="bi bi-moon-stars-fill"></i> Тёмная
+          </button>
+        </div>
+
+        <!-- Color scheme -->
+        <div class="text-xs text-base-content/45 mb-2 font-medium">Цветовая схема</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px" class="mb-5">
+          <button onclick="setColorScheme('blue')" data-color="blue"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(52% 0.200 254)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#f0f8ff;border:1px solid #c8e0f5"></div>
+            </div>
+            <span class="text-xs font-semibold">Синяя</span>
+          </button>
+          <button onclick="setColorScheme('classic')" data-color="classic"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(50% 0.225 234)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#f3f5f9;border:1px solid #dce0ed"></div>
+            </div>
+            <span class="text-xs font-semibold">Classic</span>
+          </button>
+          <button onclick="setColorScheme('purple')" data-color="purple"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(53% 0.228 292)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#f7f5fc;border:1px solid #ddd6f2"></div>
+            </div>
+            <span class="text-xs font-semibold">Purple</span>
+          </button>
+          <button onclick="setColorScheme('mono')" data-color="mono"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(28% 0.008 260)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#f4f4f4;border:1px solid #d0d0d0"></div>
+            </div>
+            <span class="text-xs font-semibold">Моно</span>
+          </button>
+          <button onclick="setColorScheme('groove')" data-color="groove"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(54% 0.180 155)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#edfdf5;border:1px solid #b2dfc9"></div>
+            </div>
+            <span class="text-xs font-semibold">Groove</span>
+          </button>
+          <button onclick="setColorScheme('blue-black')" data-color="blue-black"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(50% 0.210 254)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#111122;border:1px solid #222244"></div>
+            </div>
+            <span class="text-xs font-semibold" style="font-size:0.65rem">Синяя+Чёрн.</span>
+          </button>
+          <button onclick="setColorScheme('orange')" data-color="orange"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(64% 0.195 50)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#faf5ef;border:1px solid #e8ddd0"></div>
+            </div>
+            <span class="text-xs font-semibold">Оранжевая</span>
+          </button>
+          <button onclick="setColorScheme('yellow')" data-color="yellow"
+                  class="color-swatch-btn flex flex-col items-center gap-1.5 p-2.5 rounded-xl">
+            <div class="flex gap-1 items-end">
+              <div style="width:11px;height:26px;border-radius:4px;background:oklch(78% 0.190 96)"></div>
+              <div style="width:11px;height:18px;border-radius:4px;background:#fdfce6;border:1px solid #edea9e"></div>
+            </div>
+            <span class="text-xs font-semibold">Жёлтая</span>
+          </button>
+        </div>
+
+        <!-- Glass toggle -->
+        <div class="flex items-center justify-between px-4 py-3 rounded-xl"
+             style="background:color-mix(in oklch,var(--color-base-content) 4%,var(--color-base-100))">
+          <div>
+            <div class="text-sm font-medium">Glass-эффект</div>
+            <div class="text-xs text-base-content/40">Размытие и прозрачность в стиле macOS</div>
+          </div>
+          <input type="checkbox" id="settings-glass" class="toggle toggle-primary"
+                 onchange="toggleGlass(this.checked)">
+        </div>
       </div>
+
     </div>
 
-    <!-- Color scheme -->
-    <div class="px-5 pt-1 pb-4 border-t border-base-200">
-      <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-3 flex items-center gap-1.5 pt-3">
-        <i class="bi bi-palette"></i> Цветовая схема
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        <button onclick="setColorScheme('blue')" data-color="blue"
-                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
-          <div class="flex gap-1 items-end">
-            <div style="width:12px;height:28px;border-radius:4px;background:oklch(52% 0.200 254)"></div>
-            <div style="width:12px;height:20px;border-radius:4px;background:#f0f8ff;border:1px solid #c8e0f5"></div>
-          </div>
-          <span class="text-xs font-semibold">Синяя</span>
-        </button>
-        <button onclick="setColorScheme('mono')" data-color="mono"
-                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
-          <div class="flex gap-1 items-end">
-            <div style="width:12px;height:28px;border-radius:4px;background:oklch(28% 0.008 260)"></div>
-            <div style="width:12px;height:20px;border-radius:4px;background:#f4f4f4;border:1px solid #d0d0d0"></div>
-          </div>
-          <span class="text-xs font-semibold">Однотонная</span>
-        </button>
-        <button onclick="setColorScheme('groove')" data-color="groove"
-                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
-          <div class="flex gap-1 items-end">
-            <div style="width:12px;height:28px;border-radius:4px;background:oklch(54% 0.180 155)"></div>
-            <div style="width:12px;height:20px;border-radius:4px;background:#edfdf5;border:1px solid #b2dfc9"></div>
-          </div>
-          <span class="text-xs font-semibold">Island Groove</span>
-        </button>
-        <button onclick="setColorScheme('blue-black')" data-color="blue-black"
-                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
-          <div class="flex gap-1 items-end">
-            <div style="width:12px;height:28px;border-radius:4px;background:oklch(50% 0.210 254)"></div>
-            <div style="width:12px;height:20px;border-radius:4px;background:#111122;border:1px solid #222244"></div>
-          </div>
-          <span class="text-xs font-semibold">Синяя+Чёрная</span>
-        </button>
-        <button onclick="setColorScheme('orange')" data-color="orange"
-                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
-          <div class="flex gap-1 items-end">
-            <div style="width:12px;height:28px;border-radius:4px;background:oklch(64% 0.195 50)"></div>
-            <div style="width:12px;height:20px;border-radius:4px;background:#faf5ef;border:1px solid #e8ddd0"></div>
-          </div>
-          <span class="text-xs font-semibold">Оранжевая</span>
-        </button>
-        <button onclick="setColorScheme('yellow')" data-color="yellow"
-                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
-          <div class="flex gap-1 items-end">
-            <div style="width:12px;height:28px;border-radius:4px;background:oklch(78% 0.190 96)"></div>
-            <div style="width:12px;height:20px;border-radius:4px;background:#fdfce6;border:1px solid #edea9e"></div>
-          </div>
-          <span class="text-xs font-semibold">Жёлтая</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Glass toggle -->
-    <div class="px-5 py-3 border-t border-base-200 flex items-center justify-between">
-      <div>
-        <div class="text-sm font-medium">Glass-эффект</div>
-        <div class="text-xs text-base-content/40">Размытие и прозрачность</div>
-      </div>
-      <input type="checkbox" id="settings-glass" class="toggle toggle-primary toggle-sm"
-             onchange="toggleGlass(this.checked)">
-    </div>
-
-    <div class="flex items-center justify-between px-5 py-3 bg-base-200 border-t border-base-300">
+    <!-- Footer -->
+    <div class="flex items-center justify-between px-6 py-4 border-t border-base-300"
+         style="background:color-mix(in oklch,var(--color-base-content) 3%,var(--color-base-100))">
       <span id="settings-status" class="text-sm text-base-content/60"></span>
       <div class="flex gap-2">
         <form method="dialog">
           <button class="btn btn-ghost btn-sm">Закрыть</button>
         </form>
-        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Сохранить почту</button>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Сохранить настройки</button>
       </div>
     </div>
   </div>

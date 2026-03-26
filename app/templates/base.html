@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru" data-theme="light">
 <head>
-  <script>(function(){var t=localStorage.getItem('tt-theme')||'light';document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('tt-color')||'blue';document.documentElement.setAttribute('data-color',c);})();</script>
+  <script>(function(){var t=localStorage.getItem('tt-theme')||'light';document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('tt-color')||'blue';document.documentElement.setAttribute('data-color',c);var g=localStorage.getItem('tt-glass')!=='off';document.documentElement.setAttribute('data-glass',g?'on':'off');})();</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -256,12 +256,22 @@
 
     /* ── Dark mode island elevation ── */
     [data-theme="dark"] #sidebar {
-      box-shadow: 0 4px 32px rgba(0,0,0,0.55);
-      border: 1px solid oklch(30% 0.065 252);
+      background: color-mix(in oklch, var(--color-base-100) 82%, transparent);
+      box-shadow: 0 4px 40px rgba(0,0,0,0.55),
+                  inset 0 1px 0 color-mix(in oklch, white 8%, transparent);
+      border-color: color-mix(in oklch, white 9%, transparent);
     }
     [data-theme="dark"] .main-island {
-      box-shadow: 0 2px 28px rgba(0,0,0,0.45);
-      border: 1px solid oklch(28% 0.060 252);
+      background: color-mix(in oklch, var(--color-base-100) 90%, transparent);
+      box-shadow: 0 2px 32px rgba(0,0,0,0.45),
+                  inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
+      border-color: color-mix(in oklch, white 7%, transparent);
+    }
+    [data-theme="dark"] #user-menu-panel {
+      background: color-mix(in oklch, var(--color-base-200) 88%, transparent);
+      border-color: color-mix(in oklch, white 8%, transparent);
+      box-shadow: 0 -4px 28px rgba(0,0,0,0.4),
+                  inset 0 1px 0 color-mix(in oklch, white 7%, transparent);
     }
     [data-theme="dark"] #sidebar-toggle {
       border-color: oklch(32% 0.068 252);
@@ -276,6 +286,74 @@
       #sidebar-toggle { display: flex; }
       .main-wrap { margin-left: 0; padding: 10px; }
       .main-island { padding: 16px; min-height: calc(100vh - 20px); }
+    }
+
+    /* ── Global: border-radius system ── */
+    .btn         { border-radius: 12px !important; }
+    .btn-circle  { border-radius: 9999px !important; }
+    .input, .select, .textarea, .file-input { border-radius: 12px !important; }
+    .badge       { border-radius: 8px !important; }
+    .modal-box   { border-radius: 20px !important; }
+    .card        { border-radius: 16px !important; }
+    .alert       { border-radius: 14px !important; }
+    .dropdown-content { border-radius: 14px !important; }
+
+    /* ── Global: Button glass styling ── */
+    .btn-primary {
+      background: linear-gradient(155deg,
+        color-mix(in oklch, var(--color-primary) 88%, white 12%),
+        var(--color-primary)) !important;
+      border-color: transparent !important;
+      box-shadow: 0 2px 10px color-mix(in oklch, var(--color-primary) 40%, transparent),
+                  inset 0 1px 0 color-mix(in oklch, white 20%, transparent) !important;
+      transition: box-shadow 0.15s, transform 0.1s !important;
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 4px 18px color-mix(in oklch, var(--color-primary) 55%, transparent),
+                  inset 0 1px 0 color-mix(in oklch, white 25%, transparent) !important;
+      transform: translateY(-1px) !important;
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0) !important;
+      box-shadow: 0 1px 6px color-mix(in oklch, var(--color-primary) 35%, transparent) !important;
+    }
+    .btn-outline {
+      box-shadow: inset 0 1px 0 color-mix(in oklch, white 10%, transparent);
+    }
+    .btn-ghost {
+      transition: background 0.12s, transform 0.1s !important;
+    }
+    .btn-ghost:hover { transform: translateY(-1px) !important; }
+    .btn-ghost:active { transform: translateY(0) !important; }
+
+    /* ── Global: Input glass ── */
+    .input, .select, .textarea {
+      background: color-mix(in oklch, var(--color-base-100) 85%, transparent) !important;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-color: var(--color-base-300) !important;
+      transition: border-color 0.15s, box-shadow 0.15s !important;
+    }
+    .input:focus, .select:focus, .textarea:focus {
+      border-color: var(--color-primary) !important;
+      box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 18%, transparent) !important;
+      outline: none !important;
+    }
+
+    /* ── Global: Modal glass ── */
+    .modal-box {
+      background: color-mix(in oklch, var(--color-base-100) 88%, transparent) !important;
+      backdrop-filter: blur(24px) saturate(1.4) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
+      border: 1px solid color-mix(in oklch, white 20%, transparent) !important;
+      box-shadow: 0 8px 48px rgba(0,0,0,0.15),
+                  inset 0 1px 0 color-mix(in oklch, white 20%, transparent) !important;
+    }
+    [data-theme="dark"] .modal-box {
+      background: color-mix(in oklch, var(--color-base-200) 90%, transparent) !important;
+      border-color: color-mix(in oklch, white 8%, transparent) !important;
+      box-shadow: 0 8px 48px rgba(0,0,0,0.5),
+                  inset 0 1px 0 color-mix(in oklch, white 6%, transparent) !important;
     }
 
     /* ── Color scheme: Monochrome ── */
@@ -303,6 +381,59 @@
     [data-theme="dark"][data-color="mono"] #sidebar { border-color: oklch(32% 0.005 240); }
     [data-theme="dark"][data-color="mono"] .main-island { border-color: oklch(30% 0.005 240); }
 
+    /* ── Color scheme: Blue + Black ── */
+    [data-theme="light"][data-color="blue-black"] {
+      --color-base-200: #f0f0f5;
+      --color-base-300: #d4d4e2;
+      --color-base-content: oklch(12% 0.020 254);
+      --color-primary: oklch(50% 0.210 254);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(16% 0.028 254);
+      --color-secondary-content: #ffffff;
+      --color-neutral: oklch(14% 0.020 254);
+    }
+    [data-theme="light"][data-color="blue-black"] body { background: #d6d6e8; }
+
+    [data-theme="dark"][data-color="blue-black"] {
+      --color-base-100: oklch(11% 0.032 254);
+      --color-base-200: oklch(8% 0.026 254);
+      --color-base-300: oklch(16% 0.038 254);
+      --color-base-content: oklch(90% 0.018 254);
+      --color-primary: oklch(64% 0.200 254);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(22% 0.038 254);
+      --color-secondary-content: oklch(88% 0.016 254);
+    }
+    [data-theme="dark"][data-color="blue-black"] body { background: oklch(5% 0.020 254); }
+    [data-theme="dark"][data-color="blue-black"] #sidebar { border-color: color-mix(in oklch, white 6%, transparent); }
+    [data-theme="dark"][data-color="blue-black"] .main-island { border-color: color-mix(in oklch, white 5%, transparent); }
+
+    /* ── Color scheme: Orange + Gray ── */
+    [data-theme="light"][data-color="orange"] {
+      --color-base-200: #faf5ef;
+      --color-base-300: #e8ddd0;
+      --color-primary: oklch(64% 0.195 50);
+      --color-primary-content: #ffffff;
+      --color-secondary: oklch(54% 0.012 50);
+      --color-secondary-content: #ffffff;
+      --color-info: oklch(60% 0.160 220);
+    }
+    [data-theme="light"][data-color="orange"] body { background: #f0e2d2; }
+
+    [data-theme="dark"][data-color="orange"] {
+      --color-base-100: oklch(20% 0.026 50);
+      --color-base-200: oklch(16% 0.020 50);
+      --color-base-300: oklch(26% 0.032 50);
+      --color-base-content: oklch(88% 0.015 50);
+      --color-primary: oklch(70% 0.185 50);
+      --color-primary-content: oklch(12% 0.030 50);
+      --color-secondary: oklch(60% 0.010 50);
+      --color-secondary-content: oklch(12% 0.010 50);
+    }
+    [data-theme="dark"][data-color="orange"] body { background: oklch(11% 0.015 50); }
+    [data-theme="dark"][data-color="orange"] #sidebar { border-color: color-mix(in oklch, oklch(64% 0.195 50) 12%, transparent); }
+    [data-theme="dark"][data-color="orange"] .main-island { border-color: color-mix(in oklch, oklch(64% 0.195 50) 10%, transparent); }
+
     /* ── Color scheme: Island Groove ── */
     [data-theme="light"][data-color="groove"] {
       --color-base-200: #edfdf5;
@@ -329,6 +460,70 @@
     [data-theme="dark"][data-color="groove"] body { background: oklch(14% 0.030 155); }
     [data-theme="dark"][data-color="groove"] #sidebar { border-color: oklch(30% 0.060 155); }
     [data-theme="dark"][data-color="groove"] .main-island { border-color: oklch(28% 0.055 155); }
+
+    /* ── Color scheme: Yellow ── */
+    [data-theme="light"][data-color="yellow"] {
+      --color-base-200: #fdfce6;
+      --color-base-300: #edea9e;
+      --color-primary: oklch(78% 0.190 96);
+      --color-primary-content: oklch(20% 0.060 96);
+      --color-secondary: oklch(72% 0.155 75);
+      --color-secondary-content: oklch(20% 0.040 75);
+      --color-info: oklch(60% 0.170 220);
+      --color-success: oklch(58% 0.168 148);
+    }
+    [data-theme="light"][data-color="yellow"] body { background: #f0ec9a; }
+
+    [data-theme="dark"][data-color="yellow"] {
+      --color-base-100: oklch(21% 0.038 95);
+      --color-base-200: oklch(17% 0.030 95);
+      --color-base-300: oklch(28% 0.046 95);
+      --color-base-content: oklch(90% 0.028 95);
+      --color-primary: oklch(82% 0.195 96);
+      --color-primary-content: oklch(18% 0.060 96);
+      --color-secondary: oklch(76% 0.160 75);
+      --color-secondary-content: oklch(18% 0.040 75);
+    }
+    [data-theme="dark"][data-color="yellow"] body { background: oklch(13% 0.022 95); }
+    [data-theme="dark"][data-color="yellow"] #sidebar { border-color: color-mix(in oklch, oklch(78% 0.190 96) 15%, transparent); }
+    [data-theme="dark"][data-color="yellow"] .main-island { border-color: color-mix(in oklch, oklch(78% 0.190 96) 12%, transparent); }
+
+    /* ── Flat mode (no glass) ── */
+    [data-glass="off"] #sidebar,
+    [data-glass="off"] .main-island,
+    [data-glass="off"] #user-menu-panel,
+    [data-glass="off"] .modal-box,
+    [data-glass="off"] .input,
+    [data-glass="off"] .select,
+    [data-glass="off"] .textarea {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    [data-glass="off"] #sidebar {
+      background: var(--color-base-100) !important;
+      border-color: var(--color-base-300) !important;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10) !important;
+    }
+    [data-glass="off"] .main-island {
+      background: var(--color-base-100) !important;
+      border-color: var(--color-base-300) !important;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.06) !important;
+    }
+    [data-glass="off"] #user-menu-panel {
+      background: var(--color-base-100) !important;
+      border-color: var(--color-base-300) !important;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.10) !important;
+    }
+    [data-glass="off"] .modal-box {
+      background: var(--color-base-100) !important;
+      border-color: var(--color-base-300) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important;
+    }
+    [data-glass="off"] .input,
+    [data-glass="off"] .select,
+    [data-glass="off"] .textarea {
+      background: var(--color-base-100) !important;
+    }
 
     /* ── Color scheme swatches ── */
     .color-swatch-btn {
@@ -532,10 +727,17 @@ function setColorScheme(c) {
 applyColorScheme(localStorage.getItem('tt-color') || 'blue');
 
 // ── Settings modal ────────────────────────────────────────────────────────────
+function toggleGlass(on) {
+  const val = on ? 'on' : 'off';
+  localStorage.setItem('tt-glass', on ? 'on' : 'off');
+  document.documentElement.setAttribute('data-glass', val);
+}
+
 function openSettings() {
   closeUserMenu();
   document.getElementById('settings-status').textContent = '';
   document.getElementById('settings-mail-password').value = '';
+  document.getElementById('settings-glass').checked = localStorage.getItem('tt-glass') !== 'off';
   document.getElementById('settings-modal').showModal();
   applyColorScheme(localStorage.getItem('tt-color') || 'blue');
 }
@@ -762,41 +964,75 @@ async function syncTopbarTimer() {
       <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-3 flex items-center gap-1.5 pt-3">
         <i class="bi bi-palette"></i> Цветовая схема
       </div>
-      <div class="flex gap-2">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
         <button onclick="setColorScheme('blue')" data-color="blue"
-                class="color-swatch-btn flex-1 flex flex-col items-center gap-2 p-3 rounded-xl">
+                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
           <div class="flex gap-1 items-end">
-            <div style="width:13px;height:30px;border-radius:5px;background:oklch(52% 0.200 254)"></div>
-            <div style="width:13px;height:22px;border-radius:5px;background:#f0f8ff;border:1px solid #c8e0f5"></div>
+            <div style="width:12px;height:28px;border-radius:4px;background:oklch(52% 0.200 254)"></div>
+            <div style="width:12px;height:20px;border-radius:4px;background:#f0f8ff;border:1px solid #c8e0f5"></div>
           </div>
           <span class="text-xs font-semibold">Синяя</span>
         </button>
         <button onclick="setColorScheme('mono')" data-color="mono"
-                class="color-swatch-btn flex-1 flex flex-col items-center gap-2 p-3 rounded-xl">
+                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
           <div class="flex gap-1 items-end">
-            <div style="width:13px;height:30px;border-radius:5px;background:oklch(28% 0.008 260)"></div>
-            <div style="width:13px;height:22px;border-radius:5px;background:#f4f4f4;border:1px solid #d0d0d0"></div>
+            <div style="width:12px;height:28px;border-radius:4px;background:oklch(28% 0.008 260)"></div>
+            <div style="width:12px;height:20px;border-radius:4px;background:#f4f4f4;border:1px solid #d0d0d0"></div>
           </div>
           <span class="text-xs font-semibold">Однотонная</span>
         </button>
         <button onclick="setColorScheme('groove')" data-color="groove"
-                class="color-swatch-btn flex-1 flex flex-col items-center gap-2 p-3 rounded-xl">
+                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
           <div class="flex gap-1 items-end">
-            <div style="width:13px;height:30px;border-radius:5px;background:oklch(54% 0.180 155)"></div>
-            <div style="width:13px;height:22px;border-radius:5px;background:#edfdf5;border:1px solid #b2dfc9"></div>
+            <div style="width:12px;height:28px;border-radius:4px;background:oklch(54% 0.180 155)"></div>
+            <div style="width:12px;height:20px;border-radius:4px;background:#edfdf5;border:1px solid #b2dfc9"></div>
           </div>
           <span class="text-xs font-semibold">Island Groove</span>
         </button>
+        <button onclick="setColorScheme('blue-black')" data-color="blue-black"
+                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
+          <div class="flex gap-1 items-end">
+            <div style="width:12px;height:28px;border-radius:4px;background:oklch(50% 0.210 254)"></div>
+            <div style="width:12px;height:20px;border-radius:4px;background:#111122;border:1px solid #222244"></div>
+          </div>
+          <span class="text-xs font-semibold">Синяя+Чёрная</span>
+        </button>
+        <button onclick="setColorScheme('orange')" data-color="orange"
+                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
+          <div class="flex gap-1 items-end">
+            <div style="width:12px;height:28px;border-radius:4px;background:oklch(64% 0.195 50)"></div>
+            <div style="width:12px;height:20px;border-radius:4px;background:#faf5ef;border:1px solid #e8ddd0"></div>
+          </div>
+          <span class="text-xs font-semibold">Оранжевая</span>
+        </button>
+        <button onclick="setColorScheme('yellow')" data-color="yellow"
+                class="color-swatch-btn flex flex-col items-center gap-2 p-2.5 rounded-xl">
+          <div class="flex gap-1 items-end">
+            <div style="width:12px;height:28px;border-radius:4px;background:oklch(78% 0.190 96)"></div>
+            <div style="width:12px;height:20px;border-radius:4px;background:#fdfce6;border:1px solid #edea9e"></div>
+          </div>
+          <span class="text-xs font-semibold">Жёлтая</span>
+        </button>
       </div>
+    </div>
+
+    <!-- Glass toggle -->
+    <div class="px-5 py-3 border-t border-base-200 flex items-center justify-between">
+      <div>
+        <div class="text-sm font-medium">Glass-эффект</div>
+        <div class="text-xs text-base-content/40">Размытие и прозрачность</div>
+      </div>
+      <input type="checkbox" id="settings-glass" class="toggle toggle-primary toggle-sm"
+             onchange="toggleGlass(this.checked)">
     </div>
 
     <div class="flex items-center justify-between px-5 py-3 bg-base-200 border-t border-base-300">
       <span id="settings-status" class="text-sm text-base-content/60"></span>
       <div class="flex gap-2">
         <form method="dialog">
-          <button class="btn btn-ghost btn-sm">Отмена</button>
+          <button class="btn btn-ghost btn-sm">Закрыть</button>
         </form>
-        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Сохранить</button>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Сохранить почту</button>
       </div>
     </div>
   </div>

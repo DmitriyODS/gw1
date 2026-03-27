@@ -99,10 +99,12 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 ## Модели (models.py)
 
 ### Task — основная модель задачи
-Ключевые поля: `title`, `task_type`, `status`, `urgency`, `deadline`, `assigned_to_id`, `created_by_id`, `department_id`, `tags` (JSON), `dynamic_fields` (JSON), `completed_at`, `updated_at`, `is_archived`
+Ключевые поля: `title`, `task_type`, `status`, `urgency`, `deadline`, `assigned_to_id`, `created_by_id`, `department_id`, `tags` (JSON), `dynamic_fields` (JSON), `completed_at`, `updated_at`, `is_archived`, `is_external`
+
+`is_external = True` — задача создана через внешнюю форму `/submit`. Такие задачи не могут быть взяты в работу, пока не заполнен `task_type`.
 
 ### TaskType — типы задач (таблица в БД)
-Поля: `slug`, `label`, `sort_order`. Управляются через раздел «Списки» (`/lists`). При создании нового типа он автоматически появляется во всех формах — задач, планов, ритмов, внешней форме.
+Поля: `slug`, `label`, `sort_order`. Управляются через раздел «Списки» (`/lists`). При создании нового типа он автоматически появляется во всех формах — задач, планов, ритмов. Поддерживается экспорт/импорт в JSON. Сортировка по алфавиту.
 
 ### Роли пользователей (Role)
 | Роль | Задачи | Чужие задачи | Удаление | Аналитика | Пользователи/Списки |
@@ -175,6 +177,12 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 | `GET /analytics/export/excel` | Экспорт задач в Excel |
 | `GET /api/task-types` | JSON списка типов задач из БД (используется в формах) |
 | `GET /api/profile/stats` | JSON статистики по типам для профиля (`?mode=day\|week\|month&offset=0`) |
+| `GET /submit` | Внешняя форма заявок (без авторизации, 2 экрана) |
+| `GET /submit/success` | Экран успешной отправки заявки |
+| `GET /lists/task-types/export` | Экспорт типов задач в JSON |
+| `POST /lists/task-types/import` | Импорт типов задач из JSON |
+| `GET /lists/departments/export` | Экспорт подразделений в JSON |
+| `POST /lists/departments/import` | Импорт подразделений из JSON |
 | `GET /submit` | Внешняя форма заявок (без авторизации) |
 
 ---
@@ -207,8 +215,17 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 
 Рейтинг сотрудников: `R = 0.5*(N/N_max) + 0.5*(T/T_max) * 100` где N — закрытые задачи, T — среднее время на задачу. Данные обновляются каждые 30 секунд.
 
-### Внешняя форма заявок
-`/submit` — без авторизации. После отправки редирект с `prefill_name/phone/email/dept` в query params — форма предзаполняется для следующей заявки от того же заказчика.
+### Внешняя форма заявок (3 экрана)
+`/submit` — без авторизации. Состоит из двух экранов + экрана завершения (`/submit/success`):
+1. **Экран 1**: Структурное подразделение, ФИО, телефон, email. При выборе подразделения подставляется начальник.
+2. **Экран 2**: Выбор типа обращения карточками (Дизайн, Фото/Видео, Публикация новости, Освещение мероприятия, Презентации, Формы/Опросы, Верификация, Создание открыток, Другое) — карточки влияют на `tags`, но **не на `task_type`** (он остаётся пустым). Ниже — название, описание, вложения.
+3. **Экран завершения**: `/submit/success` — кнопка «Создать ещё одну заявку» пропускает экран 1 (prefill из query params `?skip_screen1=1`).
+
+Все заявки создаются с `is_external=True`. Взять заявку в работу нельзя, пока сотрудник не заполнит `task_type` — кнопка «В работу» заменяется на «Указать тип» (редирект на `/tasks/<id>/edit`).
+
+Карточки выбора в `public.py` → `CARD_CHOICES` — список `(slug, label, icon, tags)`. При добавлении нового выбора — обновить только этот список.
+
+На канбан-доске заявки отображаются в секции **«Заявки»** внутри колонки «Новые», задачи от сотрудников — в секции **«Задачи»**.
 
 ### PDF-экспорт и кириллица
 PDF генерируется через `reportlab`. Для поддержки кириллицы используется шрифт DejaVuSans, устанавливаемый через `fonts-dejavu-core` в Dockerfile. Функция `_register_cyrillic_font()` в `analytics.py` ищет шрифт по нескольким системным путям с fallback.

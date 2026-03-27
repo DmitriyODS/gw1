@@ -241,6 +241,24 @@
     .kanban-col { flex: 0 0 100%; max-height: none; display: none; }
     .kanban-col.mobile-active { display: flex; }
   }
+
+  /* ── Sub-sections in "New" column ── */
+  .subsection-label {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; padding: 4px 4px 6px;
+    display: flex; align-items: center; gap: 5px;
+    border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
+    margin-bottom: 4px;
+  }
+  .subsection-label.requests { color: #7c3aed; }
+  .subsection-label.tasks { color: color-mix(in oklch, var(--color-base-content) 40%, transparent); }
+  .subsection-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  }
+  .subsection-dot.requests { background: #7c3aed; }
+  .subsection-dot.tasks { background: color-mix(in oklch, var(--color-base-content) 30%, transparent); }
+  .subsection-block { margin-bottom: 8px; }
+  .subsection-block:last-child { margin-bottom: 0; }
 </style>
 {% endblock %}
 
@@ -369,16 +387,56 @@
     </div>
 
     <div class="kanban-body" data-status="{{ status }}">
-      {% if not col_tasks %}
-      <div class="empty-col">
-        <div class="empty-col-icon"><i class="bi bi-inbox"></i></div>
-        нет задач
-      </div>
-      {% endif %}
+      {% if status == 'new' %}
+        {% set ext_tasks = col_tasks | selectattr('is_external') | list %}
+        {% set int_tasks = col_tasks | rejectattr('is_external') | list %}
 
-      {% for task in col_tasks %}
-      {% include 'tasks/_card.html' %}
-      {% endfor %}
+        {% if ext_tasks %}
+        <div class="subsection-block">
+          <div class="subsection-label requests">
+            <span class="subsection-dot requests"></span>
+            Заявки
+            <span style="font-size:0.65rem;opacity:0.7;font-weight:600;margin-left:2px">{{ ext_tasks | length }}</span>
+          </div>
+          {% for task in ext_tasks %}
+          {% include 'tasks/_card.html' %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if int_tasks %}
+        <div class="subsection-block">
+          {% if ext_tasks %}
+          <div class="subsection-label tasks">
+            <span class="subsection-dot tasks"></span>
+            Задачи
+            <span style="font-size:0.65rem;opacity:0.7;font-weight:600;margin-left:2px">{{ int_tasks | length }}</span>
+          </div>
+          {% endif %}
+          {% for task in int_tasks %}
+          {% include 'tasks/_card.html' %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if not col_tasks %}
+        <div class="empty-col">
+          <div class="empty-col-icon"><i class="bi bi-inbox"></i></div>
+          нет задач
+        </div>
+        {% endif %}
+      {% else %}
+        {% if not col_tasks %}
+        <div class="empty-col">
+          <div class="empty-col-icon"><i class="bi bi-inbox"></i></div>
+          нет задач
+        </div>
+        {% endif %}
+
+        {% for task in col_tasks %}
+        {% include 'tasks/_card.html' %}
+        {% endfor %}
+      {% endif %}
     </div>
 
     {% if status == 'done' and current_user.can_admin %}
@@ -739,6 +797,7 @@ document.getElementById('kanban-wrap').addEventListener('click', e => {
   if (action === 'start') timerStart(taskId);
   if (action === 'pause') timerPause(taskId);
   if (action === 'unarchive') unarchiveTask(taskId);
+  if (action === 'goto-edit') { window.location.href = `/tasks/${taskId}/edit`; }
 });
 
 let _pendingConflictTaskId = null;
@@ -746,6 +805,10 @@ let _pendingConflictTaskId = null;
 async function timerStart(taskId) {
   const r = await fetch(`/tasks/${taskId}/timer/start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
   const d = await r.json();
+  if (d.error === 'need_task_type') {
+    window.location.href = `/tasks/${taskId}/edit`;
+    return;
+  }
   if (d.taken) {
     document.getElementById('takenByName').textContent = d.by;
     document.getElementById('takenModal').showModal();
@@ -844,6 +907,7 @@ document.querySelectorAll('.kanban-body').forEach(body => {
       body: JSON.stringify({status: newStatus})
     });
     const d = await r.json();
+    if (d.error === 'need_task_type') { window.location.href = `/tasks/${taskId}/edit`; return; }
     if (!d.ok) { showError(d.error || 'Ошибка'); return; }
     body.querySelectorAll('.empty-col').forEach(el => el.remove());
     savedCard.classList.add('was-dragged');

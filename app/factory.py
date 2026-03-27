@@ -143,6 +143,7 @@ def create_app():
             ('task_attachments',    'yadisk_folder_url', 'VARCHAR(1000)'),
             ('users', 'mail_user',     'VARCHAR(200)'),
             ('users', 'mail_password', 'VARCHAR(200)'),
+            ('tasks', 'is_external',   'BOOLEAN DEFAULT FALSE'),
         ]
         for table, col, col_type in cols:
             try:

@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+import json
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import login_required, current_user
 from extensions import db
 from models import TaskType, Department
@@ -13,7 +14,7 @@ def index():
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('tasks.list_tasks'))
     list_type = request.args.get('list', 'task_types')
-    task_types = TaskType.query.order_by(TaskType.sort_order, TaskType.label).all()
+    task_types = TaskType.query.order_by(TaskType.label).all()
     departments = Department.query.order_by(Department.name).all()
     return render_template('lists/index.html', list_type=list_type,
                            task_types=task_types, departments=departments)
@@ -114,3 +115,94 @@ def delete_department(dept_id):
     db.session.delete(dept)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+# ── Export / Import ──
+
+@lists_bp.route('/task-types/export', methods=['GET'])
+@login_required
+def export_task_types():
+    if not current_user.can_manage:
+        return jsonify({'error': 'Нет прав'}), 403
+    types = TaskType.query.order_by(TaskType.label).all()
+    data = [{'slug': t.slug, 'label': t.label, 'sort_order': t.sort_order} for t in types]
+    return Response(
+        json.dumps({'task_types': data}, ensure_ascii=False, indent=2),
+        mimetype='application/json',
+        headers={'Content-Disposition': 'attachment; filename="task_types.json"'}
+    )
+
+
+@lists_bp.route('/task-types/import', methods=['POST'])
+@login_required
+def import_task_types():
+    if not current_user.can_manage:
+        return jsonify({'error': 'Нет прав'}), 403
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'Файл не передан'}), 400
+    try:
+        data = json.loads(file.read().decode('utf-8'))
+        items = data.get('task_types', data) if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return jsonify({'error': 'Неверный формат: ожидается список task_types'}), 400
+    except Exception:
+        return jsonify({'error': 'Неверный JSON'}), 400
+
+    added = 0
+    for item in items:
+        slug = str(item.get('slug', '')).strip().lower().replace(' ', '_')
+        label = str(item.get('label', '')).strip()
+        if not slug or not label:
+            continue
+        if TaskType.query.filter_by(slug=slug).first():
+            continue
+        max_order = db.session.query(db.func.max(TaskType.sort_order)).scalar() or 0
+        db.session.add(TaskType(slug=slug, label=label, sort_order=item.get('sort_order', max_order + 1)))
+        added += 1
+    db.session.commit()
+    return jsonify({'ok': True, 'added': added})
+
+
+@lists_bp.route('/departments/export', methods=['GET'])
+@login_required
+def export_departments():
+    if not current_user.can_manage:
+        return jsonify({'error': 'Нет прав'}), 403
+    depts = Department.query.order_by(Department.name).all()
+    data = [{'name': d.name, 'head': d.head} for d in depts]
+    return Response(
+        json.dumps({'departments': data}, ensure_ascii=False, indent=2),
+        mimetype='application/json',
+        headers={'Content-Disposition': 'attachment; filename="departments.json"'}
+    )
+
+
+@lists_bp.route('/departments/import', methods=['POST'])
+@login_required
+def import_departments():
+    if not current_user.can_manage:
+        return jsonify({'error': 'Нет прав'}), 403
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'Файл не передан'}), 400
+    try:
+        data = json.loads(file.read().decode('utf-8'))
+        items = data.get('departments', data) if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return jsonify({'error': 'Неверный формат: ожидается список departments'}), 400
+    except Exception:
+        return jsonify({'error': 'Неверный JSON'}), 400
+
+    added = 0
+    for item in items:
+        name = str(item.get('name', '')).strip()
+        head = str(item.get('head', '')).strip()
+        if not name:
+            continue
+        if Department.query.filter_by(name=name).first():
+            continue
+        db.session.add(Department(name=name, head=head))
+        added += 1
+    db.session.commit()
+    return jsonify({'ok': True, 'added': added})

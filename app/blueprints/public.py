@@ -6,6 +6,19 @@ from models import Task, TaskStatus, TaskTag, Urgency, Department, TaskAttachmen
 
 public_bp = Blueprint('public', __name__)
 
+# Карточки выбора на экране 2 внешней формы → теги
+CARD_CHOICES = [
+    ('design',      'Дизайн',                'bi-vector-pen',        ['дизайн']),
+    ('photo_video', 'Фото / Видео',          'bi-camera-video',      ['фото/видео']),
+    ('news',        'Публикация новости',     'bi-newspaper',         ['публикация', 'текст']),
+    ('event',       'Освещение мероприятия', 'bi-calendar-event',    ['фото/видео', 'публикация']),
+    ('presentation','Презентации',           'bi-easel',             ['дизайн']),
+    ('forms',       'Формы / Опросы',        'bi-ui-checks',         ['внутреннее']),
+    ('verify',      'Верификация',           'bi-patch-check',       ['внутреннее']),
+    ('card',        'Создание открыток',     'bi-postcard',          ['дизайн']),
+    ('other',       'Другое',               'bi-three-dots',        []),
+]
+
 PLATFORMS = ['Сайт', 'Внешние соц. сети', 'Внутренние соц. сети', 'Афиша']
 TASK_TYPES = [
     ('pub_images',           'Картинки для публикаций'),
@@ -86,16 +99,18 @@ def api_task_types():
 def submit():
     departments = Department.query.order_by(Department.name).all()
     if request.method == 'POST':
-        task_type = request.form.get('task_type')
+        # Derive tags from card choice (task_type left empty intentionally)
+        card_choice = request.form.get('card_choice', '')
+        choice_tags = []
+        for slug, label, icon, tags in CARD_CHOICES:
+            if slug == card_choice:
+                choice_tags = list(tags)
+                break
+
         dynamic = {}
         clarification = request.form.get('clarification', '').strip()
         if clarification:
             dynamic['clarification'] = clarification
-        event_date = request.form.get('event_date', '').strip()
-        if event_date:
-            dynamic['event_date'] = event_date
-
-        auto_tags = list(AUTO_TAGS.get(task_type, []))
 
         task = Task(
             title=request.form.get('title', '').strip(),
@@ -104,9 +119,10 @@ def submit():
             customer_phone=request.form.get('customer_phone', '').strip() or None,
             customer_email=request.form.get('customer_email', '').strip() or None,
             department_id=request.form.get('department_id') or None,
-            task_type=task_type,
-            tags=auto_tags,
+            task_type=None,  # must be set by staff before starting
+            tags=choice_tags,
             dynamic_fields=dynamic,
+            is_external=True,
         )
         db.session.add(task)
         db.session.flush()
@@ -114,8 +130,7 @@ def submit():
         _save_attachments(request.files.getlist('attachments'), task.id, task=task)
 
         db.session.commit()
-        flash('Заявка успешно отправлена! Ожидайте обработки.', 'success')
-        return redirect(url_for('public.submit',
+        return redirect(url_for('public.submit_success',
             prefill_name=task.customer_name or '',
             prefill_phone=task.customer_phone or '',
             prefill_email=task.customer_email or '',
@@ -129,8 +144,19 @@ def submit():
         'dept':  request.args.get('prefill_dept', ''),
     }
     return render_template('public/submit.html', departments=departments,
-                           task_types=_get_task_types(), pub_subtypes=PUB_SUBTYPES,
-                           platforms=PLATFORMS, prefill=prefill)
+                           card_choices=CARD_CHOICES, prefill=prefill)
+
+
+@public_bp.route('/submit/success')
+def submit_success():
+    prefill = {
+        'name':  request.args.get('prefill_name', ''),
+        'phone': request.args.get('prefill_phone', ''),
+        'email': request.args.get('prefill_email', ''),
+        'dept':  request.args.get('prefill_dept', ''),
+    }
+    return render_template('public/submit.html', departments=Department.query.order_by(Department.name).all(),
+                           card_choices=CARD_CHOICES, prefill=prefill, show_success=True)
 
 
 def _save_attachments(files, task_id, task=None):

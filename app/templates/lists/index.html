@@ -50,17 +50,33 @@
   <div class="card-body p-0">
 
     <!-- Table header with add button -->
-    <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-base-200">
+    <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-base-200 flex-wrap gap-2">
       {% if list_type == 'task_types' %}
       <div class="text-sm font-semibold">{{ task_types | length }} типов задач</div>
-      <button class="btn btn-sm btn-primary gap-1" onclick="openCreateModal()">
-        <i class="bi bi-plus-lg"></i> Добавить тип
-      </button>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <a href="/lists/task-types/export" class="btn btn-sm btn-ghost border border-base-300 gap-1">
+          <i class="bi bi-download"></i> Экспорт
+        </a>
+        <button class="btn btn-sm btn-ghost border border-base-300 gap-1" onclick="openImportModal()">
+          <i class="bi bi-upload"></i> Импорт
+        </button>
+        <button class="btn btn-sm btn-primary gap-1" onclick="openCreateModal()">
+          <i class="bi bi-plus-lg"></i> Добавить тип
+        </button>
+      </div>
       {% else %}
       <div class="text-sm font-semibold">{{ departments | length }} подразделений</div>
-      <button class="btn btn-sm btn-primary gap-1" onclick="openCreateModal()">
-        <i class="bi bi-plus-lg"></i> Добавить подразделение
-      </button>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <a href="/lists/departments/export" class="btn btn-sm btn-ghost border border-base-300 gap-1">
+          <i class="bi bi-download"></i> Экспорт
+        </a>
+        <button class="btn btn-sm btn-ghost border border-base-300 gap-1" onclick="openImportModal()">
+          <i class="bi bi-upload"></i> Импорт
+        </button>
+        <button class="btn btn-sm btn-primary gap-1" onclick="openCreateModal()">
+          <i class="bi bi-plus-lg"></i> Добавить подразделение
+        </button>
+      </div>
       {% endif %}
     </div>
 
@@ -182,6 +198,20 @@
     <p class="py-2" id="errorModalMsg"></p>
     <div class="modal-action">
       <form method="dialog"><button class="btn">OK</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Import modal -->
+<dialog id="importModal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-2">Импорт из JSON</h3>
+    <p class="text-sm opacity-60 mb-4">Уже существующие элементы (по совпадению slug/названия) будут пропущены.</p>
+    <input type="file" id="import-file" accept=".json" class="file-input file-input-bordered w-full">
+    <div class="modal-action mt-4">
+      <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
+      <button class="btn btn-primary" id="importConfirmBtn">Импортировать</button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -348,5 +378,24 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async () =
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ── Import ──
+function openImportModal() {
+  document.getElementById('import-file').value = '';
+  document.getElementById('importModal').showModal();
+}
+
+document.getElementById('importConfirmBtn').addEventListener('click', async () => {
+  const file = document.getElementById('import-file').files[0];
+  if (!file) { showError('Выберите JSON-файл'); return; }
+  const url = LIST_TYPE === 'task_types' ? '/lists/task-types/import' : '/lists/departments/import';
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd });
+  const d = await r.json();
+  if (!d.ok) { showError(d.error || 'Ошибка импорта'); return; }
+  document.getElementById('importModal').close();
+  location.reload();
+});
 </script>
 {% endblock %}

@@ -185,6 +185,7 @@ class Task(db.Model):
     tags = db.Column(db.JSON, default=list)
     dynamic_fields = db.Column(db.JSON, default=dict)
     is_archived = db.Column(db.Boolean, default=False)
+    is_external = db.Column(db.Boolean, default=False)
     archived_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

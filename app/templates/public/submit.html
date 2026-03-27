@@ -4,48 +4,106 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Подать заявку</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
-            --color-primary: oklch(54.7% 0.191 257);
+            --color-primary: oklch(52% 0.155 254);
             --color-primary-content: #ffffff;
+            --color-success: oklch(55% 0.130 148);
         }
+        body { background: #f0f4f8; min-height: 100dvh; }
 
-        body { background: #f4f6fb; }
+        /* ── Progress bar ── */
+        .progress-bar { display: flex; gap: 6px; align-items: center; }
+        .progress-step {
+            height: 4px; border-radius: 2px; flex: 1;
+            background: color-mix(in oklch, var(--color-primary) 20%, #e2e8f0);
+            transition: background 0.3s;
+        }
+        .progress-step.done { background: var(--color-primary); }
 
+        /* ── Screens ── */
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* ── Card choices grid ── */
+        .choice-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        @media (max-width: 480px) {
+            .choice-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        }
+        .choice-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 14px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: #ffffff;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .choice-card:hover { border-color: color-mix(in oklch, var(--color-primary) 50%, transparent); background: color-mix(in oklch, var(--color-primary) 4%, white); }
+        .choice-card.selected {
+            border-color: var(--color-primary);
+            background: color-mix(in oklch, var(--color-primary) 8%, white);
+        }
+        .choice-icon {
+            font-size: 1.6rem;
+            color: color-mix(in oklch, var(--color-primary) 70%, #475569);
+            margin-bottom: 6px;
+            display: block;
+            transition: color 0.15s;
+        }
+        .choice-card.selected .choice-icon { color: var(--color-primary); }
+        .choice-label { font-size: 0.78rem; font-weight: 600; color: #374151; line-height: 1.2; }
+
+        /* ── Field label ── */
+        .field-label { font-size: 0.78rem; font-weight: 700; color: #374151; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+
+        /* ── Drop zone ── */
         .drop-zone {
-            border: 2px dashed var(--color-base-300);
-            border-radius: 12px; padding: 28px 20px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px; padding: 24px 20px;
             text-align: center; cursor: pointer;
-            transition: all 0.15s; background: var(--color-base-100);
+            transition: all 0.15s; background: #f8fafc;
         }
         .drop-zone:hover { border-color: var(--color-primary); background: color-mix(in oklch, var(--color-primary) 4%, white); }
         .drop-zone.drag-active { border-color: var(--color-primary); background: color-mix(in oklch, var(--color-primary) 8%, white); }
 
-        .field-label { font-size: 0.8rem; font-weight: 600; color: var(--color-base-content); opacity: 0.6; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
-        .section-divider { height: 1px; background: var(--color-base-200); margin: 28px 0; }
+        /* ── Phone input ── */
+        .phone-input::placeholder { color: #94a3b8; }
 
-        input[type="datetime-local"] { color-scheme: light; cursor: pointer; }
-        .datetime-wrap { position: relative; display: flex; align-items: center; }
-        .datetime-wrap .dt-icon {
-            position: absolute; left: 12px; pointer-events: none; z-index: 1;
-            color: color-mix(in oklch, var(--color-base-content) 40%, transparent); font-size: 0.9rem;
+        /* ── Success screen ── */
+        .success-icon {
+            width: 72px; height: 72px; border-radius: 50%;
+            background: color-mix(in oklch, var(--color-success) 14%, white);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 20px;
         }
-        .datetime-wrap input { padding-left: 2.2rem; flex: 1; }
+
+        /* ── Mobile tweaks ── */
+        @media (max-width: 640px) {
+            .card-box { border-radius: 16px !important; }
+        }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="flex flex-col min-h-dvh">
 
 <!-- Top accent bar -->
-<div style="height:3px; background: linear-gradient(90deg, var(--color-primary) 0%, oklch(65% 0.24 300) 100%);"></div>
+<div style="height:3px; background: linear-gradient(90deg, var(--color-primary) 0%, oklch(58% 0.175 290) 100%);"></div>
 
 <!-- Header -->
-<header class="bg-white border-b border-base-200 px-6 py-4">
-    <div class="max-w-xl mx-auto flex items-center justify-between">
+<header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-3">
+    <div class="max-w-lg mx-auto flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--color-primary)">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: var(--color-primary)">
                 <i class="bi bi-send text-white text-sm"></i>
             </div>
             <div>
@@ -53,293 +111,420 @@
                 <div class="text-xs opacity-40">Приём заявок</div>
             </div>
         </div>
-        <a href="{{ url_for('auth.login') }}" class="text-xs opacity-40 hover:opacity-70 transition-opacity flex items-center gap-1 no-underline">
-            <i class="bi bi-box-arrow-in-right"></i> Войти
+        <a href="/login" class="text-xs opacity-40 hover:opacity-70 transition-opacity flex items-center gap-1 no-underline">
+            <i class="bi bi-box-arrow-in-right"></i>
         </a>
     </div>
 </header>
 
 <!-- Main -->
-<main class="flex-1 flex items-start justify-center px-4 py-10">
-    <div class="w-full max-w-xl">
+<main class="flex-1 px-4 py-6 sm:py-10">
+    <div class="w-full max-w-lg mx-auto">
 
-        <!-- Page title -->
-        <div class="mb-7 text-center">
-            <h1 class="text-2xl font-bold mb-1">Новая заявка</h1>
+        {% if show_success %}
+        <!-- ══════════ SUCCESS SCREEN ══════════ -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 sm:p-10 text-center card-box">
+            <div class="success-icon">
+                <i class="bi bi-check-lg text-3xl" style="color: var(--color-success)"></i>
+            </div>
+            <h2 class="text-xl font-bold mb-2">Заявка отправлена!</h2>
+            <p class="text-sm opacity-50 mb-8">В скором времени она будет отработана.</p>
+            <div class="flex flex-col gap-3">
+                <a href="{{ url_for('public.submit', prefill_name=prefill.name, prefill_phone=prefill.phone, prefill_email=prefill.email, prefill_dept=prefill.dept, skip_screen1='1') }}"
+                   class="btn btn-primary w-full rounded-xl h-12 text-base font-semibold">
+                    <i class="bi bi-plus-circle"></i> Создать ещё одну заявку
+                </a>
+                <a href="{{ url_for('public.submit') }}"
+                   class="btn btn-ghost w-full rounded-xl border border-slate-200">
+                    Новая заявка (очистить данные)
+                </a>
+            </div>
+        </div>
+        <p class="text-center text-xs opacity-30 mt-5">Groove Work · Система управления задачами</p>
+
+        {% else %}
+        <!-- ══════════ FORM (2 screens) ══════════ -->
+
+        <!-- Progress -->
+        <div class="mb-5">
+            <div class="progress-bar mb-2" id="progress-bar">
+                <div class="progress-step" id="step-1"></div>
+                <div class="progress-step" id="step-2"></div>
+            </div>
+            <div class="text-xs opacity-40 font-semibold" id="step-label">Шаг 1 из 2</div>
         </div>
 
-        <!-- Card -->
-        <div class="bg-white rounded-2xl shadow-sm border border-base-200 overflow-hidden">
+        <form id="main-form" method="post" enctype="multipart/form-data" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="card_choice" id="card_choice_input">
 
-            <!-- Success state -->
-            <div id="success-block" style="display:none" class="px-8 py-16 text-center">
-                <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
-                     style="background: color-mix(in oklch, var(--color-success) 12%, white)">
-                    <i class="bi bi-check-lg text-2xl" style="color: var(--color-success)"></i>
+            <!-- ══ SCREEN 1: Информация о заказчике ══ -->
+            <div class="screen {% if not request.args.get('skip_screen1') %}active{% endif %}" id="screen-1">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden card-box mb-4">
+                    <div class="px-5 sm:px-7 pt-5 pb-1 border-b border-slate-100">
+                        <h2 class="text-base font-bold flex items-center gap-2">
+                            <i class="bi bi-person-circle opacity-40"></i> Информация о заказчике
+                        </h2>
+                    </div>
+                    <div class="px-5 sm:px-7 py-5 flex flex-col gap-4">
+
+                        <!-- Department -->
+                        <div>
+                            <div class="field-label">Структурное подразделение</div>
+                            <div class="ss-wrap relative" id="dept_wrap" data-blank="— выберите —">
+                                <div class="ss-trigger input input-bordered w-full rounded-xl flex items-center gap-2 cursor-pointer select-none" tabindex="0">
+                                    <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— выберите —</span>
+                                    <i class="bi bi-chevron-down text-xs opacity-40"></i>
+                                </div>
+                                <input type="hidden" name="department_id" class="ss-value">
+                                <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-300 rounded-xl shadow-lg overflow-hidden">
+                                    <div class="p-2 border-b border-slate-100">
+                                        <input type="text" class="ss-search input input-sm input-bordered w-full rounded-xl" placeholder="Поиск…" autocomplete="off">
+                                    </div>
+                                    <div class="ss-list max-h-44 overflow-y-auto py-1"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Full name -->
+                        <div>
+                            <div class="field-label">ФИО заказчика <span class="text-error normal-case opacity-70">*</span></div>
+                            <input type="text" name="customer_name" id="customer_name"
+                                   class="input input-bordered w-full rounded-xl"
+                                   placeholder="Иванов Иван Иванович"
+                                   value="{{ prefill.name }}">
+                            <div id="name-error" class="text-xs mt-1 text-error hidden">Укажите ФИО</div>
+                        </div>
+
+                        <!-- Phone -->
+                        <div>
+                            <div class="field-label">Телефон для связи <span class="text-error normal-case opacity-70">*</span></div>
+                            <input type="tel" name="customer_phone" id="customer_phone"
+                                   class="input input-bordered w-full rounded-xl phone-input"
+                                   placeholder="+7 (900) 000-00-00"
+                                   value="{{ prefill.phone }}">
+                            <div id="phone-error" class="text-xs mt-1 text-error hidden">Введите корректный номер телефона</div>
+                        </div>
+
+                        <!-- Email -->
+                        <div>
+                            <div class="field-label">Корпоративная почта</div>
+                            <input type="text" name="customer_email" id="customer_email"
+                                   class="input input-bordered w-full rounded-xl"
+                                   placeholder="ivanov@company.ru"
+                                   value="{{ prefill.email }}">
+                            <div id="email-error" class="text-xs mt-1 text-error hidden">Проверьте формат почты (нужны @ и домен)</div>
+                        </div>
+                    </div>
                 </div>
-                <h2 class="text-xl font-bold mb-2">Заявка отправлена!</h2>
-                <p class="text-sm opacity-50 mb-6">Наши специалисты рассмотрят её и свяжутся с вами в ближайшее время.</p>
-                <button class="btn btn-primary rounded-xl px-8 mb-3" onclick="showFormAgain()">
-                    Добавить ещё задачу
-                </button>
-                <button class="btn btn-ghost rounded-xl px-8" onclick="location.href='/submit'">
-                    Новая заявка (очистить)
+
+                <button type="button" id="btn-next"
+                        class="btn btn-primary w-full rounded-xl h-12 text-base font-semibold"
+                        onclick="goToScreen2()">
+                    Далее <i class="bi bi-arrow-right"></i>
                 </button>
             </div>
 
-            <form id="main-form" method="post" enctype="multipart/form-data" class="p-7">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="task_type" id="task_type_hidden">
-
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% for cat, msg in messages %}
-                {% set ac = 'alert-error' if cat == 'danger' else 'alert-' + cat %}
-                <div role="alert" class="alert {{ ac }} rounded-xl mb-5 py-2.5 text-sm">{{ msg }}</div>
-                {% endfor %}
-                {% endwith %}
-
-                <!-- Contact info -->
-                <div class="mb-7">
-                    <div class="text-xs font-bold opacity-40 uppercase tracking-widest mb-5">Контактная информация</div>
-
-                    <div class="mb-4">
-                        <div class="field-label">Тема заявки <span class="text-error normal-case">*</span></div>
-                        <input type="text" name="title" class="input input-bordered w-full rounded-xl"
-                               required placeholder="Кратко опишите задачу">
+            <!-- ══ SCREEN 2: Описание задачи ══ -->
+            <div class="screen {% if request.args.get('skip_screen1') %}active{% endif %}" id="screen-2">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden card-box mb-4">
+                    <div class="px-5 sm:px-7 pt-5 pb-1 border-b border-slate-100">
+                        <h2 class="text-base font-bold flex items-center gap-2">
+                            <i class="bi bi-grid opacity-40"></i> Тип обращения
+                        </h2>
+                        <p class="text-xs opacity-40 pb-3 mt-1">Выберите одну или несколько подходящих категорий</p>
                     </div>
+                    <div class="px-5 sm:px-7 py-5">
+                        <div class="choice-grid">
+                            {% for slug, label, icon, tags in card_choices %}
+                            <div class="choice-card" data-value="{{ slug }}" onclick="selectChoice(this)">
+                                <i class="bi {{ icon }} choice-icon"></i>
+                                <div class="choice-label">{{ label }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <!-- Other clarification -->
+                        <div id="other-block" class="hidden mt-4">
+                            <div class="field-label">Уточните запрос</div>
+                            <input type="text" name="clarification"
+                                   class="input input-bordered w-full rounded-xl"
+                                   placeholder="Опишите подробнее…">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden card-box mb-4">
+                    <div class="px-5 sm:px-7 pt-5 pb-1 border-b border-slate-100">
+                        <h2 class="text-base font-bold flex items-center gap-2">
+                            <i class="bi bi-pencil-square opacity-40"></i> Детали заявки
+                        </h2>
+                    </div>
+                    <div class="px-5 sm:px-7 py-5 flex flex-col gap-4">
+
+                        <!-- Title -->
                         <div>
-                            <div class="field-label">ФИО <span class="text-error normal-case">*</span></div>
-                            <input type="text" name="customer_name" class="input input-bordered w-full rounded-xl"
-                                   required placeholder="Иванов Иван Иванович"
-                                   value="{{ prefill.name }}">
+                            <div class="field-label">Название задачи <span class="text-error normal-case opacity-70">*</span></div>
+                            <input type="text" name="title" id="task-title"
+                                   class="input input-bordered w-full rounded-xl"
+                                   placeholder="Кратко опишите, что нужно сделать">
+                            <div id="title-error" class="text-xs mt-1 text-error hidden">Укажите название задачи</div>
                         </div>
+
+                        <!-- Description -->
                         <div>
-                            <div class="field-label">Телефон</div>
-                            <input type="tel" name="customer_phone" class="input input-bordered w-full rounded-xl"
-                                   placeholder="+7 (900) 000-00-00"
-                                   value="{{ prefill.phone }}">
+                            <div class="field-label">Описание</div>
+                            <textarea name="description" rows="4"
+                                      class="textarea textarea-bordered w-full rounded-xl"
+                                      placeholder="Подробности, пожелания, сроки…"></textarea>
                         </div>
-                        <div class="sm:col-span-2">
-                            <div class="field-label">Email</div>
-                            <input type="email" name="customer_email" class="input input-bordered w-full rounded-xl"
-                                   placeholder="example@mail.ru"
-                                   value="{{ prefill.email }}">
-                        </div>
-                    </div>
 
-                    <div>
-                        <div class="field-label">Подразделение</div>
-                        <div class="ss-wrap relative" id="dept_wrap" data-blank="— выберите —">
-                            <div class="ss-trigger input input-bordered w-full rounded-xl flex items-center gap-2 cursor-pointer select-none" tabindex="0">
-                                <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— выберите —</span>
-                                <i class="bi bi-chevron-down text-xs opacity-40"></i>
+                        <!-- Files -->
+                        <div>
+                            <div class="field-label">Прикрепить файлы</div>
+                            <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+                                <i class="bi bi-cloud-upload text-2xl opacity-25 mb-2 block"></i>
+                                <div class="text-sm font-medium opacity-50">Нажмите или перетащите файлы</div>
+                                <div class="text-xs opacity-30 mt-1">JPG, PNG, PDF, DOCX, XLSX, ZIP</div>
                             </div>
-                            <input type="hidden" name="department_id" class="ss-value">
-                            <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-base-300 rounded-xl shadow-lg overflow-hidden">
-                                <div class="p-2 border-b border-base-200">
-                                    <input type="text" class="ss-search input input-sm input-bordered w-full rounded-xl" placeholder="Поиск…" autocomplete="off">
-                                </div>
-                                <div class="ss-list max-h-44 overflow-y-auto py-1"></div>
-                            </div>
+                            <input type="file" id="file-input" class="hidden" multiple>
+                            <div id="file-inputs-container"></div>
+                            <div id="file-list" class="flex flex-col gap-1.5 mt-2"></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="section-divider"></div>
-
-                <!-- Task type -->
-                <div class="mb-7">
-                    <div class="text-xs font-bold opacity-40 uppercase tracking-widest mb-3">
-                        Тип задачи <span class="text-error normal-case">*</span>
-                    </div>
-
-                    <div class="ss-wrap relative" id="type_wrap" data-blank="— выберите тип задачи —">
-                        <div class="ss-trigger input input-bordered w-full rounded-xl flex items-center gap-2 cursor-pointer select-none" tabindex="0">
-                            <span class="ss-label flex-1 min-w-0 truncate text-sm opacity-50">— выберите тип задачи —</span>
-                            <i class="bi bi-chevron-down text-xs opacity-40"></i>
-                        </div>
-                        <div class="ss-dropdown hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-base-300 rounded-xl shadow-lg overflow-hidden">
-                            <div class="p-2 border-b border-base-200">
-                                <input type="text" class="ss-search input input-sm input-bordered w-full rounded-xl" placeholder="Поиск…" autocomplete="off">
-                            </div>
-                            <div class="ss-list max-h-52 overflow-y-auto py-1"></div>
-                        </div>
-                    </div>
-
-                    <!-- Publication sub-block -->
-                    <div class="dynamic-block hidden mt-4" id="block-publication">
-                        <div class="bg-base-50 rounded-xl border border-base-200 p-4">
-                            <div class="mb-4">
-                                <div class="field-label mb-3">Подтип публикации</div>
-                                <div class="flex gap-3 flex-wrap">
-                                    {% for val, label in pub_subtypes %}
-                                    <label class="flex items-center gap-2 cursor-pointer text-sm">
-                                        <input class="radio radio-primary radio-sm" type="radio" name="subtype" value="{{ val }}">
-                                        <span>{{ label }}</span>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="field-label mb-3">Площадки размещения</div>
-                                <div class="flex flex-col gap-2">
-                                    {% for p in platforms %}
-                                    <label class="flex items-center gap-2 cursor-pointer text-sm">
-                                        <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" name="platforms" value="{{ p }}">
-                                        <span>{{ p }}</span>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Photo/video event date sub-block -->
-                    <div class="dynamic-block hidden mt-4" id="block-photo_video">
-                        <div class="field-label">Дата мероприятия <span class="text-error normal-case">*</span></div>
-                        <div class="datetime-wrap">
-                            <i class="bi bi-camera-video dt-icon"></i>
-                            <input type="datetime-local" name="event_date" class="input input-bordered w-full rounded-xl">
-                        </div>
-                    </div>
-
-                    <!-- Other sub-block -->
-                    <div class="dynamic-block hidden mt-4" id="block-other">
-                        <div class="field-label">Уточните задачу</div>
-                        <input type="text" name="clarification" class="input input-bordered w-full rounded-xl"
-                               placeholder="Опишите подробнее...">
-                    </div>
+                <div class="flex gap-3">
+                    <button type="button"
+                            class="btn btn-ghost border border-slate-300 rounded-xl h-12 px-5"
+                            onclick="goToScreen1()">
+                        <i class="bi bi-arrow-left"></i>
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary flex-1 rounded-xl h-12 text-base font-semibold"
+                            id="submit-btn">
+                        <i class="bi bi-send-fill"></i> Отправить заявку
+                    </button>
                 </div>
+            </div>
 
-                <div class="section-divider"></div>
+        </form>
 
-                <!-- Description & files -->
-                <div class="mb-7">
-                    <div class="text-xs font-bold opacity-40 uppercase tracking-widest mb-5">Описание и файлы</div>
+        <p class="text-center text-xs opacity-30 mt-5">Groove Work · Система управления задачами</p>
+        {% endif %}
 
-                    <div class="mb-4">
-                        <div class="field-label">Описание задачи</div>
-                        <textarea name="description" class="textarea textarea-bordered w-full rounded-xl" rows="4"
-                                  placeholder="Подробности, пожелания, дедлайн..."></textarea>
-                    </div>
-
-                    <div class="field-label">Вложения</div>
-                    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-                        <i class="bi bi-cloud-upload text-2xl opacity-25 mb-2 block"></i>
-                        <div class="text-sm font-medium opacity-50">Перетащите файлы сюда или нажмите для выбора</div>
-                        <div class="text-xs opacity-30 mt-1">JPG, PNG, PDF, DOCX, XLSX, ZIP — до 20 МБ каждый</div>
-                    </div>
-                    <input type="file" id="file-input" class="hidden" multiple>
-                    <div id="file-inputs-container"></div>
-                    <div id="file-list" class="flex flex-col gap-1.5 mt-2"></div>
-                </div>
-
-                <!-- Submit -->
-                <button type="submit" class="btn btn-primary w-full rounded-xl h-12 text-base font-semibold">
-                    <i class="bi bi-send-fill"></i> Отправить заявку
-                </button>
-            </form>
-        </div>
-
-        <p class="text-center text-xs opacity-30 mt-5">Groove Work Stats · Система управления задачами</p>
     </div>
 </main>
 
 <script>
-    // Searchable select component
-    function initSS(wrapId, data, onChange) {
-        const wrap = document.getElementById(wrapId);
-        const trigger = wrap.querySelector('.ss-trigger');
-        const valueEl = wrap.querySelector('.ss-value');
-        const dropdown = wrap.querySelector('.ss-dropdown');
-        const searchEl = wrap.querySelector('.ss-search');
-        const listEl = wrap.querySelector('.ss-list');
-        const labelEl = wrap.querySelector('.ss-label');
-        const blank = wrap.dataset.blank || '— выберите —';
+// ── Searchable select ──
+function initSS(wrapId, data, onChange) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const trigger = wrap.querySelector('.ss-trigger');
+    const valueEl = wrap.querySelector('.ss-value');
+    const dropdown = wrap.querySelector('.ss-dropdown');
+    const searchEl = wrap.querySelector('.ss-search');
+    const listEl = wrap.querySelector('.ss-list');
+    const labelEl = wrap.querySelector('.ss-label');
+    const blank = wrap.dataset.blank || '— выберите —';
 
-        function renderList(q) {
-            const items = data.filter(d => !q || d.label.toLowerCase().includes(q.toLowerCase()));
-            listEl.innerHTML = items.length
-                ? items.map(d => `<div class="ss-item px-3 py-1.5 text-sm cursor-pointer hover:bg-base-200 rounded-lg mx-1 transition-colors" data-value="${d.value}">${d.label}</div>`).join('')
-                : '<div class="px-3 py-2 text-sm opacity-40">Ничего не найдено</div>';
-        }
-
-        function open() {
-            dropdown.classList.remove('hidden');
-            searchEl.value = ''; renderList('');
-            requestAnimationFrame(() => searchEl.focus());
-        }
-        function close() { dropdown.classList.add('hidden'); }
-
-        trigger.addEventListener('click', e => { e.stopPropagation(); dropdown.classList.contains('hidden') ? open() : close(); });
-        trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-        searchEl.addEventListener('input', () => renderList(searchEl.value));
-        searchEl.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-
-        listEl.addEventListener('click', e => {
-            const item = e.target.closest('.ss-item');
-            if (!item) return;
-            if (valueEl) valueEl.value = item.dataset.value;
-            labelEl.textContent = item.textContent;
-            labelEl.classList.remove('opacity-50');
-            close();
-            if (onChange) onChange(item.dataset.value);
-        });
-
-        document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
+    function renderList(q) {
+        const items = data.filter(d => !q || d.label.toLowerCase().includes(q.toLowerCase()));
+        listEl.innerHTML = items.length
+            ? items.map(d => `<div class="ss-item px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-100 rounded-lg mx-1 transition-colors" data-value="${d.value}">${d.label}</div>`).join('')
+            : '<div class="px-3 py-2 text-sm opacity-40">Ничего не найдено</div>';
     }
 
-    const PREFILL_DEPT = {{ prefill.dept | tojson }};
+    function open() {
+        dropdown.classList.remove('hidden');
+        searchEl.value = ''; renderList('');
+        requestAnimationFrame(() => searchEl.focus());
+    }
+    function close() { dropdown.classList.add('hidden'); }
 
-    fetch('/api/departments')
-        .then(r => r.json())
-        .then(depts => {
-            const deptMap = {};
-            depts.forEach(d => { deptMap[String(d.id)] = d; });
+    trigger.addEventListener('click', e => { e.stopPropagation(); dropdown.classList.contains('hidden') ? open() : close(); });
+    trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    searchEl.addEventListener('input', () => renderList(searchEl.value));
+    searchEl.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 
-            initSS('dept_wrap', depts.map(d => ({ value: String(d.id), label: d.name })), val => {
-                const dept = deptMap[val];
-                if (dept && dept.head) {
-                    const nameInput = document.querySelector('[name="customer_name"]');
-                    if (!nameInput.value.trim()) nameInput.value = dept.head;
-                }
-            });
+    listEl.addEventListener('click', e => {
+        const item = e.target.closest('.ss-item');
+        if (!item) return;
+        if (valueEl) valueEl.value = item.dataset.value;
+        labelEl.textContent = item.textContent;
+        labelEl.classList.remove('opacity-50');
+        close();
+        if (onChange) onChange(item.dataset.value, item.textContent);
+    });
 
-            if (PREFILL_DEPT) {
-                const dept = depts.find(d => String(d.id) === String(PREFILL_DEPT));
-                if (dept) {
-                    const wrap = document.getElementById('dept_wrap');
+    document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
+}
+
+// Load departments
+const PREFILL_DEPT = {{ prefill.dept | tojson }};
+
+fetch('/api/departments')
+    .then(r => r.json())
+    .then(depts => {
+        const deptMap = {};
+        depts.forEach(d => { deptMap[String(d.id)] = d; });
+        initSS('dept_wrap', depts.map(d => ({ value: String(d.id), label: d.name })), (val) => {
+            // Always fill name from dept head when dept is selected
+            const dept = deptMap[val];
+            if (dept && dept.head) {
+                const nameInput = document.getElementById('customer_name');
+                if (nameInput) nameInput.value = dept.head;
+            }
+        });
+        if (PREFILL_DEPT) {
+            const dept = depts.find(d => String(d.id) === String(PREFILL_DEPT));
+            if (dept) {
+                const wrap = document.getElementById('dept_wrap');
+                if (wrap) {
                     wrap.querySelector('.ss-value').value = dept.id;
                     const lbl = wrap.querySelector('.ss-label');
                     lbl.textContent = dept.name;
                     lbl.classList.remove('opacity-50');
                 }
             }
-        })
-        .catch(() => {});
+        }
+    })
+    .catch(() => {});
 
-    // Task type searchable select
-    const TASK_TYPE_DATA = [
-        {% for val, label in task_types %}
-        { value: {{ val | tojson }}, label: {{ label | tojson }} }{% if not loop.last %},{% endif %}
-
-        {% endfor %}
-    ];
-    initSS('type_wrap', TASK_TYPE_DATA, val => {
-        document.getElementById('task_type_hidden').value = val;
-        selectType(val);
+// ── Phone mask ──
+const phoneInput = document.getElementById('customer_phone');
+if (phoneInput) {
+    phoneInput.addEventListener('input', function() {
+        let v = this.value.replace(/\D/g, '');
+        if (v.startsWith('8')) v = '7' + v.slice(1);
+        if (v.startsWith('7') && v.length > 1) {
+            let d = v.slice(1);
+            let out = '+7';
+            if (d.length > 0) out += ' (' + d.slice(0, 3);
+            if (d.length >= 3) out += ') ' + d.slice(3, 6);
+            if (d.length >= 6) out += '-' + d.slice(6, 8);
+            if (d.length >= 8) out += '-' + d.slice(8, 10);
+            this.value = out;
+        }
+        document.getElementById('phone-error')?.classList.add('hidden');
+        this.classList.remove('input-error');
     });
+}
 
-    function selectType(type) {
-        document.querySelectorAll('.dynamic-block').forEach(b => b.classList.add('hidden'));
-        const block = document.getElementById('block-' + type);
-        if (block) block.classList.remove('hidden');
+// ── Email live hint ──
+const emailInput = document.getElementById('customer_email');
+if (emailInput) {
+    emailInput.addEventListener('input', function() {
+        document.getElementById('email-error')?.classList.add('hidden');
+        this.classList.remove('input-error');
+    });
+}
+
+// ── Helpers ──
+function phoneDigits(v) { return v.replace(/\D/g, ''); }
+function isValidPhone(v) {
+    const d = phoneDigits(v);
+    // Russian mobile: 11 digits starting with 7 or 8
+    // City number: 10+ digits
+    return d.length >= 10;
+}
+function isValidEmail(v) {
+    if (!v) return true; // optional
+    const parts = v.split('@');
+    return parts.length === 2 && parts[0].length > 0 && parts[1].includes('.');
+}
+
+// ── Card choice ──
+let selectedChoice = null;
+
+function selectChoice(el) {
+    document.querySelectorAll('.choice-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedChoice = el.dataset.value;
+    document.getElementById('card_choice_input').value = selectedChoice;
+    // Show other block if needed
+    const otherBlock = document.getElementById('other-block');
+    if (selectedChoice === 'other') {
+        otherBlock.classList.remove('hidden');
+    } else {
+        otherBlock.classList.add('hidden');
+    }
+}
+
+// ── Screen navigation ──
+function updateProgress(screen) {
+    const steps = [document.getElementById('step-1'), document.getElementById('step-2')];
+    const label = document.getElementById('step-label');
+    steps.forEach((s, i) => {
+        if (!s) return;
+        if (i < screen) s.classList.add('done');
+        else s.classList.remove('done');
+    });
+    if (label) label.textContent = `Шаг ${screen} из 2`;
+}
+
+function goToScreen2() {
+    let ok = true;
+
+    const name = document.getElementById('customer_name');
+    const nameErr = document.getElementById('name-error');
+    if (!name.value.trim()) {
+        name.classList.add('input-error');
+        nameErr?.classList.remove('hidden');
+        if (ok) { name.focus(); ok = false; }
+    } else {
+        name.classList.remove('input-error');
+        nameErr?.classList.add('hidden');
     }
 
-    // Drag & drop
-    const dropZone = document.getElementById('drop-zone');
+    const phone = document.getElementById('customer_phone');
+    const phoneErr = document.getElementById('phone-error');
+    if (!isValidPhone(phone.value)) {
+        phone.classList.add('input-error');
+        phoneErr?.classList.remove('hidden');
+        if (ok) { phone.focus(); ok = false; }
+    } else {
+        phone.classList.remove('input-error');
+        phoneErr?.classList.add('hidden');
+    }
+
+    const email = document.getElementById('customer_email');
+    const emailErr = document.getElementById('email-error');
+    if (!isValidEmail(email.value.trim())) {
+        email.classList.add('input-error');
+        emailErr?.classList.remove('hidden');
+        if (ok) { email.focus(); ok = false; }
+    } else {
+        email.classList.remove('input-error');
+        emailErr?.classList.add('hidden');
+    }
+
+    if (!ok) return;
+
+    document.getElementById('screen-1').classList.remove('active');
+    document.getElementById('screen-2').classList.add('active');
+    updateProgress(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goToScreen1() {
+    document.getElementById('screen-2').classList.remove('active');
+    document.getElementById('screen-1').classList.add('active');
+    updateProgress(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Initial progress ──
+(function() {
+    const s1Active = document.getElementById('screen-1')?.classList.contains('active');
+    updateProgress(s1Active ? 1 : 2);
+})();
+
+// ── File upload ──
+let dt = new DataTransfer();
+const dropZone = document.getElementById('drop-zone');
+if (dropZone) {
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
     dropZone.addEventListener('drop', e => {
@@ -348,83 +533,85 @@
         for (const f of e.dataTransfer.files) dt.items.add(f);
         renderFiles();
     });
+}
 
-    let dt = new DataTransfer();
-
-    document.getElementById('file-input').addEventListener('change', function () {
+const fileInput = document.getElementById('file-input');
+if (fileInput) {
+    fileInput.addEventListener('change', function() {
         for (const f of this.files) dt.items.add(f);
         this.value = '';
         renderFiles();
     });
+}
 
-    function removeFile(idx) {
-        const files = [...dt.files];
-        dt = new DataTransfer();
-        files.forEach((f, i) => { if (i !== idx) dt.items.add(f); });
-        renderFiles();
+function removeFile(idx) {
+    const files = [...dt.files];
+    dt = new DataTransfer();
+    files.forEach((f, i) => { if (i !== idx) dt.items.add(f); });
+    renderFiles();
+}
+
+function formatSize(b) {
+    if (b < 1024) return b + ' Б';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' КБ';
+    return (b / 1048576).toFixed(1) + ' МБ';
+}
+
+function renderFiles() {
+    const list = document.getElementById('file-list');
+    if (!list) return;
+    const icons = {
+        pdf: 'bi-file-pdf text-error', doc: 'bi-file-word text-blue-600',
+        docx: 'bi-file-word text-blue-600', xls: 'bi-file-excel text-green-600',
+        xlsx: 'bi-file-excel text-green-600', jpg: 'bi-file-image text-amber-500',
+        jpeg: 'bi-file-image text-amber-500', png: 'bi-file-image text-amber-500',
+        zip: 'bi-file-zip', rar: 'bi-file-zip'
+    };
+    list.innerHTML = [...dt.files].map((f, i) => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        const icon = icons[ext] || 'bi-file-earmark';
+        return `<div class="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+            <i class="bi ${icon} text-base opacity-60"></i>
+            <span class="flex-1 text-sm truncate opacity-80" title="${f.name}">${f.name}</span>
+            <span class="text-xs opacity-30 shrink-0">${formatSize(f.size)}</span>
+            <button type="button" onclick="removeFile(${i})"
+                    class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-200 opacity-50 hover:opacity-100 transition-all">
+                <i class="bi bi-x text-sm"></i>
+            </button>
+        </div>`;
+    }).join('');
+    syncFilesToForm();
+}
+
+function syncFilesToForm() {
+    const container = document.getElementById('file-inputs-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.name = 'attachments'; inp.multiple = true; inp.style.display = 'none';
+    container.appendChild(inp);
+    try { inp.files = dt.files; } catch (e) {}
+}
+
+// ── Submit guard ──
+document.getElementById('main-form')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const title = document.getElementById('task-title');
+    const titleErr = document.getElementById('title-error');
+    if (!title || !title.value.trim()) {
+        title?.classList.add('input-error');
+        titleErr?.classList.remove('hidden');
+        title?.focus();
+        return;
     }
+    title.classList.remove('input-error');
+    titleErr?.classList.add('hidden');
 
-    function formatSize(b) {
-        if (b < 1024) return b + ' Б';
-        if (b < 1048576) return (b / 1024).toFixed(1) + ' КБ';
-        return (b / 1048576).toFixed(1) + ' МБ';
-    }
-
-    function renderFiles() {
-        const list = document.getElementById('file-list');
-        const icons = {
-            pdf: 'bi-file-pdf text-error', doc: 'bi-file-word text-primary',
-            docx: 'bi-file-word text-primary', xls: 'bi-file-excel text-success',
-            xlsx: 'bi-file-excel text-success', jpg: 'bi-file-image text-warning',
-            jpeg: 'bi-file-image text-warning', png: 'bi-file-image text-warning',
-            zip: 'bi-file-zip', rar: 'bi-file-zip'
-        };
-        list.innerHTML = [...dt.files].map((f, i) => {
-            const ext = f.name.split('.').pop().toLowerCase();
-            const icon = icons[ext] || 'bi-file-earmark';
-            return `<div class="flex items-center gap-2.5 bg-base-100 border border-base-200 rounded-xl px-3 py-2">
-                <i class="bi ${icon} text-base opacity-60"></i>
-                <span class="flex-1 text-sm truncate opacity-80" title="${f.name}">${f.name}</span>
-                <span class="text-xs opacity-30 shrink-0">${formatSize(f.size)}</span>
-                <button type="button" class="btn btn-ghost btn-xs btn-circle opacity-40 hover:opacity-100" onclick="removeFile(${i})">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>`;
-        }).join('');
-        syncFilesToForm();
-    }
-
-    function syncFilesToForm() {
-        const container = document.getElementById('file-inputs-container');
-        container.innerHTML = '';
-        const inp = document.createElement('input');
-        inp.type = 'file'; inp.name = 'attachments'; inp.multiple = true; inp.style.display = 'none';
-        container.appendChild(inp);
-        try { inp.files = dt.files; } catch (e) {}
-    }
-
-    {% with messages = get_flashed_messages() %}
-    {% for msg in messages %}
-    {% if 'успешно' in msg %}
-    document.getElementById('main-form').style.display = 'none';
-    document.getElementById('success-block').style.display = 'block';
-    {% endif %}
-    {% endfor %}
-    {% endwith %}
-
-    function showFormAgain() {
-        document.getElementById('success-block').style.display = 'none';
-        document.getElementById('main-form').style.display = 'block';
-        document.querySelector('[name="title"]').value = '';
-        document.querySelector('[name="description"]').value = '';
-        document.getElementById('task_type_hidden').value = '';
-        // reset type select label
-        const typeWrap = document.getElementById('type_wrap');
-        if (typeWrap) {
-            typeWrap.querySelector('.ss-label').textContent = typeWrap.dataset.blank || '— выберите тип задачи —';
-            typeWrap.querySelector('.ss-label').classList.add('opacity-50');
-        }
-    }
+    const btn = document.getElementById('submit-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Отправка…'; }
+    this.submit();
+});
 </script>
 </body>
 </html>

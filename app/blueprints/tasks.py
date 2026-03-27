@@ -311,6 +311,8 @@ def move_task(task_id):
         return jsonify({'error': 'Неверный статус'}), 400
     if status == TaskStatus.IN_PROGRESS:
         return jsonify({'error': 'Нельзя перетащить в «В работе» — используйте кнопку таймера'}), 400
+    if task.is_external and not task.task_type:
+        return jsonify({'error': 'need_task_type', 'task_id': task_id}), 400
     now = datetime.utcnow()
     TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
         {'ended_at': now}, synchronize_session=False
@@ -332,6 +334,10 @@ def timer_start(task_id):
     task = Task.query.options(joinedload(Task.assigned_to)).get_or_404(task_id)
     if task.status == TaskStatus.DONE:
         return jsonify({'error': 'Нельзя запустить таймер для завершённой задачи'}), 400
+
+    # External requests require task_type to be set before starting
+    if task.is_external and not task.task_type:
+        return jsonify({'error': 'need_task_type', 'task_id': task_id}), 400
 
     # Task is claimed by someone else
     if task.assigned_to_id and task.assigned_to_id != current_user.id:
@@ -391,6 +397,8 @@ def timer_force_start(task_id):
             prev_task_status = TaskStatus.IN_PROGRESS
 
     task = Task.query.get_or_404(task_id)
+    if task.is_external and not task.task_type:
+        return jsonify({'error': 'need_task_type', 'task_id': task_id}), 400
     log = TimeLog(task_id=task_id, user_id=current_user.id)
     task.status = TaskStatus.IN_PROGRESS
     task.assigned_to_id = current_user.id   # claim new task
@@ -497,6 +505,9 @@ def unassign_task(task_id):
 @login_required
 def mark_done(task_id):
     task = Task.query.get_or_404(task_id)
+    if task.is_external and not task.task_type:
+        flash('Нельзя закрыть заявку без типа задачи — сначала укажите тип', 'warning')
+        return redirect(url_for('tasks.detail', task_id=task_id))
 
     # 1 запрос вместо 2 (open_subtasks_count вызывался дважды через property)
     open_count = Task.query.filter(

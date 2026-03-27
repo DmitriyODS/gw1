@@ -4,6 +4,7 @@
 {% set is_free = task.assigned_to_id is none %}
 {% set timer_running = task.id in my_active_task_ids %}
 
+{% set is_external_no_type = task.is_external and not task.task_type %}
 <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
    class="task-card urgency-{{ task.urgency }} {% if task.is_overdue %}overdue{% endif %} {% if is_taken %}task-taken{% endif %} {% if task.is_archived %}task-archived{% endif %}"
    data-id="{{ task.id }}"
@@ -12,7 +13,9 @@
    data-assigned="{{ task.assigned_to_id or '' }}"
    data-archived="{{ 'true' if task.is_archived else 'false' }}"
    data-updated="{{ task.updated_at.isoformat() if task.updated_at else '' }}"
-   {% if not is_taken and not task.is_archived %}draggable="true"{% endif %}>
+   data-external="{{ 'true' if task.is_external else 'false' }}"
+   data-task-type="{{ task.task_type or '' }}"
+   {% if not is_taken and not task.is_archived and not is_external_no_type %}draggable="true"{% endif %}>
 
   <!-- Top row: urgency badge + archived chip + tags + id -->
   <div class="flex items-start justify-between gap-1 mb-1">
@@ -102,6 +105,12 @@
       {% elif timer_running %}
       <button class="btn-timer btn-timer-pause" data-action="pause" data-id="{{ task.id }}">
         <i class="bi bi-pause-fill"></i> Пауза
+      </button>
+      {% elif is_external_no_type %}
+      <button class="btn-timer"
+              style="background:color-mix(in oklch,var(--color-warning) 14%,var(--color-base-100));color:color-mix(in oklch,var(--color-warning) 80%,var(--color-base-content));border:1.5px solid color-mix(in oklch,var(--color-warning) 30%,transparent)"
+              data-action="goto-edit" data-id="{{ task.id }}">
+        <i class="bi bi-tag"></i> Указать тип
       </button>
       {% elif is_free or is_mine %}
       <button class="btn-timer btn-timer-start btn-timer-start-highlight" data-action="start" data-id="{{ task.id }}">

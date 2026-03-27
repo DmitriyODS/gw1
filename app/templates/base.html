@@ -1435,6 +1435,20 @@ async function saveSettings() {
   }
 }
 
+async function clearMailSettings() {
+  if (!confirm('Удалить сохранённые логин и пароль почты?')) return;
+  try {
+    const r = await fetch('/api/user/mail-clear', {
+      method: 'POST',
+      headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
+    });
+    const d = await r.json();
+    if (d.success) location.reload();
+  } catch(e) {
+    alert('Ошибка сети');
+  }
+}
+
 // ── Active nav link (longest-match to avoid /analytics prefix conflict) ──
 (function() {
   const path = window.location.pathname;
@@ -1615,6 +1629,11 @@ async function syncTopbarTimer() {
           </label>
           {% if not current_user.mail_user %}
           <p class="text-xs text-base-content/40">После сохранения раздел «Почта» появится в меню</p>
+          {% else %}
+          <button type="button" onclick="clearMailSettings()"
+                  class="btn btn-ghost btn-sm text-error self-start gap-1.5">
+            <i class="bi bi-trash"></i> Удалить почтовые данные
+          </button>
           {% endif %}
         </div>
       </div>

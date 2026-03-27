@@ -252,6 +252,15 @@ def save_user_settings():
     return jsonify({'success': True, 'has_mail': bool(mail_user)})
 
 
+@profile_bp.route('/api/user/mail-clear', methods=['POST'])
+@login_required
+def clear_mail_settings():
+    current_user.mail_user     = None
+    current_user.mail_password = None
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 # ── Avatar upload / reset ─────────────────────────────────────────────────────
 
 @profile_bp.route('/profile/avatar', methods=['POST'])

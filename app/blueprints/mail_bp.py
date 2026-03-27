@@ -204,7 +204,7 @@ def mail_list():
     page    = request.args.get('page', 1, type=int)
     per_pg  = 30
     refresh = request.args.get('refresh', '0') == '1'
-    cache_key = f'mail_list_{folder}'
+    cache_key = f'mail_list_{current_user.id}_{folder}'
 
     if not refresh:
         cached = _cache_get(cache_key, ttl=120)
@@ -272,6 +272,7 @@ def mail_list():
             'from_cache': False,
         })
 
+
     except imaplib.IMAP4.error as e:
         return jsonify({'error': f'Ошибка IMAP: {e}'}), 500
     except Exception as e:
@@ -282,7 +283,7 @@ def mail_list():
 @login_required
 def get_message(uid):
     folder    = request.args.get('folder', 'inbox')
-    cache_key = f'msg_{folder}_{uid}'
+    cache_key = f'msg_{current_user.id}_{folder}_{uid}'
     cached    = _cache_get(cache_key, ttl=3600)
     if cached:
         return jsonify(cached)
@@ -310,7 +311,7 @@ def get_message(uid):
         if folder == 'inbox':
             conn.uid('store', uid, '+FLAGS', '\\Seen')
             # Update list cache unread flag
-            lkey = 'mail_list_inbox'
+            lkey = f'mail_list_{current_user.id}_inbox'
             if lkey in _cache:
                 for m in _cache[lkey][0]:
                     if m['uid'] == uid:
@@ -459,7 +460,7 @@ def send_mail():
             server.sendmail(from_email, recipients, msg.as_bytes())
 
         # Invalidate sent cache so new message appears
-        _cache.pop('mail_list_sent', None)
+        _cache.pop(f'mail_list_{current_user.id}_sent', None)
         return jsonify({'success': True})
 
     except smtplib.SMTPAuthenticationError:
@@ -492,7 +493,10 @@ def test_connection():
     # IMAP test
     imap_host = cfg.get('MAIL_IMAP_HOST', '?')
     imap_port = cfg.get('MAIL_IMAP_PORT', 993)
-    imap_user = cfg.get('MAIL_USER', '?')
+    imap_user, imap_pass = _user_mail_creds()
+    pass_source = 'пользователь' if (current_user.mail_user and current_user.mail_password) else (
+        'глобальный (пароль не задан у пользователя)' if current_user.mail_user else 'глобальный'
+    )
     try:
         conn = _imap_connect()
         _, folders_data = conn.list()
@@ -515,6 +519,7 @@ def test_connection():
             'ok': True,
             'host': f'{imap_host}:{imap_port}',
             'user': imap_user,
+            'pass_source': pass_source,
             'folders': folder_names[:30],
             'inbox_folder': inbox_folder,
             'inbox_folder_ok': st == 'OK',
@@ -525,6 +530,7 @@ def test_connection():
             'ok': False,
             'host': f'{imap_host}:{imap_port}',
             'user': imap_user,
+            'pass_source': pass_source,
             'error': str(e),
         }
 
@@ -541,8 +547,9 @@ def test_connection():
             server.ehlo()
         else:
             server = smtplib.SMTP_SSL(smtp_host, smtp_port, context=ctx, timeout=10)
+        smtp_user, smtp_pass = _user_mail_creds()
         with server:
-            server.login(cfg['MAIL_USER'], cfg['MAIL_PASSWORD'])
+            server.login(smtp_user, smtp_pass)
         result['smtp'] = {'ok': True, 'mode': smtp_mode, 'host': smtp_host, 'port': smtp_port}
     except Exception as e:
         result['smtp'] = {
@@ -560,7 +567,7 @@ def test_connection():
 
     imap = result['imap']
     smtp = result['smtp']
-    imap_rows = row('Хост', imap['host']) + row('Логин', imap['user'])
+    imap_rows = row('Хост', imap['host']) + row('Логин', imap['user']) + row('Пароль (источник)', imap['pass_source'])
     if imap['ok']:
         imap_rows += row('Статус', '✓ OK', True)
         imap_rows += row('Папки', ', '.join(imap['folders']))

@@ -25,7 +25,6 @@ class TaskStatus:
     NEW = 'new'
     IN_PROGRESS = 'in_progress'
     PAUSED = 'paused'
-    REVIEW = 'review'
     DONE = 'done'
     LABELS = {
         'new': 'Новая',

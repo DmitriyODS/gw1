@@ -67,7 +67,8 @@ def build_stats(period):
 
     # 1 запрос: количество задач по статусам (вместо 5 отдельных COUNT)
     status_rows = db.session.query(Task.status, func.count(Task.id)).filter(
-        Task.created_at >= start
+        Task.created_at >= start,
+        Task.is_archived == False,
     ).group_by(Task.status).all()
     by_status = {s: 0 for s in TaskStatus.LABELS}
     for s, cnt in status_rows:
@@ -77,7 +78,10 @@ def build_stats(period):
     # 1 запрос: тип × статус (вместо N_типов × 5 запросов)
     type_status_rows = db.session.query(
         Task.task_type, Task.status, func.count(Task.id)
-    ).filter(Task.created_at >= start).group_by(Task.task_type, Task.status).all()
+    ).filter(
+        Task.created_at >= start,
+        Task.is_archived == False,
+    ).group_by(Task.task_type, Task.status).all()
 
     type_totals = defaultdict(int)
     _type_by_status_raw = defaultdict(lambda: defaultdict(int))
@@ -97,7 +101,8 @@ def build_stats(period):
     dept_status_rows = db.session.query(
         Department.name, Task.status, func.count(Task.id)
     ).join(Task, Task.department_id == Department.id).filter(
-        Task.created_at >= start
+        Task.created_at >= start,
+        Task.is_archived == False,
     ).group_by(Department.name, Task.status).all()
 
     dept_totals = defaultdict(int)
@@ -121,11 +126,18 @@ def build_stats(period):
         Task.created_at >= start, Task.customer_name != None, Task.customer_name != ''
     ).group_by(Task.customer_name).order_by(func.count(Task.id).desc()).limit(10).all()
 
-    top_tasks = db.session.query(User.full_name, func.count(Task.id).label('cnt')).join(
-        Task, Task.created_by_id == User.id
-    ).filter(Task.status == TaskStatus.DONE, Task.created_at >= start).group_by(
-        User.full_name
-    ).order_by(func.count(Task.id).desc()).limit(10).all()
+    top_tasks = db.session.query(
+        User.full_name,
+        func.count(func.distinct(Task.id)).label('cnt')
+    ).join(TimeLog, TimeLog.user_id == User.id
+    ).join(Task, TimeLog.task_id == Task.id
+    ).filter(
+        Task.status == TaskStatus.DONE,
+        Task.completed_at >= start,
+        Task.completed_at.isnot(None),
+        TimeLog.ended_at.isnot(None),
+    ).group_by(User.id, User.full_name
+    ).order_by(func.count(func.distinct(Task.id)).desc()).limit(10).all()
 
     top_time = db.session.query(
         User.full_name,
@@ -160,13 +172,13 @@ def _period_bounds(mode, offset, tz_hours):
     if mode == 'day':
         day = (now_local + timedelta(days=offset)).date()
         s = datetime(day.year, day.month, day.day, 0, 0, 0)
-        e = datetime(day.year, day.month, day.day, 23, 59, 59)
+        e = datetime(day.year, day.month, day.day, 23, 59, 59, 999999)
         label = day.strftime('%d.%m.%Y')
     elif mode == 'week':
         monday = (now_local - timedelta(days=now_local.weekday())).date() + timedelta(weeks=offset)
         sunday = monday + timedelta(days=6)
         s = datetime(monday.year, monday.month, monday.day, 0, 0, 0)
-        e = datetime(sunday.year, sunday.month, sunday.day, 23, 59, 59)
+        e = datetime(sunday.year, sunday.month, sunday.day, 23, 59, 59, 999999)
         label = f'{monday.strftime("%d.%m")} – {sunday.strftime("%d.%m.%Y")}'
     else:  # month
         year = now_local.year
@@ -177,7 +189,7 @@ def _period_bounds(mode, offset, tz_hours):
             month -= 12; year += 1
         last_day = cal_mod.monthrange(year, month)[1]
         s = datetime(year, month, 1, 0, 0, 0)
-        e = datetime(year, month, last_day, 23, 59, 59)
+        e = datetime(year, month, last_day, 23, 59, 59, 999999)
         label = s.strftime('%B %Y')
 
     return s - timedelta(hours=tz_hours), e - timedelta(hours=tz_hours), label
@@ -252,23 +264,9 @@ def time_report():
         can_see_all=can_see_all, rows=rows, total_ranked=total_ranked, today_iso=today_iso)
 
 
-@analytics_bp.route('/analytics/time/user-detail')
-@login_required
-def time_user_detail():
-    """Returns JSON detail for one user in a given period."""
-    can_see_all = current_user.can_admin
-    uid    = request.args.get('user_id', type=int)
-    mode   = request.args.get('mode', 'week')
-    offset = request.args.get('offset', 0, type=int)
-    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
-
-    if not uid:
-        uid = current_user.id
-    if not can_see_all and uid != current_user.id:
-        return jsonify({'error': 'Нет прав'}), 403
-
-    start, end, period_label = _period_bounds(mode, offset, tz_hours)
-
+def _load_user_period_data(uid, start, end):
+    """Загружает закрытые задачи, логи и время по сотруднику за период.
+    Возвращает (done_tasks, logs, time_by_task) где time_by_task — {task_id: float сек}."""
     worked_task_ids = db.session.query(TimeLog.task_id).filter(
         TimeLog.user_id == uid,
         TimeLog.ended_at.isnot(None),
@@ -290,6 +288,28 @@ def time_user_detail():
     time_by_task = defaultdict(float)
     for log in logs:
         time_by_task[log.task_id] += (log.ended_at - log.started_at).total_seconds()
+
+    return done_tasks, logs, time_by_task
+
+
+@analytics_bp.route('/analytics/time/user-detail')
+@login_required
+def time_user_detail():
+    """Returns JSON detail for one user in a given period."""
+    can_see_all = current_user.can_admin
+    uid    = request.args.get('user_id', type=int)
+    mode   = request.args.get('mode', 'week')
+    offset = request.args.get('offset', 0, type=int)
+    tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
+
+    if not uid:
+        uid = current_user.id
+    if not can_see_all and uid != current_user.id:
+        return jsonify({'error': 'Нет прав'}), 403
+
+    start, end, period_label = _period_bounds(mode, offset, tz_hours)
+
+    done_tasks, logs, time_by_task = _load_user_period_data(uid, start, end)
 
     total_secs = int(sum(time_by_task.values()))
 
@@ -404,17 +424,25 @@ def tv_mode():
 
 
 def compute_staff_scores(start, end=None, limit=5):
-    """Compute employee ranking using formula R_i = 0.5*(N_i/N_max) + 0.5*(S_i/S_max), scaled to 0-100.
-    N_i — кол-во закрытых задач в периоде, S_i — суммарное время работы по этим задачам."""
+    """Compute employee ranking: R_i = 0.5*(N_i/N_max) + 0.5*(T_min/T_i), scaled to 0-100.
+    N_i — кол-во закрытых задач в периоде.
+    T_i — среднее время на задачу (меньше = эффективнее, поэтому T_min/T_i).
+    Сотрудник с 0 задач в рейтинг не попадает."""
     now = datetime.utcnow()
     if end is None:
         end = now
 
-    user_tasks_q = db.session.query(
+    # 1 запрос: кол-во задач и суммарное время одновременно
+    combined_q = db.session.query(
         TimeLog.user_id,
         User.full_name,
-        func.count(func.distinct(Task.id)).label('cnt')
-    ).join(Task, TimeLog.task_id == Task.id).join(User, TimeLog.user_id == User.id).filter(
+        func.count(func.distinct(Task.id)).label('cnt'),
+        func.coalesce(func.sum(
+            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
+        ), 0).label('secs')
+    ).join(Task, TimeLog.task_id == Task.id
+    ).join(User, TimeLog.user_id == User.id
+    ).filter(
         Task.status == TaskStatus.DONE,
         Task.completed_at >= start,
         Task.completed_at <= end,
@@ -422,44 +450,37 @@ def compute_staff_scores(start, end=None, limit=5):
         TimeLog.ended_at.isnot(None),
     ).group_by(TimeLog.user_id, User.full_name).all()
 
-    # Считаем суммарное время только по закрытым задачам того же периода,
-    # чтобы периоды задач и времени совпадали.
-    user_time_q = db.session.query(
-        TimeLog.user_id,
-        func.coalesce(func.sum(
-            func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
-        ), 0).label('secs')
-    ).join(Task, TimeLog.task_id == Task.id).filter(
-        Task.status == TaskStatus.DONE,
-        Task.completed_at >= start,
-        Task.completed_at <= end,
-        Task.completed_at.isnot(None),
-        TimeLog.ended_at.isnot(None),
-    ).group_by(TimeLog.user_id).all()
-
-    time_map = {u.user_id: float(u.secs) for u in user_time_q}
-
     staff = []
-    for u in user_tasks_q:
-        n_i = u.cnt
-        total_secs = time_map.get(u.user_id, 0)
-        # t = суммарное время (больше = лучше), не среднее
-        staff.append({'id': u.user_id, 'name': u.full_name, 'n': n_i, 't': total_secs, 'secs': int(total_secs)})
+    for u in combined_q:
+        if u.cnt == 0:
+            continue
+        total_secs = float(u.secs)
+        avg_secs = total_secs / u.cnt  # среднее время на задачу
+        staff.append({
+            'id': u.user_id,
+            'name': u.full_name,
+            'n': u.cnt,
+            't': avg_secs,       # среднее время (меньше = лучше)
+            'secs': int(total_secs),
+        })
 
     if not staff:
         return []
 
     n_max = max(s['n'] for s in staff) or 1
-    t_max = max(s['t'] for s in staff) or 1
+    t_min = min(s['t'] for s in staff) or 1  # эталон: самый быстрый
 
     for s in staff:
-        s['score'] = round((0.5 * s['n'] / n_max + 0.5 * s['t'] / t_max) * 100)
+        # N: больше задач — лучше; T: меньше среднее время — лучше (t_min/t_i)
+        t_score = t_min / s['t'] if s['t'] > 0 else 1.0
+        s['score'] = round((0.5 * s['n'] / n_max + 0.5 * t_score) * 100)
 
     ranked = sorted(staff, key=lambda x: x['score'], reverse=True)
     return ranked[:limit] if limit is not None else ranked
 
 
 @analytics_bp.route('/analytics/tv/data')
+@login_required
 def tv_data():
     now = datetime.utcnow()
     tz_hours = current_app.config.get('TZ_OFFSET_HOURS', 3)
@@ -615,27 +636,7 @@ def export_user_stats_excel():
     user = User.query.get_or_404(uid)
     start, end, period_label = _period_bounds(mode, offset, tz_hours)
 
-    worked_task_ids = db.session.query(TimeLog.task_id).filter(
-        TimeLog.user_id == uid,
-        TimeLog.ended_at.isnot(None),
-    ).distinct().subquery()
-    done_tasks = Task.query.filter(
-        Task.id.in_(worked_task_ids),
-        Task.status == TaskStatus.DONE,
-        Task.completed_at >= start,
-        Task.completed_at <= end,
-        Task.completed_at.isnot(None),
-    ).order_by(Task.completed_at.desc()).all()
-
-    logs = TimeLog.query.filter(
-        TimeLog.user_id == uid,
-        TimeLog.started_at >= start,
-        TimeLog.started_at <= end,
-        TimeLog.ended_at.isnot(None),
-    ).all()
-    time_by_task = defaultdict(float)
-    for log in logs:
-        time_by_task[log.task_id] += (log.ended_at - log.started_at).total_seconds()
+    done_tasks, _logs, time_by_task = _load_user_period_data(uid, start, end)
 
     by_type = defaultdict(lambda: {'cnt': 0, 'secs': 0})
     for t in done_tasks:

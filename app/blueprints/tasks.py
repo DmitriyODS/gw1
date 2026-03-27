@@ -306,6 +306,8 @@ def _task_from_form(form, task=None, created_by_id=None):
 @login_required
 def move_task(task_id):
     task = Task.query.get_or_404(task_id)
+    if task.assigned_to_id != current_user.id and task.created_by_id != current_user.id and not current_user.can_admin:
+        return jsonify({'error': 'Нет прав для перемещения этой задачи'}), 403
     status = request.json.get('status')
     if status not in TaskStatus.LABELS:
         return jsonify({'error': 'Неверный статус'}), 400
@@ -321,6 +323,9 @@ def move_task(task_id):
     # Moving back to NEW unassigns the task
     if status == TaskStatus.NEW:
         task.assigned_to_id = None
+    # Clear completed_at when moving out of DONE to prevent premature auto-archive
+    if status != TaskStatus.DONE:
+        task.completed_at = None
     touch(task)
     db.session.commit()
     return jsonify({'ok': True})
@@ -391,7 +396,6 @@ def timer_force_start(task_id):
         remaining = TimeLog.query.filter_by(task_id=prev_task.id, ended_at=None).first()
         if not remaining:
             prev_task.status = TaskStatus.PAUSED
-            prev_task.assigned_to_id = current_user.id
             prev_task_status = TaskStatus.PAUSED
         else:
             prev_task_status = TaskStatus.IN_PROGRESS
@@ -505,6 +509,9 @@ def unassign_task(task_id):
 @login_required
 def mark_done(task_id):
     task = Task.query.get_or_404(task_id)
+    if task.assigned_to_id != current_user.id and not current_user.can_admin:
+        flash('Нет прав для закрытия этой задачи', 'error')
+        return redirect(url_for('tasks.detail', task_id=task_id))
     if task.is_external and not task.task_type:
         flash('Нельзя закрыть заявку без типа задачи — сначала укажите тип', 'warning')
         return redirect(url_for('tasks.detail', task_id=task_id))

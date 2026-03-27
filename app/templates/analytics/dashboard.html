@@ -118,9 +118,9 @@
 <script>
 // Read chart colors from CSS tokens
 const _css = getComputedStyle(document.documentElement);
-const C1 = _css.getPropertyValue('--chart-1').trim();
-const C2 = _css.getPropertyValue('--chart-2').trim();
-const C3 = _css.getPropertyValue('--chart-3').trim();
+const C1 = _css.getPropertyValue('--tok-chart-1').trim();
+const C2 = _css.getPropertyValue('--tok-chart-2').trim();
+const C3 = _css.getPropertyValue('--tok-chart-3').trim();
 
 const burnupDates   = {{ burnup.dates | tojson }};
 const burnupCreated = {{ burnup.created | tojson }};
@@ -158,9 +158,9 @@ const typeBarH = Math.max(220, typeLabels.length * 26 + 20);
 typeCanvas.style.height = typeBarH + 'px';
 
 const PALETTE = [C1, C2, C3,
-  _css.getPropertyValue('--chart-4').trim(),
-  _css.getPropertyValue('--chart-5').trim(),
-  _css.getPropertyValue('--chart-6').trim(),
+  _css.getPropertyValue('--tok-chart-4').trim(),
+  _css.getPropertyValue('--tok-chart-5').trim(),
+  _css.getPropertyValue('--tok-chart-6').trim(),
 ];
 
 new Chart(typeCanvas, {

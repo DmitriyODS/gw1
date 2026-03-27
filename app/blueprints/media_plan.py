@@ -1,6 +1,6 @@
 import calendar
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from flask import Blueprint, render_template, request, send_file
 from flask_login import login_required
 from models import Task, TaskStatus
@@ -43,9 +43,14 @@ def _get_month_tasks(current_month):
     else:
         month_end = date(current_month.year, current_month.month + 1, 1)
 
+    # Ограничиваем выборку задачами, созданными не раньше чем за 2 года до начала месяца,
+    # чтобы не сканировать всю историю. pub_date хранится в JSON, поэтому точный фильтр
+    # возможен только в Python, но грубое ограничение по created_at сокращает объём данных.
+    earliest = datetime(month_start.year - 2, month_start.month, 1)
     all_pubs = Task.query.filter(
         Task.task_type.in_(['placement', 'publication']),
         Task.is_archived == False,
+        Task.created_at >= earliest,
     ).all()
 
     by_day = {}
@@ -134,7 +139,7 @@ def export_xlsx():
 
     STATUS_LABELS = {
         'new': 'Новая', 'in_progress': 'В работе',
-        'paused': 'На паузе', 'review': 'Проверка', 'done': 'Готово',
+        'paused': 'На паузе', 'done': 'Готово',
     }
 
     headers = ['Дата публикации', 'Время', 'Название', 'Подтип', 'Площадки', 'Статус', 'Ссылка']
@@ -152,7 +157,7 @@ def export_xlsx():
 
     STATUS_COLORS = {
         'new': 'E2E8F0', 'in_progress': 'DBEAFE',
-        'paused': 'FEF9C3', 'review': 'DBEAFE', 'done': 'DCFCE7',
+        'paused': 'FEF9C3', 'done': 'DCFCE7',
     }
 
     for row_idx, (pub_dt, t) in enumerate(all_tasks, 2):

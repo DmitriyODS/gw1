@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru" data-theme="light">
 <head>
-  <script>(function(){var t=localStorage.getItem('tt-theme')||'light';document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('tt-color')||'blue';document.documentElement.setAttribute('data-color',c);var g=localStorage.getItem('tt-glass')!=='off';document.documentElement.setAttribute('data-glass',g?'on':'off');})();</script>
+  <script>(function(){var t=localStorage.getItem('tt-theme')||'light';document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('tt-color')||'mono';document.documentElement.setAttribute('data-color',c);var g=localStorage.getItem('tt-glass')!=='off';document.documentElement.setAttribute('data-glass',g?'on':'off');})();</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -36,57 +36,104 @@
 
       /* ── App color tokens ── */
       /* Page */
-      --bg-page: #E1EFFB;
+      --tok-bg-page: #E1EFFB;
+
+      /* Panel / surface with primary tint (sidebar nav groups, kanban columns) */
+      --tok-panel-bg:     color-mix(in oklch, var(--color-primary) 7%, var(--color-base-100));
+      --tok-panel-border: color-mix(in oklch, var(--color-primary) 15%, transparent);
 
       /* Kanban column accents */
-      --col-new:            #94a3b8;
-      --col-new-title:      #475569;
-      --col-progress:       #ec4899;
-      --col-progress-title: #be185d;
-      --col-paused:         #f59e0b;
-      --col-paused-title:   #b45309;
-      --col-done:           #22c55e;
-      --col-done-title:     #166534;
+      --tok-status-new:            #94a3b8;
+      --tok-status-new-title:      #475569;
+      --tok-status-progress:       #ec4899;
+      --tok-status-progress-title: #be185d;
+      --tok-status-paused:         #f59e0b;
+      --tok-status-paused-title:   #b45309;
+      --tok-status-done:           #22c55e;
+      --tok-status-done-title:     #166534;
 
       /* Urgency */
-      --urgency-important:  #f97316;
-      --urgency-slow:       #cbd5e1;
+      --tok-urgency-important:  #f97316;
+      --tok-urgency-slow:       #cbd5e1;
 
       /* Tags */
-      --tag-design-bg:      #ede9fe;
-      --tag-design-text:    #7c3aed;
-      --tag-design-border:  #c4b5fd;
-      --tag-text-bg:        #dbeafe;
-      --tag-text-color:     #1d4ed8;
-      --tag-text-border:    #93c5fd;
-      --tag-pub-bg:         #dcfce7;
-      --tag-pub-text:       #15803d;
-      --tag-pub-border:     #86efac;
-      --tag-media-bg:       #fef3c7;
-      --tag-media-text:     #b45309;
-      --tag-media-border:   #fcd34d;
-      --tag-external-bg:    #cffafe;
-      --tag-external-text:  #0e7490;
-      --tag-external-border:#67e8f9;
+      --tok-tag-design-bg:      #ede9fe;
+      --tok-tag-design-fg:      #7c3aed;
+      --tok-tag-design-bd:      #c4b5fd;
+      --tok-tag-text-bg:        #dbeafe;
+      --tok-tag-text-fg:        #1d4ed8;
+      --tok-tag-text-bd:        #93c5fd;
+      --tok-tag-pub-bg:         #dcfce7;
+      --tok-tag-pub-fg:         #15803d;
+      --tok-tag-pub-bd:         #86efac;
+      --tok-tag-media-bg:       #fef3c7;
+      --tok-tag-media-fg:       #b45309;
+      --tok-tag-media-bd:       #fcd34d;
+      --tok-tag-external-bg:    #cffafe;
+      --tok-tag-external-fg:    #0e7490;
+      --tok-tag-external-bd:    #67e8f9;
 
       /* Sections & UI accents */
-      --subsection-requests: #7c3aed;
-      --subtask-bg:          #f3e8ff;
-      --subtask-text:        #6d28d9;
-      --subtask-border:      #ddd6fe;
+      --tok-section-requests: #7c3aed;
+      --tok-subtask-bg:          #f3e8ff;
+      --tok-subtask-fg:          #6d28d9;
+      --tok-subtask-bd:          #ddd6fe;
 
       /* Rank badges (leaderboard) */
-      --rank-gold:           #fbbf24;
-      --rank-silver:         #94a3b8;
-      --rank-bronze:         #b45309;
+      --tok-rank-gold:           #fbbf24;
+      --tok-rank-silver:         #94a3b8;
+      --tok-rank-bronze:         #b45309;
 
       /* Chart palette (referenced by JS via getComputedStyle) */
-      --chart-1: oklch(58% 0.160 254);
-      --chart-2: oklch(62% 0.100 148);
-      --chart-3: oklch(66% 0.100 66);
-      --chart-4: oklch(52% 0.130 27);
-      --chart-5: oklch(58% 0.140 290);
-      --chart-6: oklch(60% 0.120 190);
+      --tok-chart-1: oklch(58% 0.160 254);
+      --tok-chart-2: oklch(62% 0.100 148);
+      --tok-chart-3: oklch(66% 0.100 66);
+      --tok-chart-4: oklch(52% 0.130 27);
+      --tok-chart-5: oklch(58% 0.140 290);
+      --tok-chart-6: oklch(60% 0.120 190);
+
+      /* Additional chart colors */
+      --tok-chart-7: oklch(56% 0.150 60);
+      --tok-chart-8: oklch(60% 0.130 130);
+
+      /* Subtask icon */
+      --tok-subtask-icon: #8b5cf6;
+
+      /* Frequency badges (rhythms) */
+      --tok-freq-daily-bg:    #dbeafe;
+      --tok-freq-daily-fg:    #1d4ed8;
+      --tok-freq-weekly-bg:   #fef3c7;
+      --tok-freq-weekly-fg:   #b45309;
+      --tok-freq-monthly-bg:  #f3e8ff;
+      --tok-freq-monthly-fg:  #7c3aed;
+
+      /* TV mode tokens */
+      --tok-tv-bg:       #eef2f7;
+      --tok-tv-surface:  #ffffff;
+      --tok-tv-border:   rgba(0,0,0,0.08);
+      --tok-tv-text:     #0f172a;
+      --tok-tv-muted:    #94a3b8;
+      --tok-tv-dim:      rgba(0,0,0,0.02);
+      --tok-tv-shadow:   0 2px 16px rgba(0,0,0,0.08);
+      --tok-tv-accent:   #2563eb;
+      --tok-tv-text-alt: #0f172a;
+      --tok-tv-status-new:      #94a3b8;
+      --tok-tv-status-progress: #2563eb;
+      --tok-tv-status-done:     #16a34a;
+
+      /* Login page tokens */
+      --tok-login-bg:         #cce4f7;
+      --tok-login-primary:    #2563eb;
+      --tok-login-primary-dim:#3b82f6;
+      --tok-login-primary-bright: #4f90ea;
+      --tok-login-surface:    #ffffff;
+      --tok-login-text:       #334155;
+      --tok-login-muted:      #64748b;
+      --tok-login-border:     #cbd5e1;
+      --tok-login-error-bg:   #fee2e2;
+      --tok-login-error:      #dc2626;
+      --tok-login-warn-bg:    #fef3c7;
+      --tok-login-warn:       #b45309;
     }
 
     /* ── Dark theme ── */
@@ -111,55 +158,102 @@
       --color-error-content: #ffffff;
 
       /* ── App color tokens ── */
-      --bg-page: #002C5B;
+      --tok-bg-page: #002C5B;
 
-      --col-new:            #94a3b8;
-      --col-new-title:      #cbd5e1;
-      --col-progress:       #ec4899;
-      --col-progress-title: #f472b6;
-      --col-paused:         #f59e0b;
-      --col-paused-title:   #fbbf24;
-      --col-done:           #22c55e;
-      --col-done-title:     #4ade80;
+      /* Panel / surface with primary tint */
+      --tok-panel-bg:     color-mix(in oklch, var(--color-primary) 9%, var(--color-base-100));
+      --tok-panel-border: color-mix(in oklch, var(--color-primary) 18%, transparent);
 
-      --urgency-important:  #f97316;
-      --urgency-slow:       #475569;
+      --tok-status-new:            #94a3b8;
+      --tok-status-new-title:      #cbd5e1;
+      --tok-status-progress:       #ec4899;
+      --tok-status-progress-title: #f472b6;
+      --tok-status-paused:         #f59e0b;
+      --tok-status-paused-title:   #fbbf24;
+      --tok-status-done:           #22c55e;
+      --tok-status-done-title:     #4ade80;
 
-      --tag-design-bg:      #2e1065;
-      --tag-design-text:    #c4b5fd;
-      --tag-design-border:  #6d28d9;
-      --tag-text-bg:        #1e3a5f;
-      --tag-text-color:     #93c5fd;
-      --tag-text-border:    #1d4ed8;
-      --tag-pub-bg:         #052e16;
-      --tag-pub-text:       #86efac;
-      --tag-pub-border:     #15803d;
-      --tag-media-bg:       #451a03;
-      --tag-media-text:     #fcd34d;
-      --tag-media-border:   #b45309;
-      --tag-external-bg:    #083344;
-      --tag-external-text:  #67e8f9;
-      --tag-external-border:#0e7490;
+      --tok-urgency-important:  #f97316;
+      --tok-urgency-slow:       #475569;
 
-      --subsection-requests: #a78bfa;
-      --subtask-bg:          #2e1065;
-      --subtask-text:        #c4b5fd;
-      --subtask-border:      #6d28d9;
+      --tok-tag-design-bg:      #2e1065;
+      --tok-tag-design-fg:      #c4b5fd;
+      --tok-tag-design-bd:      #6d28d9;
+      --tok-tag-text-bg:        #1e3a5f;
+      --tok-tag-text-fg:        #93c5fd;
+      --tok-tag-text-bd:        #1d4ed8;
+      --tok-tag-pub-bg:         #052e16;
+      --tok-tag-pub-fg:         #86efac;
+      --tok-tag-pub-bd:         #15803d;
+      --tok-tag-media-bg:       #451a03;
+      --tok-tag-media-fg:       #fcd34d;
+      --tok-tag-media-bd:       #b45309;
+      --tok-tag-external-bg:    #083344;
+      --tok-tag-external-fg:    #67e8f9;
+      --tok-tag-external-bd:    #0e7490;
+
+      --tok-section-requests: #a78bfa;
+      --tok-subtask-bg:          #2e1065;
+      --tok-subtask-fg:          #c4b5fd;
+      --tok-subtask-bd:          #6d28d9;
 
       /* Rank badges */
-      --rank-gold:           #fbbf24;
-      --rank-silver:         #94a3b8;
-      --rank-bronze:         #cd7c3a;
+      --tok-rank-gold:           #fbbf24;
+      --tok-rank-silver:         #94a3b8;
+      --tok-rank-bronze:         #cd7c3a;
 
-      --chart-1: oklch(65% 0.145 254);
-      --chart-2: oklch(68% 0.100 148);
-      --chart-3: oklch(72% 0.092 66);
-      --chart-4: oklch(62% 0.120 27);
-      --chart-5: oklch(65% 0.130 290);
-      --chart-6: oklch(68% 0.115 190);
+      --tok-chart-1: oklch(65% 0.145 254);
+      --tok-chart-2: oklch(68% 0.100 148);
+      --tok-chart-3: oklch(72% 0.092 66);
+      --tok-chart-4: oklch(62% 0.120 27);
+      --tok-chart-5: oklch(65% 0.130 290);
+      --tok-chart-6: oklch(68% 0.115 190);
+
+      /* Additional chart colors */
+      --tok-chart-7: oklch(64% 0.140 60);
+      --tok-chart-8: oklch(66% 0.120 130);
+
+      /* Subtask icon */
+      --tok-subtask-icon: #a78bfa;
+
+      /* Frequency badges (rhythms) */
+      --tok-freq-daily-bg:    #1e3a5f;
+      --tok-freq-daily-fg:    #93c5fd;
+      --tok-freq-weekly-bg:   #451a03;
+      --tok-freq-weekly-fg:   #fcd34d;
+      --tok-freq-monthly-bg:  #2e1065;
+      --tok-freq-monthly-fg:  #c4b5fd;
+
+      /* TV mode tokens */
+      --tok-tv-bg:       #07090f;
+      --tok-tv-surface:  rgba(255,255,255,0.04);
+      --tok-tv-border:   rgba(255,255,255,0.08);
+      --tok-tv-text:     #f1f5f9;
+      --tok-tv-muted:    #64748b;
+      --tok-tv-dim:      rgba(255,255,255,0.03);
+      --tok-tv-shadow:   0 2px 16px rgba(0,0,0,0.4);
+      --tok-tv-accent:   #3b82f6;
+      --tok-tv-text-alt: #f1f5f9;
+      --tok-tv-status-new:      #94a3b8;
+      --tok-tv-status-progress: #3b82f6;
+      --tok-tv-status-done:     #22c55e;
+
+      /* Login page tokens */
+      --tok-login-bg:         #0f1a2e;
+      --tok-login-primary:    #3b82f6;
+      --tok-login-primary-dim:#60a5fa;
+      --tok-login-primary-bright: #93c5fd;
+      --tok-login-surface:    oklch(24% 0.068 252);
+      --tok-login-text:       #cbd5e1;
+      --tok-login-muted:      #94a3b8;
+      --tok-login-border:     oklch(32% 0.072 252);
+      --tok-login-error-bg:   #450a0a;
+      --tok-login-error:      #f87171;
+      --tok-login-warn-bg:    #431407;
+      --tok-login-warn:       #fbbf24;
     }
 
-    body { background: var(--bg-page); margin: 0; }
+    body { background: var(--tok-bg-page); margin: 0; }
 
     /* ── Sidebar island ── */
     #sidebar {
@@ -212,7 +306,8 @@
       color: color-mix(in oklch, var(--color-base-content) 35%, transparent);
     }
     .nav-card {
-      background: color-mix(in oklch, var(--color-base-content) 4%, var(--color-base-100));
+      background: var(--tok-panel-bg);
+      border: 1px solid var(--tok-panel-border);
       border-radius: 12px; padding: 4px; margin-bottom: 6px;
     }
     .nav-link {
@@ -373,7 +468,7 @@
     /* Task styles */
     .task-overdue { background-color: color-mix(in oklch, var(--color-error) 8%, var(--color-base-100)) !important; border-left: 4px solid var(--color-error) !important; }
     .urgency-border-urgent    { border-left: 4px solid var(--color-error); }
-    .urgency-border-important { border-left: 4px solid #f97316; }
+    .urgency-border-important { border-left: 4px solid var(--tok-urgency-important); }
     .urgency-border-normal    { border-left: 4px solid var(--color-info); }
     .urgency-border-slow      { border-left: 4px solid color-mix(in oklch, var(--color-base-content) 25%, transparent); }
     .timer-mono { font-family: 'Courier New', monospace; font-size: 1.4rem; font-weight: bold; }
@@ -820,6 +915,8 @@
     .color-swatch-btn:hover:not(.swatch-active) {
       background: var(--color-base-200);
     }
+    /* ── Custom palette injected styles ── */
+    /* Applied dynamically via <style id="tt-custom-style"> when a custom palette is active */
   </style>
   {% block head %}{% endblock %}
 </head>
@@ -1018,7 +1115,7 @@ applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
 
 // ── Color scheme ──────────────────────────────────────────────────────────────
 function applyColorScheme(c) {
-  c = c || 'blue';
+  c = c || 'mono';
   document.documentElement.setAttribute('data-color', c);
   document.querySelectorAll('.color-swatch-btn').forEach(btn => {
     btn.classList.toggle('swatch-active', btn.dataset.color === c);
@@ -1028,7 +1125,7 @@ function setColorScheme(c) {
   localStorage.setItem('tt-color', c);
   applyColorScheme(c);
 }
-applyColorScheme(localStorage.getItem('tt-color') || 'blue');
+applyColorScheme(localStorage.getItem('tt-color') || 'mono');
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 function toggleGlass(on) {
@@ -1037,14 +1134,256 @@ function toggleGlass(on) {
   document.documentElement.setAttribute('data-glass', val);
 }
 
+// ── Custom palettes ───────────────────────────────────────────────────────────
+let _paletteFormMode = 'create'; // 'create' | slug string for edit
+
+function _getPalettes() {
+  try { return JSON.parse(localStorage.getItem('tt-custom-palettes') || '[]'); } catch(_) { return []; }
+}
+function _savePalettes(list) {
+  localStorage.setItem('tt-custom-palettes', JSON.stringify(list));
+}
+
+// Convert any CSS color string to #rrggbb hex (for input[type=color])
+function _cssColorToHex(v) {
+  if (!v) return '#808080';
+  v = v.trim();
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/i.test(v)) return '#' + [...v.slice(1)].map(c => c+c).join('');
+  try {
+    const cvs = document.createElement('canvas');
+    cvs.width = cvs.height = 1;
+    const ctx = cvs.getContext('2d');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r,g,b] = ctx.getImageData(0,0,1,1).data;
+    return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+  } catch(_) { return '#808080'; }
+}
+
+function _applyCustomPalette(slug) {
+  const list = _getPalettes();
+  const palette = list.find(p => p.slug === slug);
+  let el = document.getElementById('tt-custom-style');
+  if (!el) { el = document.createElement('style'); el.id = 'tt-custom-style'; document.head.appendChild(el); }
+  if (!palette) { el.textContent = ''; return; }
+  const { light = {}, dark = {} } = palette.schemes || {};
+  const toRules = (vars, selector) => {
+    const entries = Object.entries(vars);
+    if (!entries.length) return '';
+    return `${selector} {\n${entries.map(([k,v])=>`  ${k}: ${v};`).join('\n')}\n}`;
+  };
+  el.textContent = [
+    toRules(light, `[data-color="${slug}"][data-theme="light"]`),
+    toRules(dark,  `[data-color="${slug}"][data-theme="dark"]`),
+    `[data-color="${slug}"] body { background: var(--tok-bg-page); }`,
+  ].filter(Boolean).join('\n');
+}
+
+function setCustomPalette(slug) {
+  localStorage.setItem('tt-color', slug);
+  document.documentElement.setAttribute('data-color', slug);
+  _applyCustomPalette(slug);
+  _renderPaletteList();
+  document.querySelectorAll('.color-swatch-btn').forEach(btn => {
+    btn.classList.toggle('swatch-active', btn.dataset.color === slug);
+  });
+}
+
+function deleteCustomPalette(slug) {
+  if (!confirm('Удалить палитру?')) return;
+  const list = _getPalettes().filter(p => p.slug !== slug);
+  _savePalettes(list);
+  if (localStorage.getItem('tt-color') === slug) setColorScheme('mono');
+  const form = document.getElementById('new-palette-form');
+  if (_paletteFormMode === slug) { _paletteFormMode = 'create'; form.classList.add('hidden'); }
+  _renderPaletteList();
+}
+
+function exportPalettes() {
+  const list = _getPalettes();
+  if (!list.length) { alert('Нет кастомных палитр для экспорта'); return; }
+  const blob = new Blob([JSON.stringify(list, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'groove-work-palettes.json'; a.click();
+}
+
+function importPalettesFromFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) data = [data];
+      const existing = _getPalettes();
+      const merged = [...existing];
+      data.forEach(p => {
+        if (!p.slug || !p.name) return;
+        const idx = merged.findIndex(x => x.slug === p.slug);
+        if (idx >= 0) merged[idx] = p; else merged.push(p);
+      });
+      _savePalettes(merged);
+      _renderPaletteList();
+      alert(`Импортировано: ${data.length} палитр(ы)`);
+    } catch(_) { alert('Ошибка: неверный формат файла'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// Open form in create or edit mode
+function _openPaletteForm(mode, slug) {
+  const form = document.getElementById('new-palette-form');
+  const rs = getComputedStyle(document.documentElement);
+  const fromCSS = tok => _cssColorToHex(rs.getPropertyValue(tok).trim());
+
+  _paletteFormMode = mode === 'edit' ? slug : 'create';
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const titleEl = document.getElementById('palette-form-title');
+  const saveEl  = document.getElementById('palette-save-btn');
+
+  if (mode === 'edit') {
+    const p = _getPalettes().find(x => x.slug === slug);
+    if (!p) return;
+    const l = p.schemes?.light || {}, d = p.schemes?.dark || {};
+    const lhex = tok => l[tok] ? _cssColorToHex(l[tok]) : fromCSS(tok);
+    const dhex = tok => d[tok] ? _cssColorToHex(d[tok]) : '#808080';
+    document.getElementById('new-palette-name').value = p.name;
+    set('cp-bg-page',       lhex('--tok-bg-page'));
+    set('cp-base-100',      lhex('--color-base-100'));
+    set('cp-base-200',      lhex('--color-base-200'));
+    set('cp-base-300',      lhex('--color-base-300'));
+    set('cp-primary',       lhex('--color-primary'));
+    set('cp-panel-bg',      l['--tok-panel-bg'] ? _cssColorToHex(l['--tok-panel-bg']) : fromCSS('--tok-panel-bg'));
+    set('cp-bg-page-dark',  dhex('--tok-bg-page'));
+    set('cp-base-100-dark', dhex('--color-base-100'));
+    set('cp-base-200-dark', dhex('--color-base-200'));
+    set('cp-base-300-dark', dhex('--color-base-300'));
+    set('cp-primary-dark',  dhex('--color-primary'));
+    set('cp-panel-bg-dark', d['--tok-panel-bg'] ? _cssColorToHex(d['--tok-panel-bg']) : '#252525');
+    if (titleEl) titleEl.textContent = 'Редактировать палитру';
+    if (saveEl)  saveEl.textContent  = 'Обновить';
+  } else {
+    document.getElementById('new-palette-name').value = '';
+    set('cp-bg-page',       fromCSS('--tok-bg-page'));
+    set('cp-base-100',      fromCSS('--color-base-100'));
+    set('cp-base-200',      fromCSS('--color-base-200'));
+    set('cp-base-300',      fromCSS('--color-base-300'));
+    set('cp-primary',       fromCSS('--color-primary'));
+    set('cp-panel-bg',      fromCSS('--tok-panel-bg'));
+    set('cp-bg-page-dark',  '#111111');
+    set('cp-base-100-dark', '#1e1e1e');
+    set('cp-base-200-dark', '#181818');
+    set('cp-base-300-dark', '#2a2a2a');
+    set('cp-primary-dark',  fromCSS('--color-primary'));
+    set('cp-panel-bg-dark', '#252525');
+    if (titleEl) titleEl.textContent = 'Новая палитра';
+    if (saveEl)  saveEl.textContent  = 'Сохранить';
+  }
+  form.classList.remove('hidden');
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function editCustomPalette(slug) { _openPaletteForm('edit', slug); }
+
+function closePaletteForm() {
+  _paletteFormMode = 'create';
+  document.getElementById('new-palette-form').classList.add('hidden');
+}
+
+function saveNewPalette() {
+  const name = document.getElementById('new-palette-name').value.trim();
+  if (!name) { alert('Введите название палитры'); return; }
+  const lv = id => document.getElementById(id)?.value || '';
+  const dv = id => document.getElementById(id + '-dark')?.value || '';
+  const schemes = {
+    light: {
+      '--tok-bg-page':           lv('cp-bg-page'),
+      '--color-base-100':        lv('cp-base-100'),
+      '--color-base-200':        lv('cp-base-200'),
+      '--color-base-300':        lv('cp-base-300'),
+      '--color-primary':         lv('cp-primary'),
+      '--color-primary-content': '#ffffff',
+      '--tok-panel-bg':          lv('cp-panel-bg'),
+      '--tok-panel-border':      `color-mix(in oklch, ${lv('cp-panel-bg')} 60%, transparent)`,
+    },
+    dark: {
+      '--tok-bg-page':           dv('cp-bg-page'),
+      '--color-base-100':        dv('cp-base-100'),
+      '--color-base-200':        dv('cp-base-200'),
+      '--color-base-300':        dv('cp-base-300'),
+      '--color-primary':         dv('cp-primary'),
+      '--color-primary-content': '#ffffff',
+      '--tok-panel-bg':          dv('cp-panel-bg'),
+      '--tok-panel-border':      `color-mix(in oklch, ${dv('cp-panel-bg')} 70%, transparent)`,
+    },
+  };
+  const list = _getPalettes();
+  if (_paletteFormMode !== 'create') {
+    const idx = list.findIndex(p => p.slug === _paletteFormMode);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], name, schemes };
+      _savePalettes(list);
+      _applyCustomPalette(list[idx].slug);
+      _renderPaletteList();
+      closePaletteForm();
+    }
+  } else {
+    const slug = 'custom-' + name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '-' + Date.now().toString(36);
+    list.push({ name, slug, version: 1, schemes });
+    _savePalettes(list);
+    _renderPaletteList();
+    closePaletteForm();
+    setCustomPalette(slug);
+  }
+}
+
+function _renderPaletteList() {
+  const el = document.getElementById('custom-palette-list');
+  if (!el) return;
+  const list = _getPalettes();
+  const current = localStorage.getItem('tt-color') || 'mono';
+  if (!list.length) {
+    el.innerHTML = '<div class="text-xs text-base-content/40 py-2">Нет кастомных палитр</div>';
+    return;
+  }
+  el.innerHTML = list.map(p => {
+    const active = current === p.slug;
+    return `<div class="flex items-center gap-1 py-1.5 px-3 rounded-xl transition-colors"
+      style="${active ? 'background:color-mix(in oklch,var(--color-primary) 10%,var(--color-base-100));outline:1.5px solid color-mix(in oklch,var(--color-primary) 35%,transparent);' : ''}">
+      <div class="flex-1 text-sm font-medium truncate">${p.name}</div>
+      ${active ? '<span class="text-xs opacity-50 shrink-0">активна</span>' : `<button onclick="setCustomPalette('${p.slug}')" class="btn btn-xs btn-ghost shrink-0" title="Применить"><i class="bi bi-check2"></i></button>`}
+      <button onclick="editCustomPalette('${p.slug}')" class="btn btn-xs btn-ghost shrink-0" title="Редактировать"><i class="bi bi-pencil"></i></button>
+      <button onclick="exportSinglePalette('${p.slug}')" class="btn btn-xs btn-ghost shrink-0" title="Экспорт"><i class="bi bi-download"></i></button>
+      <button onclick="deleteCustomPalette('${p.slug}')" class="btn btn-xs btn-ghost text-error shrink-0" title="Удалить"><i class="bi bi-trash"></i></button>
+    </div>`;
+  }).join('');
+}
+
+function exportSinglePalette(slug) {
+  const p = _getPalettes().find(x => x.slug === slug);
+  if (!p) return;
+  const blob = new Blob([JSON.stringify([p], null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `palette-${p.slug}.json`; a.click();
+}
+
+// Apply any active custom palette on page load
+(function() {
+  const c = localStorage.getItem('tt-color') || 'mono';
+  if (c.startsWith('custom-')) _applyCustomPalette(c);
+})();
+
 function openSettings() {
   closeUserMenu();
   document.getElementById('settings-status').textContent = '';
   document.getElementById('settings-mail-password').value = '';
   document.getElementById('settings-glass').checked = localStorage.getItem('tt-glass') !== 'off';
   document.getElementById('settings-modal').showModal();
-  applyColorScheme(localStorage.getItem('tt-color') || 'blue');
+  applyColorScheme(localStorage.getItem('tt-color') || 'mono');
   _updateThemeBtns(document.documentElement.getAttribute('data-theme') || 'light');
+  _renderPaletteList();
 }
 
 async function saveSettings() {
@@ -1369,6 +1708,116 @@ async function syncTopbarTimer() {
           </div>
           <input type="checkbox" id="settings-glass" class="toggle toggle-primary"
                  onchange="toggleGlass(this.checked)">
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="border-t border-base-300"></div>
+
+      <!-- Section 3: Custom Palettes -->
+      <div class="px-6 py-5">
+        <div class="text-xs font-bold uppercase tracking-wider text-base-content/40 mb-3 flex items-center gap-1.5">
+          <i class="bi bi-palette2"></i> Кастомные палитры
+        </div>
+
+        <!-- Palette list -->
+        <div id="custom-palette-list" class="flex flex-col gap-1 mb-3"></div>
+
+        <!-- Action buttons -->
+        <div class="flex gap-2 mb-3">
+          <button onclick="_openPaletteForm('create')"
+                  class="btn btn-sm btn-ghost flex-1">
+            <i class="bi bi-plus-lg"></i> Создать
+          </button>
+          <button onclick="exportPalettes()" class="btn btn-sm btn-ghost flex-1">
+            <i class="bi bi-download"></i> Экспорт всех
+          </button>
+          <label class="btn btn-sm btn-ghost flex-1 cursor-pointer">
+            <i class="bi bi-upload"></i> Импорт
+            <input type="file" accept=".json" class="hidden" onchange="importPalettesFromFile(this)">
+          </label>
+        </div>
+
+        <!-- New/edit palette form -->
+        <div id="new-palette-form" class="hidden rounded-xl p-4 flex flex-col gap-3"
+             style="background:color-mix(in oklch,var(--color-base-content) 4%,var(--color-base-100))">
+          <div class="text-xs font-bold uppercase tracking-wider text-base-content/40" id="palette-form-title">Новая палитра</div>
+          <input type="text" id="new-palette-name" class="input input-bordered input-sm w-full"
+                 placeholder="Название палитры">
+
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Light theme -->
+            <div class="flex flex-col gap-2">
+              <div class="text-xs font-semibold text-base-content/50 flex items-center gap-1">
+                <i class="bi bi-sun"></i> Светлая
+              </div>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Фон страницы</span>
+                <input type="color" id="cp-bg-page" value="#e2e2e2" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Карточки</span>
+                <input type="color" id="cp-base-100" value="#ffffff" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Панели</span>
+                <input type="color" id="cp-base-200" value="#f4f4f4" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Рамки</span>
+                <input type="color" id="cp-base-300" value="#d0d0d0" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Акцент</span>
+                <input type="color" id="cp-primary" value="#374151" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Группировка</span>
+                <input type="color" id="cp-panel-bg" value="#f0f0f0" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+            </div>
+
+            <!-- Dark theme -->
+            <div class="flex flex-col gap-2">
+              <div class="text-xs font-semibold text-base-content/50 flex items-center gap-1">
+                <i class="bi bi-moon-stars"></i> Тёмная
+              </div>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Фон страницы</span>
+                <input type="color" id="cp-bg-page-dark" value="#111111" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Карточки</span>
+                <input type="color" id="cp-base-100-dark" value="#1e1e1e" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Панели</span>
+                <input type="color" id="cp-base-200-dark" value="#181818" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Рамки</span>
+                <input type="color" id="cp-base-300-dark" value="#2a2a2a" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Акцент</span>
+                <input type="color" id="cp-primary-dark" value="#a0a0a0" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-base-content/60">Группировка</span>
+                <input type="color" id="cp-panel-bg-dark" value="#252525" class="w-8 h-6 rounded cursor-pointer border-0">
+              </label>
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="palette-save-btn" onclick="saveNewPalette()" class="btn btn-primary btn-sm flex-1">
+              <i class="bi bi-check-lg"></i> Сохранить
+            </button>
+            <button onclick="closePaletteForm()"
+                    class="btn btn-ghost btn-sm">
+              Отмена
+            </button>
+          </div>
         </div>
       </div>
 

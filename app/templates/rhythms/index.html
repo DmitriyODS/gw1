@@ -24,9 +24,9 @@
     font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
     border-radius: 20px;
   }
-  .freq-daily    { background: #dbeafe; color: #1d4ed8; }
-  .freq-weekly   { background: #fef3c7; color: #b45309; }
-  .freq-monthly  { background: #f3e8ff; color: #7c3aed; }
+  .freq-daily    { background: var(--tok-freq-daily-bg);   color: var(--tok-freq-daily-fg); }
+  .freq-weekly   { background: var(--tok-freq-weekly-bg);  color: var(--tok-freq-weekly-fg); }
+  .freq-monthly  { background: var(--tok-freq-monthly-bg); color: var(--tok-freq-monthly-fg); }
   .due-badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
@@ -39,12 +39,12 @@
     padding: 1px 6px; border-radius: 20px;
     border: 1px solid transparent;
   }
-  .task-tag-дизайн     { background:#ede9fe;color:#7c3aed;border-color:#c4b5fd; }
-  .task-tag-текст      { background:#dbeafe;color:#1d4ed8;border-color:#93c5fd; }
-  .task-tag-публикация { background:#dcfce7;color:#15803d;border-color:#86efac; }
-  .task-tag-фото-видео { background:#fef3c7;color:#b45309;border-color:#fcd34d; }
+  .task-tag-дизайн     { background:var(--tok-tag-design-bg);   color:var(--tok-tag-design-fg);   border-color:var(--tok-tag-design-bd); }
+  .task-tag-текст      { background:var(--tok-tag-text-bg);     color:var(--tok-tag-text-fg);     border-color:var(--tok-tag-text-bd); }
+  .task-tag-публикация { background:var(--tok-tag-pub-bg);      color:var(--tok-tag-pub-fg);      border-color:var(--tok-tag-pub-bd); }
+  .task-tag-фото-видео { background:var(--tok-tag-media-bg);    color:var(--tok-tag-media-fg);    border-color:var(--tok-tag-media-bd); }
   .task-tag-внутреннее { background:var(--color-base-200);color:color-mix(in oklch,var(--color-base-content) 70%,transparent);border-color:var(--color-base-300); }
-  .task-tag-внешнее    { background:#cffafe;color:#0e7490;border-color:#67e8f9; }
+  .task-tag-внешнее    { background:var(--tok-tag-external-bg); color:var(--tok-tag-external-fg); border-color:var(--tok-tag-external-bd); }
 
   .form-section {
     background: var(--color-base-200);

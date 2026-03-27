@@ -14,16 +14,16 @@
     flex: 0 0 272px;
     display: flex; flex-direction: column;
     border-radius: 16px;
-    background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
-    border: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+    background: var(--tok-panel-bg);
+    border: 1px solid var(--tok-panel-border);
   }
   .kanban-header {
     padding: 12px 14px 10px;
     display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+    border-bottom: 1px solid var(--tok-panel-border);
     border-radius: 16px 16px 0 0;
     position: sticky; top: 0;
-    background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
+    background: var(--tok-panel-bg);
   }
   .kanban-header-title {
     display: flex; align-items: center; gap: 7px;
@@ -31,8 +31,8 @@
   }
   .col-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .kanban-count {
-    background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
-    border: 1.5px solid color-mix(in oklch, var(--color-base-content) 12%, transparent);
+    background: var(--tok-panel-bg);
+    border: 1.5px solid var(--tok-panel-border);
     border-radius: 20px; padding: 2px 10px;
     font-size: 0.75rem; font-weight: 700;
     color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
@@ -78,9 +78,9 @@
   .task-card.task-taken:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.07); transform: none; }
 
   .urgency-urgent    { border-left-color: var(--color-error) !important; }
-  .urgency-important { border-left-color: var(--urgency-important) !important; }
+  .urgency-important { border-left-color: var(--tok-urgency-important) !important; }
   .urgency-normal    { border-left-color: var(--color-info) !important; }
-  .urgency-slow      { border-left-color: var(--urgency-slow); }
+  .urgency-slow      { border-left-color: var(--tok-urgency-slow); }
 
   .task-title { font-size: 0.875rem; font-weight: 600; line-height: 1.35; margin: 5px 0; }
   .task-meta {
@@ -98,7 +98,7 @@
     transition: opacity 0.15s;
   }
   .btn-timer:hover { opacity: 0.75; }
-  .btn-timer-start { background: color-mix(in oklch, var(--color-success) 14%, var(--color-base-100)); color: var(--color-success); }
+  .btn-timer-start { background: color-mix(in oklch, var(--color-primary) 14%, var(--color-base-100)); color: var(--color-primary); }
   .btn-timer-pause { background: color-mix(in oklch, var(--color-warning) 16%, var(--color-base-100)); color: color-mix(in oklch, var(--color-warning) 80%, var(--color-base-content)); }
   .btn-timer-start-highlight {
     background: color-mix(in oklch, var(--color-primary) 18%, var(--color-base-100));
@@ -135,34 +135,34 @@
 
   /* ── Column accent colors ── */
   .col-new .kanban-header {
-    background: color-mix(in oklch, var(--col-new) 10%, var(--color-base-100));
-    border-bottom-color: color-mix(in oklch, var(--col-new) 20%, transparent);
+    background: color-mix(in oklch, var(--tok-status-new) 10%, var(--color-base-100));
+    border-bottom-color: color-mix(in oklch, var(--tok-status-new) 20%, transparent);
   }
   .col-in_progress .kanban-header {
-    background: color-mix(in oklch, var(--col-progress) 12%, var(--color-base-100));
-    border-bottom-color: color-mix(in oklch, var(--col-progress) 20%, transparent);
+    background: color-mix(in oklch, var(--tok-status-progress) 12%, var(--color-base-100));
+    border-bottom-color: color-mix(in oklch, var(--tok-status-progress) 20%, transparent);
   }
   .col-paused .kanban-header {
-    background: color-mix(in oklch, var(--col-paused) 12%, var(--color-base-100));
-    border-bottom-color: color-mix(in oklch, var(--col-paused) 20%, transparent);
+    background: color-mix(in oklch, var(--tok-status-paused) 12%, var(--color-base-100));
+    border-bottom-color: color-mix(in oklch, var(--tok-status-paused) 20%, transparent);
   }
   .col-done .kanban-header {
-    background: color-mix(in oklch, var(--col-done) 12%, var(--color-base-100));
-    border-bottom-color: color-mix(in oklch, var(--col-done) 20%, transparent);
+    background: color-mix(in oklch, var(--tok-status-done) 12%, var(--color-base-100));
+    border-bottom-color: color-mix(in oklch, var(--tok-status-done) 20%, transparent);
   }
-  .col-new .kanban-header-title        { color: var(--col-new-title); }
-  .col-in_progress .kanban-header-title { color: var(--col-progress-title); }
-  .col-paused .kanban-header-title      { color: var(--col-paused-title); }
-  .col-done .kanban-header-title        { color: var(--col-done-title); }
+  .col-new .kanban-header-title        { color: var(--tok-status-new-title); }
+  .col-in_progress .kanban-header-title { color: var(--tok-status-progress-title); }
+  .col-paused .kanban-header-title      { color: var(--tok-status-paused-title); }
+  .col-done .kanban-header-title        { color: var(--tok-status-done-title); }
 
   /* Dark overrides removed — tokens already differ per theme */
-  .col-in_progress .col-dot { background: var(--col-progress); }
-  .col-done .col-dot        { background: var(--col-done); }
-  .col-paused .col-dot      { background: var(--col-paused); }
-  .col-new .col-dot         { background: var(--col-new); }
+  .col-in_progress .col-dot { background: var(--tok-status-progress); }
+  .col-done .col-dot        { background: var(--tok-status-done); }
+  .col-paused .col-dot      { background: var(--tok-status-paused); }
+  .col-new .col-dot         { background: var(--tok-status-new); }
   .col-done .kanban-footer {
     padding: 8px 10px;
-    border-top: 1px solid color-mix(in oklch, var(--col-done) 20%, transparent);
+    border-top: 1px solid color-mix(in oklch, var(--tok-status-done) 20%, transparent);
   }
 
   /* ── Archived card ── */
@@ -177,12 +177,12 @@
     padding: 1px 6px; border-radius: 20px; white-space: nowrap;
     border: 1px solid transparent;
   }
-  .task-tag-дизайн      { background: var(--tag-design-bg);   color: var(--tag-design-text);   border-color: var(--tag-design-border); }
-  .task-tag-текст       { background: var(--tag-text-bg);     color: var(--tag-text-color);    border-color: var(--tag-text-border); }
-  .task-tag-публикация  { background: var(--tag-pub-bg);      color: var(--tag-pub-text);      border-color: var(--tag-pub-border); }
-  .task-tag-фото-видео  { background: var(--tag-media-bg);    color: var(--tag-media-text);    border-color: var(--tag-media-border); }
+  .task-tag-дизайн      { background: var(--tok-tag-design-bg);   color: var(--tok-tag-design-fg);   border-color: var(--tok-tag-design-bd); }
+  .task-tag-текст       { background: var(--tok-tag-text-bg);     color: var(--tok-tag-text-fg);     border-color: var(--tok-tag-text-bd); }
+  .task-tag-публикация  { background: var(--tok-tag-pub-bg);      color: var(--tok-tag-pub-fg);      border-color: var(--tok-tag-pub-bd); }
+  .task-tag-фото-видео  { background: var(--tok-tag-media-bg);    color: var(--tok-tag-media-fg);    border-color: var(--tok-tag-media-bd); }
   .task-tag-внутреннее  { background: var(--color-base-200);  color: color-mix(in oklch,var(--color-base-content) 70%,transparent); border-color: var(--color-base-300); }
-  .task-tag-внешнее     { background: var(--tag-external-bg); color: var(--tag-external-text); border-color: var(--tag-external-border); }
+  .task-tag-внешнее     { background: var(--tok-tag-external-bg); color: var(--tok-tag-external-fg); border-color: var(--tok-tag-external-bd); }
 
   /* ── Filter bar ── */
   .filter-bar {
@@ -230,12 +230,12 @@
     border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
     margin-bottom: 4px;
   }
-  .subsection-label.requests { color: var(--subsection-requests); }
+  .subsection-label.requests { color: var(--tok-section-requests); }
   .subsection-label.tasks { color: color-mix(in oklch, var(--color-base-content) 40%, transparent); }
   .subsection-dot {
     width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
   }
-  .subsection-dot.requests { background: var(--subsection-requests); }
+  .subsection-dot.requests { background: var(--tok-section-requests); }
   .subsection-dot.tasks { background: color-mix(in oklch, var(--color-base-content) 30%, transparent); }
   .subsection-block { margin-bottom: 8px; }
   .subsection-block:last-child { margin-bottom: 0; }

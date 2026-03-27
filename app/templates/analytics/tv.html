@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru" data-theme="dark">
 <head>
-<script>(function(){var t=localStorage.getItem('tt-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){var t=localStorage.getItem('tt-theme')||'dark';document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('tt-color')||'mono';document.documentElement.setAttribute('data-color',c);var g=localStorage.getItem('tt-glass')!=='off';document.documentElement.setAttribute('data-glass',g?'on':'off');})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TV — Groove Work</title>
@@ -12,22 +12,47 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:      #07090f;
-  --surface: rgba(255,255,255,0.04);
-  --border:  rgba(255,255,255,0.08);
-  --text:    #f1f5f9;
-  --muted:   #64748b;
-  --dim:     rgba(255,255,255,0.03);
-  --shadow:  0 2px 16px rgba(0,0,0,0.4);
+  /* Dark defaults — overridden by [data-theme="light"] below */
+  --bg:      var(--tok-tv-bg,      #07090f);
+  --surface: var(--tok-tv-surface, rgba(255,255,255,0.04));
+  --border:  var(--tok-tv-border,  rgba(255,255,255,0.08));
+  --text:    var(--tok-tv-text,    #f1f5f9);
+  --muted:   var(--tok-tv-muted,   #64748b);
+  --dim:     var(--tok-tv-dim,     rgba(255,255,255,0.03));
+  --shadow:  var(--tok-tv-shadow,  0 2px 16px rgba(0,0,0,0.4));
+  --accent:  var(--tok-tv-accent,  #3b82f6);
 }
 [data-theme="light"] {
-  --bg:      #eef2f7;
-  --surface: #ffffff;
-  --border:  rgba(0,0,0,0.08);
-  --text:    #0f172a;
-  --muted:   #94a3b8;
-  --dim:     rgba(0,0,0,0.02);
-  --shadow:  0 2px 16px rgba(0,0,0,0.08);
+  --tok-tv-bg:       #eef2f7;
+  --tok-tv-surface:  #ffffff;
+  --tok-tv-border:   rgba(0,0,0,0.08);
+  --tok-tv-text:     #0f172a;
+  --tok-tv-muted:    #94a3b8;
+  --tok-tv-dim:      rgba(0,0,0,0.02);
+  --tok-tv-shadow:   0 2px 16px rgba(0,0,0,0.08);
+  --tok-tv-accent:   #2563eb;
+  --tok-tv-status-new:      #94a3b8;
+  --tok-tv-status-progress: #2563eb;
+  --tok-tv-status-done:     #16a34a;
+  --tok-rank-gold:   #f59e0b;
+  --tok-rank-silver: #64748b;
+  --tok-rank-bronze: #92400e;
+}
+[data-theme="dark"] {
+  --tok-tv-bg:       #07090f;
+  --tok-tv-surface:  rgba(255,255,255,0.04);
+  --tok-tv-border:   rgba(255,255,255,0.08);
+  --tok-tv-text:     #f1f5f9;
+  --tok-tv-muted:    #64748b;
+  --tok-tv-dim:      rgba(255,255,255,0.03);
+  --tok-tv-shadow:   0 2px 16px rgba(0,0,0,0.4);
+  --tok-tv-accent:   #3b82f6;
+  --tok-tv-status-new:      #94a3b8;
+  --tok-tv-status-progress: #3b82f6;
+  --tok-tv-status-done:     #22c55e;
+  --tok-rank-gold:   #fbbf24;
+  --tok-rank-silver: #94a3b8;
+  --tok-rank-bronze: #cd7c3a;
 }
 
 body {
@@ -50,7 +75,7 @@ body {
 }
 .logo-dot {
   width: 28px; height: 28px; border-radius: 8px;
-  background: #3b82f6; display: flex; align-items: center;
+  background: var(--accent); display: flex; align-items: center;
   justify-content: center; color: white;
 }
 .logo-dot .material-icons-round { font-size: 16px; }
@@ -149,12 +174,12 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 0.72rem; font-weight: 800;
 }
-.rank-1 { background: color-mix(in oklch, var(--rank-gold) 15%, transparent); color: var(--rank-gold); }
-.rank-2 { background: color-mix(in oklch, var(--rank-silver) 15%, transparent); color: var(--rank-silver); }
-.rank-3 { background: color-mix(in oklch, var(--rank-bronze) 15%, transparent); color: var(--rank-bronze); }
+.rank-1 { background: color-mix(in oklch, var(--tok-rank-gold)   15%, transparent); color: var(--tok-rank-gold); }
+.rank-2 { background: color-mix(in oklch, var(--tok-rank-silver) 15%, transparent); color: var(--tok-rank-silver); }
+.rank-3 { background: color-mix(in oklch, var(--tok-rank-bronze) 15%, transparent); color: var(--tok-rank-bronze); }
 .rank-rest { background: var(--border); color: var(--muted); font-size: 0.67rem; }
 .rank-name { flex: 1; font-size: 0.85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank-val { font-size: 0.9rem; font-weight: 800; color: var(--color-primary); flex-shrink: 0; }
+.rank-val { font-size: 0.9rem; font-weight: 800; color: var(--accent); flex-shrink: 0; }
 
 /* Layout helpers */
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 0; }
@@ -173,7 +198,7 @@ body {
   z-index: 50;
 }
 body:hover .nav-arrow { opacity: 1; }
-.nav-arrow:hover { background: #3b82f6; border-color: #3b82f6; color: white; }
+.nav-arrow:hover { background: var(--accent); border-color: var(--accent); color: white; }
 .nav-arrow .material-icons-round { font-size: 20px; }
 .nav-prev { left: 10px; }
 .nav-next { right: 10px; }
@@ -188,12 +213,15 @@ body:hover .dots { opacity: 1; }
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--border); cursor: pointer; transition: all 0.2s;
 }
-.dot.active { background: #3b82f6; width: 18px; border-radius: 3px; }
+.dot.active { background: var(--accent); width: 18px; border-radius: 3px; }
 
 .progress-bar {
-  height: 3px; background: #3b82f6; position: fixed; bottom: 0; left: 0;
+  height: 3px; background: var(--accent); position: fixed; bottom: 0; left: 0;
   transition: none; z-index: 50;
 }
+.stat-num-new      { color: var(--tok-tv-status-new); }
+.stat-num-progress { color: var(--tok-tv-status-progress); }
+.stat-num-done     { color: var(--tok-tv-status-done); }
 </style>
 </head>
 <body>
@@ -227,15 +255,15 @@ body:hover .dots { opacity: 1; }
     <div class="slide-title"><span class="material-icons-round">today</span> Сегодня — задачи</div>
     <div class="stats-row" style="flex-shrink:0;">
       <div class="stat-card">
-        <div class="stat-num" id="d1-new" style="color:#94a3b8">—</div>
+        <div class="stat-num stat-num-new" id="d1-new">—</div>
         <div class="stat-lbl">Новые</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="d1-ip" style="color:#3b82f6">—</div>
+        <div class="stat-num stat-num-progress" id="d1-ip">—</div>
         <div class="stat-lbl">В работе</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="d1-done" style="color:#22c55e">—</div>
+        <div class="stat-num stat-num-done" id="d1-done">—</div>
         <div class="stat-lbl">Закрыто</div>
       </div>
     </div>
@@ -277,15 +305,15 @@ body:hover .dots { opacity: 1; }
     <div class="slide-title"><span class="material-icons-round">date_range</span> Текущая неделя — задачи</div>
     <div class="stats-row" style="flex-shrink:0;">
       <div class="stat-card">
-        <div class="stat-num" id="w1-new" style="color:#94a3b8">—</div>
+        <div class="stat-num stat-num-new" id="w1-new">—</div>
         <div class="stat-lbl">Новые</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="w1-ip" style="color:#3b82f6">—</div>
+        <div class="stat-num stat-num-progress" id="w1-ip">—</div>
         <div class="stat-lbl">В работе</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="w1-done" style="color:#22c55e">—</div>
+        <div class="stat-num stat-num-done" id="w1-done">—</div>
         <div class="stat-lbl">Закрыто</div>
       </div>
     </div>
@@ -327,15 +355,15 @@ body:hover .dots { opacity: 1; }
     <div class="slide-title"><span class="material-icons-round">analytics</span> Общая статистика</div>
     <div class="stats-row" style="flex-shrink:0;">
       <div class="stat-card">
-        <div class="stat-num" id="at-new" style="color:#94a3b8">—</div>
+        <div class="stat-num stat-num-new" id="at-new">—</div>
         <div class="stat-lbl">Открытых</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="at-ip" style="color:#3b82f6">—</div>
+        <div class="stat-num stat-num-progress" id="at-ip">—</div>
         <div class="stat-lbl">В работе</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="at-done" style="color:#22c55e">—</div>
+        <div class="stat-num stat-num-done" id="at-done">—</div>
         <div class="stat-lbl">Всего закрыто</div>
       </div>
     </div>
@@ -365,7 +393,20 @@ body:hover .dots { opacity: 1; }
 <script>
 const TOTAL_SLIDES = 5;
 const DURATION = 12000;
-const BAR_COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#f97316','#84cc16'];
+function getBarColors() {
+  const rs = getComputedStyle(document.documentElement);
+  const get = v => rs.getPropertyValue(v).trim();
+  return [
+    get('--tok-chart-1') || '#3b82f6',
+    get('--tok-chart-2') || '#22c55e',
+    get('--tok-chart-3') || '#f59e0b',
+    get('--tok-chart-4') || '#ef4444',
+    get('--tok-chart-5') || '#a855f7',
+    get('--tok-chart-6') || '#06b6d4',
+    get('--tok-chart-7') || '#f97316',
+    get('--tok-chart-8') || '#84cc16',
+  ];
+}
 let cur = 0, data = null;
 const charts = {};
 let autoTimer = null;
@@ -396,8 +437,11 @@ function fmt(secs) {
   return d > 0 ? `${d}д ${h}ч ${m}м` : h > 0 ? `${h}ч ${m}м` : `${m}м`;
 }
 function chartC() {
-  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
-  return { text: dark?'#f1f5f9':'#0f172a', muted: dark?'#64748b':'#94a3b8' };
+  const rs = getComputedStyle(document.documentElement);
+  return {
+    text:  rs.getPropertyValue('--tok-tv-text').trim()  || (document.documentElement.getAttribute('data-theme') !== 'light' ? '#f1f5f9' : '#0f172a'),
+    muted: rs.getPropertyValue('--tok-tv-muted').trim() || (document.documentElement.getAttribute('data-theme') !== 'light' ? '#64748b' : '#94a3b8'),
+  };
 }
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
@@ -412,7 +456,7 @@ function renderHbars(containerId, items, maxCount) {
     return `<div class="hbar-row">
       <div class="hbar-label" title="${lbl}">${lbl}</div>
       <div class="hbar-track">
-        <div class="hbar-fill" style="width:${Math.max(val/max*100,val>0?3:0).toFixed(1)}%;background:${BAR_COLORS[i%BAR_COLORS.length]}">${val>0?val:''}</div>
+        <div class="hbar-fill" style="width:${Math.max(val/max*100,val>0?3:0).toFixed(1)}%;background:${getBarColors()[i%8]}">${val>0?val:''}</div>
       </div>
       <div class="hbar-count">${val}</div>
     </div>`;
@@ -445,7 +489,7 @@ function renderDonut(canvasId, items) {
     type: 'doughnut',
     data: {
       labels: items.map(i => i.name),
-      datasets: [{ data: items.map(i => i.cnt), backgroundColor: BAR_COLORS, borderWidth: 3, borderColor: 'transparent' }],
+      datasets: [{ data: items.map(i => i.cnt), backgroundColor: getBarColors(), borderWidth: 3, borderColor: 'transparent' }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,

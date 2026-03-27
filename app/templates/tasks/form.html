@@ -34,11 +34,11 @@
       {% if parent_task %}
       <input type="hidden" name="parent_task_id" value="{{ parent_task.id }}">
       <div class="flex items-center gap-2 py-2 px-3 rounded-xl text-sm"
-           style="background:#f3e8ff; color:#6d28d9; border:1px solid #ddd6fe;">
+           style="background:var(--tok-subtask-bg); color:var(--tok-subtask-fg); border:1px solid var(--tok-subtask-bd);">
         <i class="bi bi-diagram-2"></i>
         Подзадача для:
         <a href="{{ url_for('tasks.detail', task_id=parent_task.id) }}"
-           class="font-semibold underline" style="color:#6d28d9;">
+           class="font-semibold underline" style="color:var(--tok-subtask-fg);">
           #{{ parent_task.id }} {{ parent_task.title }}
         </a>
       </div>

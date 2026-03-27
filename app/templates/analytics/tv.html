@@ -130,11 +130,11 @@ body {
 }
 .time-badge-icon {
   width: 34px; height: 34px; border-radius: 10px;
-  background: rgba(34,197,94,0.12); display: flex; align-items: center;
-  justify-content: center; color: #22c55e; flex-shrink: 0;
+  background: color-mix(in oklch, var(--color-success) 12%, transparent); display: flex; align-items: center;
+  justify-content: center; color: var(--color-success); flex-shrink: 0;
 }
 .time-badge-icon .material-icons-round { font-size: 18px; }
-.time-badge-val { font-size: 1.4rem; font-weight: 900; color: #22c55e; line-height: 1; }
+.time-badge-val { font-size: 1.4rem; font-weight: 900; color: var(--color-success); line-height: 1; }
 .time-badge-lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
 
 /* Rankings */
@@ -149,12 +149,12 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 0.72rem; font-weight: 800;
 }
-.rank-1 { background: rgba(251,191,36,0.15); color: #fbbf24; }
-.rank-2 { background: rgba(148,163,184,0.15); color: #94a3b8; }
-.rank-3 { background: rgba(180,83,9,0.15); color: #b45309; }
+.rank-1 { background: color-mix(in oklch, var(--rank-gold) 15%, transparent); color: var(--rank-gold); }
+.rank-2 { background: color-mix(in oklch, var(--rank-silver) 15%, transparent); color: var(--rank-silver); }
+.rank-3 { background: color-mix(in oklch, var(--rank-bronze) 15%, transparent); color: var(--rank-bronze); }
 .rank-rest { background: var(--border); color: var(--muted); font-size: 0.67rem; }
 .rank-name { flex: 1; font-size: 0.85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank-val { font-size: 0.9rem; font-weight: 800; color: #3b82f6; flex-shrink: 0; }
+.rank-val { font-size: 0.9rem; font-weight: 800; color: var(--color-primary); flex-shrink: 0; }
 
 /* Layout helpers */
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 0; }

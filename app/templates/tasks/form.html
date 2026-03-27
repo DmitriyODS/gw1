@@ -15,36 +15,7 @@
     opacity: 0 !important;
     pointer-events: none !important;
   }
-  /* ── Datetime-local input styling ── */
-  input[type="datetime-local"],
-  input[type="date"],
-  input[type="time"] {
-    color-scheme: light;
-    cursor: pointer;
-  }
-  [data-theme="dark"] input[type="datetime-local"],
-  [data-theme="dark"] input[type="date"],
-  [data-theme="dark"] input[type="time"] {
-    color-scheme: dark;
-  }
-  .datetime-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-  .datetime-wrap .dt-icon {
-    position: absolute;
-    left: 12px;
-    pointer-events: none;
-    color: color-mix(in oklch, var(--color-base-content) 40%, transparent);
-    font-size: 0.9rem;
-    z-index: 1;
-  }
-  .datetime-wrap input[type="datetime-local"],
-  .datetime-wrap input[type="date"] {
-    padding-left: 2.2rem;
-    flex: 1;
-  }
+  /* datetime inputs are replaced by gw-datepicker */
 </style>
 {% endblock %}
 
@@ -194,11 +165,8 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
             <div>
               <label class="label pb-1"><span class="label-text font-semibold">Дата публикации</span></label>
-              <div class="datetime-wrap">
-                <i class="bi bi-send dt-icon"></i>
-                <input type="datetime-local" name="pub_date" class="input input-bordered w-full"
-                       value="{{ task.dynamic_fields.get('pub_date','') if task else '' }}">
-              </div>
+              <input type="datetime-local" name="pub_date" class="input input-bordered w-full"
+                     value="{{ task.dynamic_fields.get('pub_date','') if task else '' }}">
             </div>
             <div>
               <label class="label pb-1"><span class="label-text font-semibold">Ссылка на публикацию</span></label>
@@ -214,10 +182,7 @@
       <div id="pub-mode-fields" class="hidden flex flex-col gap-4 bg-base-200 rounded-xl p-4">
         <div>
           <label class="label pb-1"><span class="label-text font-semibold">Дата и время планируемой публикации</span></label>
-          <div class="datetime-wrap">
-            <i class="bi bi-send dt-icon"></i>
-            <input type="datetime-local" name="pub_date_pub" class="input input-bordered w-full">
-          </div>
+          <input type="datetime-local" name="pub_date_pub" class="input input-bordered w-full">
         </div>
         <div>
           <div class="label-text font-semibold mb-3">Куда публикуем</div>
@@ -262,11 +227,8 @@
       <!-- Event date block (photo/video) -->
       <div id="block-event-date" style="display:none">
         <label class="label pb-1"><span class="label-text font-semibold">Дата мероприятия <span class="text-error">*</span></span></label>
-        <div class="datetime-wrap">
-          <i class="bi bi-camera-video dt-icon"></i>
-          <input type="datetime-local" name="event_date" class="input input-bordered w-full"
-                 value="{{ task.dynamic_fields.get('event_date','') if task else '' }}">
-        </div>
+        <input type="datetime-local" name="event_date" class="input input-bordered w-full"
+               value="{{ task.dynamic_fields.get('event_date','') if task else '' }}">
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -282,11 +244,8 @@
         </div>
         <div>
           <label class="label pb-1"><span class="label-text font-semibold">Дедлайн</span></label>
-          <div class="datetime-wrap">
-            <i class="bi bi-calendar-event dt-icon"></i>
-            <input type="datetime-local" name="deadline" class="input input-bordered w-full"
-                   value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task and task.deadline else '' }}">
-          </div>
+          <input type="datetime-local" name="deadline" class="input input-bordered w-full"
+                 value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task and task.deadline else '' }}">
         </div>
       </div>
 
@@ -771,51 +730,6 @@ document.getElementById('task_type_hidden')?.addEventListener('change', function
   document.getElementById('type-required-error')?.remove();
 });
 
-// ── Datetime-local year fix: max 4 digits, auto-advance after 4th ──
-document.querySelectorAll('input[type="datetime-local"]').forEach(inp => {
-  if (!inp.max) inp.max = '2099-12-31T23:59';
-
-  let yearDone = false;
-  let yearCount = 0;
-
-  inp.addEventListener('focus', () => {
-    yearDone = false;
-    yearCount = 0;
-  });
-  inp.addEventListener('blur', () => {
-    yearDone = false;
-    yearCount = 0;
-  });
-
-  inp.addEventListener('keydown', function(e) {
-    if (yearDone) return;
-    if (/^\d$/.test(e.key)) {
-      yearCount++;
-      if (yearCount >= 4) {
-        yearDone = true;
-        setTimeout(() => {
-          this.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'ArrowRight', keyCode: 39, bubbles: true
-          }));
-        }, 0);
-      }
-    } else if (e.key !== 'Backspace' && e.key !== 'Delete') {
-      // User navigated manually — stop tracking year
-      yearDone = true;
-    }
-  });
-
-  // Safety: truncate year > 4 digits on change
-  inp.addEventListener('change', function() {
-    if (!this.value) return;
-    const [dp, tp] = this.value.split('T');
-    if (!dp) return;
-    const parts = dp.split('-');
-    if (parts[0] && parts[0].length > 4) {
-      parts[0] = parts[0].slice(0, 4);
-      this.value = parts.join('-') + (tp ? 'T' + tp : '');
-    }
-  });
-});
+// datetime-local inputs are managed by gw-datepicker (see gw-datepicker.js)
 </script>
 {% endblock %}

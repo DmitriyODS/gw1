@@ -80,16 +80,7 @@
   .group-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
   .group-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
 
-  /* ── Datetime inputs ── */
-  input[type="datetime-local"], input[type="date"] { color-scheme: light; cursor: pointer; }
-  [data-theme="dark"] input[type="datetime-local"],
-  [data-theme="dark"] input[type="date"] { color-scheme: dark; }
-  .datetime-wrap { position: relative; display: flex; align-items: center; }
-  .datetime-wrap .dt-icon {
-    position: absolute; left: 12px; pointer-events: none; z-index: 1;
-    color: color-mix(in oklch, var(--color-base-content) 40%, transparent); font-size: 0.9rem;
-  }
-  .datetime-wrap input { padding-left: 2.2rem; flex: 1; }
+  /* datetime inputs are replaced by gw-datepicker */
 
   /* ── Empty state ── */
   .empty-plans {
@@ -316,10 +307,7 @@
 
       <div>
         <label class="label pb-1"><span class="label-text font-semibold">Дата реализации</span></label>
-        <div class="datetime-wrap">
-          <i class="bi bi-calendar-event dt-icon"></i>
-          <input type="datetime-local" name="release_date" class="input input-bordered w-full">
-        </div>
+        <input type="datetime-local" name="release_date" class="input input-bordered w-full">
         <div class="text-xs text-base-content/50 mt-1">
           <i class="bi bi-info-circle"></i> Ориентировочная дата — план не конвертируется автоматически
         </div>
@@ -433,10 +421,7 @@
 
       <div>
         <label class="label pb-1"><span class="label-text font-semibold">Дата реализации</span></label>
-        <div class="datetime-wrap">
-          <i class="bi bi-calendar-event dt-icon"></i>
-          <input type="datetime-local" name="release_date" id="e-release-date" class="input input-bordered w-full">
-        </div>
+        <input type="datetime-local" name="release_date" id="e-release-date" class="input input-bordered w-full">
       </div>
 
       <div>

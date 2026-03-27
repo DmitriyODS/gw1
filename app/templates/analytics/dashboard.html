@@ -116,6 +116,12 @@
 
 {% block scripts %}
 <script>
+// Read chart colors from CSS tokens
+const _css = getComputedStyle(document.documentElement);
+const C1 = _css.getPropertyValue('--chart-1').trim();
+const C2 = _css.getPropertyValue('--chart-2').trim();
+const C3 = _css.getPropertyValue('--chart-3').trim();
+
 const burnupDates   = {{ burnup.dates | tojson }};
 const burnupCreated = {{ burnup.created | tojson }};
 const burnupDone    = {{ burnup.done | tojson }};
@@ -125,8 +131,8 @@ new Chart(document.getElementById('burnupChart'), {
   data: {
     labels: burnupDates,
     datasets: [
-      {label: 'Создано', data: burnupCreated, borderColor: 'rgba(99,102,241,0.9)', backgroundColor: 'rgba(99,102,241,0.08)', fill: true, tension: 0.3, pointRadius: 3},
-      {label: 'Закрыто', data: burnupDone,    borderColor: 'rgba(34,197,94,0.9)',  backgroundColor: 'rgba(34,197,94,0.08)',  fill: true, tension: 0.3, pointRadius: 3},
+      {label: 'Создано', data: burnupCreated, borderColor: C1, backgroundColor: C1.replace(')', ' / 0.08)').replace('oklch(', 'oklch('), fill: true, tension: 0.3, pointRadius: 3},
+      {label: 'Закрыто', data: burnupDone,    borderColor: C2, backgroundColor: C2.replace(')', ' / 0.08)').replace('oklch(', 'oklch('), fill: true, tension: 0.3, pointRadius: 3},
     ]
   },
   options: {responsive: true, plugins: {legend: {position: 'top'}}, scales: {y: {beginAtZero: true, ticks: {stepSize: 1}}}}
@@ -141,8 +147,7 @@ new Chart(document.getElementById('deptChart'), {
   type: 'bar',
   data: {
     labels: deptLabels,
-    datasets: [{label: 'Задач', data: deptValues,
-      backgroundColor: 'rgba(13,110,253,0.7)'}]
+    datasets: [{label: 'Задач', data: deptValues, backgroundColor: C3}]
   },
   options: {responsive: true, plugins: {legend: {display: false}}}
 });
@@ -152,10 +157,10 @@ const typeCanvas = document.getElementById('typeChart');
 const typeBarH = Math.max(220, typeLabels.length * 26 + 20);
 typeCanvas.style.height = typeBarH + 'px';
 
-const PALETTE = [
-  '#0d6efd','#198754','#ffc107','#dc3545','#6c757d',
-  '#6610f2','#0dcaf0','#fd7e14','#20c997','#d63384',
-  '#adb5bd','#6f42c1','#e9ecef','#495057','#343a40',
+const PALETTE = [C1, C2, C3,
+  _css.getPropertyValue('--chart-4').trim(),
+  _css.getPropertyValue('--chart-5').trim(),
+  _css.getPropertyValue('--chart-6').trim(),
 ];
 
 new Chart(typeCanvas, {

@@ -21,12 +21,12 @@
     padding: 2px 8px; border-radius: 20px; white-space: nowrap;
     border: 1px solid transparent;
   }
-  .task-tag-дизайн      { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
-  .task-tag-текст       { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
-  .task-tag-публикация  { background: #dcfce7; color: #15803d; border-color: #86efac; }
-  .task-tag-фото-видео  { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
-  .task-tag-внутреннее  { background: var(--color-base-200); color: color-mix(in oklch,var(--color-base-content) 70%,transparent); border-color: var(--color-base-300); }
-  .task-tag-внешнее     { background: #cffafe; color: #0e7490; border-color: #67e8f9; }
+  .task-tag-дизайн      { background: var(--tag-design-bg);   color: var(--tag-design-text);   border-color: var(--tag-design-border); }
+  .task-tag-текст       { background: var(--tag-text-bg);     color: var(--tag-text-color);    border-color: var(--tag-text-border); }
+  .task-tag-публикация  { background: var(--tag-pub-bg);      color: var(--tag-pub-text);      border-color: var(--tag-pub-border); }
+  .task-tag-фото-видео  { background: var(--tag-media-bg);    color: var(--tag-media-text);    border-color: var(--tag-media-border); }
+  .task-tag-внутреннее  { background: var(--color-base-200);  color: color-mix(in oklch,var(--color-base-content) 70%,transparent); border-color: var(--color-base-300); }
+  .task-tag-внешнее     { background: var(--tag-external-bg); color: var(--tag-external-text); border-color: var(--tag-external-border); }
 </style>
 {% endblock %}
 
@@ -75,11 +75,11 @@
     <!-- Parent task / subtask indicator -->
     {% if parent_task %}
     <div class="flex items-center gap-2 py-2 px-3 mb-3 rounded-xl text-sm"
-         style="background:#f3e8ff; color:#6d28d9; border:1px solid #ddd6fe;">
+         style="background:var(--subtask-bg); color:var(--subtask-text); border:1px solid var(--subtask-border);">
       <i class="bi bi-diagram-2"></i>
       Подзадача →
       <a href="{{ url_for('tasks.detail', task_id=parent_task.id) }}"
-         class="font-semibold underline" style="color:#6d28d9;">
+         class="font-semibold underline" style="color:var(--subtask-text);">
         #{{ parent_task.id }} {{ parent_task.title }}
       </a>
     </div>

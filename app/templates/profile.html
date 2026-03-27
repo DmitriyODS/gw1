@@ -1,6 +1,26 @@
 {% extends 'base.html' %}
 {% block title %}Профиль — Groove Work{% endblock %}
 
+{% block head %}
+<style>
+  /* Compact datepicker trigger in period nav */
+  #period-dp-row .gw-dp-wrap { display: flex; }
+  #period-dp-row .gw-dp-field {
+    width: 28px; height: 28px; padding: 0;
+    border: none; background: transparent;
+    border-radius: 6px; min-height: unset;
+    justify-content: center;
+  }
+  #period-dp-row .gw-dp-field:hover,
+  #period-dp-row .gw-dp-field.open {
+    border-color: transparent; box-shadow: none;
+    background: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  }
+  #period-dp-row .gw-dp-field-val,
+  #period-dp-row .gw-dp-field-clear { display: none; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-3xl mx-auto flex flex-col gap-4">
 
@@ -77,19 +97,9 @@
     <!-- Period nav -->
     <div class="flex items-center gap-2 px-4 py-2 border-b border-base-300">
       <button class="btn btn-ghost btn-xs" onclick="changeOffset(-1)"><i class="bi bi-chevron-left"></i></button>
-      <div class="relative flex-1 flex justify-center">
-        <button class="btn btn-ghost btn-xs gap-1 text-sm font-medium" onclick="toggleDatePicker()" id="period-label-btn">
-          <span id="period-label">...</span>
-          <i class="bi bi-calendar3 text-xs opacity-50"></i>
-        </button>
-        <div id="date-picker-wrap" class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50
-             bg-base-100 border border-base-300 rounded-xl shadow-lg p-3" style="min-width:210px;">
-          <div class="text-xs font-semibold opacity-50 uppercase tracking-wide mb-2">Выбрать дату</div>
-          <input type="date" id="date-picker-input"
-                 class="input input-sm input-bordered w-full rounded-lg"
-                 onchange="applyDatePicker(this.value)">
-          <div class="text-xs opacity-40 mt-2 text-center">Применяется к текущему режиму</div>
-        </div>
+      <div class="flex-1 flex justify-center items-center gap-2" id="period-dp-row">
+        <span id="period-label" class="text-sm font-medium">...</span>
+        <input type="date" id="date-picker-input">
       </div>
       <button class="btn btn-ghost btn-xs" id="next-btn" onclick="changeOffset(1)"><i class="bi bi-chevron-right"></i></button>
     </div>
@@ -391,19 +401,8 @@ function fmtDur(s) {
 }
 
 // ── Date picker ──
-let _datePickerOpen = false;
-function toggleDatePicker() {
-  _datePickerOpen = !_datePickerOpen;
-  document.getElementById('date-picker-wrap').classList.toggle('hidden', !_datePickerOpen);
-}
-document.addEventListener('click', e => {
-  const wrap = document.getElementById('date-picker-wrap');
-  const btn = document.getElementById('period-label-btn');
-  if (_datePickerOpen && wrap && !wrap.contains(e.target) && !btn.contains(e.target)) {
-    _datePickerOpen = false;
-    wrap.classList.add('hidden');
-  }
-});
+document.getElementById('date-picker-input').addEventListener('change', e => applyDatePicker(e.target.value));
+
 function applyDatePicker(dateStr) {
   const selected = new Date(dateStr + 'T00:00:00');
   const today = new Date(); today.setHours(0,0,0,0);
@@ -423,8 +422,6 @@ function applyDatePicker(dateStr) {
   }
   if (offset > 0) offset = 0;
   currentOffset = offset;
-  _datePickerOpen = false;
-  document.getElementById('date-picker-wrap').classList.add('hidden');
   loadStats();
 }
 

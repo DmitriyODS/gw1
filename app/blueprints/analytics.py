@@ -294,19 +294,37 @@ def time_user_detail():
     total_secs = int(sum(time_by_task.values()))
 
     by_type = defaultdict(lambda: {'cnt': 0, 'secs': 0})
+    by_hour = [0] * 24  # tasks completed per local hour
     tasks_out = []
     for t in done_tasks:
         secs = int(time_by_task.get(t.id, 0))
         type_label = TYPE_LABELS.get(t.task_type, t.task_type or 'Не указан')
         by_type[type_label]['cnt'] += 1
         by_type[type_label]['secs'] += secs
+        local_dt = t.completed_at + timedelta(hours=tz_hours)
+        by_hour[local_dt.hour] += 1
         tasks_out.append({
             'id': t.id,
             'title': t.title,
             'type': type_label,
             'secs': secs,
-            'completed_at': (t.completed_at + timedelta(hours=tz_hours)).strftime('%d.%m %H:%M'),
+            'completed_at': local_dt.strftime('%d.%m %H:%M'),
         })
+
+    # Also count active work hours from TimeLogs (hours when work was done)
+    work_by_hour = [0] * 24
+    for log in logs:
+        local_start = log.started_at + timedelta(hours=tz_hours)
+        local_end   = log.ended_at   + timedelta(hours=tz_hours)
+        # Distribute work minutes across hours
+        cur = local_start.replace(minute=0, second=0, microsecond=0)
+        while cur <= local_end:
+            h = cur.hour
+            seg_start = max(local_start, cur)
+            seg_end   = min(local_end, cur + timedelta(hours=1))
+            if seg_end > seg_start:
+                work_by_hour[h] += int((seg_end - seg_start).total_seconds() / 60)
+            cur += timedelta(hours=1)
 
     type_list = sorted(
         [{'label': k, 'cnt': v['cnt'], 'secs': v['secs']} for k, v in by_type.items()],
@@ -321,6 +339,8 @@ def time_user_detail():
         'total_secs': total_secs,
         'tasks': tasks_out,
         'by_type': type_list,
+        'by_hour': by_hour,        # закрытые задачи по часам (0–23)
+        'work_by_hour': work_by_hour,  # минуты работы по часам (0–23)
     })
 
 

@@ -14,6 +14,7 @@
   <style>
     /* ── Light theme ── */
     [data-theme="light"] {
+      /* DaisyUI base */
       --color-base-100: #ffffff;
       --color-base-200: #f0f8ff;
       --color-base-300: #c8e0f5;
@@ -32,6 +33,60 @@
       --color-warning-content: oklch(20% 0.06 65);
       --color-error: oklch(52% 0.130 27);
       --color-error-content: #ffffff;
+
+      /* ── App color tokens ── */
+      /* Page */
+      --bg-page: #E1EFFB;
+
+      /* Kanban column accents */
+      --col-new:            #94a3b8;
+      --col-new-title:      #475569;
+      --col-progress:       #ec4899;
+      --col-progress-title: #be185d;
+      --col-paused:         #f59e0b;
+      --col-paused-title:   #b45309;
+      --col-done:           #22c55e;
+      --col-done-title:     #166534;
+
+      /* Urgency */
+      --urgency-important:  #f97316;
+      --urgency-slow:       #cbd5e1;
+
+      /* Tags */
+      --tag-design-bg:      #ede9fe;
+      --tag-design-text:    #7c3aed;
+      --tag-design-border:  #c4b5fd;
+      --tag-text-bg:        #dbeafe;
+      --tag-text-color:     #1d4ed8;
+      --tag-text-border:    #93c5fd;
+      --tag-pub-bg:         #dcfce7;
+      --tag-pub-text:       #15803d;
+      --tag-pub-border:     #86efac;
+      --tag-media-bg:       #fef3c7;
+      --tag-media-text:     #b45309;
+      --tag-media-border:   #fcd34d;
+      --tag-external-bg:    #cffafe;
+      --tag-external-text:  #0e7490;
+      --tag-external-border:#67e8f9;
+
+      /* Sections & UI accents */
+      --subsection-requests: #7c3aed;
+      --subtask-bg:          #f3e8ff;
+      --subtask-text:        #6d28d9;
+      --subtask-border:      #ddd6fe;
+
+      /* Rank badges (leaderboard) */
+      --rank-gold:           #fbbf24;
+      --rank-silver:         #94a3b8;
+      --rank-bronze:         #b45309;
+
+      /* Chart palette (referenced by JS via getComputedStyle) */
+      --chart-1: oklch(58% 0.160 254);
+      --chart-2: oklch(62% 0.100 148);
+      --chart-3: oklch(66% 0.100 66);
+      --chart-4: oklch(52% 0.130 27);
+      --chart-5: oklch(58% 0.140 290);
+      --chart-6: oklch(60% 0.120 190);
     }
 
     /* ── Dark theme ── */
@@ -54,10 +109,57 @@
       --color-warning-content: oklch(20% 0.06 65);
       --color-error: oklch(60% 0.125 27);
       --color-error-content: #ffffff;
+
+      /* ── App color tokens ── */
+      --bg-page: #002C5B;
+
+      --col-new:            #94a3b8;
+      --col-new-title:      #cbd5e1;
+      --col-progress:       #ec4899;
+      --col-progress-title: #f472b6;
+      --col-paused:         #f59e0b;
+      --col-paused-title:   #fbbf24;
+      --col-done:           #22c55e;
+      --col-done-title:     #4ade80;
+
+      --urgency-important:  #f97316;
+      --urgency-slow:       #475569;
+
+      --tag-design-bg:      #2e1065;
+      --tag-design-text:    #c4b5fd;
+      --tag-design-border:  #6d28d9;
+      --tag-text-bg:        #1e3a5f;
+      --tag-text-color:     #93c5fd;
+      --tag-text-border:    #1d4ed8;
+      --tag-pub-bg:         #052e16;
+      --tag-pub-text:       #86efac;
+      --tag-pub-border:     #15803d;
+      --tag-media-bg:       #451a03;
+      --tag-media-text:     #fcd34d;
+      --tag-media-border:   #b45309;
+      --tag-external-bg:    #083344;
+      --tag-external-text:  #67e8f9;
+      --tag-external-border:#0e7490;
+
+      --subsection-requests: #a78bfa;
+      --subtask-bg:          #2e1065;
+      --subtask-text:        #c4b5fd;
+      --subtask-border:      #6d28d9;
+
+      /* Rank badges */
+      --rank-gold:           #fbbf24;
+      --rank-silver:         #94a3b8;
+      --rank-bronze:         #cd7c3a;
+
+      --chart-1: oklch(65% 0.145 254);
+      --chart-2: oklch(68% 0.100 148);
+      --chart-3: oklch(72% 0.092 66);
+      --chart-4: oklch(62% 0.120 27);
+      --chart-5: oklch(65% 0.130 290);
+      --chart-6: oklch(68% 0.115 190);
     }
 
-    body { background: #E1EFFB; margin: 0; }
-    [data-theme="dark"] body { background: #002C5B; }
+    body { background: var(--bg-page); margin: 0; }
 
     /* ── Sidebar island ── */
     #sidebar {
@@ -1305,5 +1407,6 @@ async function syncTopbarTimer() {
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 {% endif %}
+<script src="{{ url_for('static', filename='gw-datepicker.js') }}"></script>
 </body>
 </html>

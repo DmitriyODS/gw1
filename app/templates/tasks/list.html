@@ -263,7 +263,7 @@
     <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10"></i>
     <input type="text" id="task-search" placeholder="Поиск по названию задачи"
            class="input input-bordered w-full rounded-full pl-9 text-sm"
-           oninput="onSearchInput()">
+           autocomplete="off" oninput="onSearchInput()">
   </div>
   <a href="{{ url_for('tasks.create') }}" class="btn btn-primary gap-2 shrink-0">
     <i class="bi bi-plus-lg"></i> Создать задачу

@@ -1605,13 +1605,13 @@ async function syncTopbarTimer() {
           <label class="flex flex-col gap-1">
             <span class="text-xs text-base-content/55">Логин (IMAP/SMTP)</span>
             <input type="text" id="settings-mail-user" class="input input-bordered w-full"
-                   placeholder="firstname.lastname"
+                   placeholder="firstname.lastname" autocomplete="username"
                    value="{{ current_user.mail_user or '' }}">
           </label>
           <label class="flex flex-col gap-1">
             <span class="text-xs text-base-content/55">Пароль</span>
             <input type="password" id="settings-mail-password" class="input input-bordered w-full"
-                   placeholder="{{ '••••••••' if current_user.mail_password else 'Не задан' }}">
+                   placeholder="{{ '••••••••' if current_user.mail_password else 'Не задан' }}" autocomplete="current-password">
           </label>
           {% if not current_user.mail_user %}
           <p class="text-xs text-base-content/40">После сохранения раздел «Почта» появится в меню</p>

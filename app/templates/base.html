@@ -281,15 +281,15 @@
     }
     .sidebar-logo-btn {
       display: flex; align-items: center; gap: 9px;
-      width: 100%; border: none;
-      background: color-mix(in oklch, var(--color-base-content) 5%, var(--color-base-100));
+      width: 100%; border: 1px solid var(--tok-panel-border);
+      background: var(--tok-panel-bg);
       color: var(--color-base-content); border-radius: 12px;
       padding: 10px 14px;
       font-weight: 700; font-size: 0.9rem;
       text-decoration: none; cursor: pointer;
       transition: background 0.15s;
     }
-    .sidebar-logo-btn:hover { background: color-mix(in oklch, var(--color-base-content) 10%, var(--color-base-100)); color: var(--color-base-content); }
+    .sidebar-logo-btn:hover { background: color-mix(in oklch, var(--color-primary) 10%, var(--color-base-100)); color: var(--color-base-content); }
     .sidebar-version {
       font-size: 0.58rem; opacity: 0.55; font-weight: 400; margin-left: auto;
     }
@@ -360,13 +360,14 @@
     /* ── User dropdown button ── */
     .sidebar-user-btn {
       display: flex; align-items: center; gap: 10px;
-      background: color-mix(in oklch, var(--color-base-content) 4%, var(--color-base-100));
+      background: var(--tok-panel-bg);
+      border: 1px solid var(--tok-panel-border);
       border-radius: 12px; padding: 10px 11px;
-      border: none; cursor: pointer; width: 100%; text-align: left;
+      cursor: pointer; width: 100%; text-align: left;
       transition: background 0.12s;
     }
     .sidebar-user-btn:hover {
-      background: color-mix(in oklch, var(--color-base-content) 8%, var(--color-base-100));
+      background: color-mix(in oklch, var(--color-primary) 10%, var(--color-base-100));
     }
     .user-avatar-lg {
       width: 34px; height: 34px; border-radius: 50%;
@@ -418,7 +419,7 @@
     .user-menu-sep { margin: 3px 10px; border: none; border-top: 1px solid var(--color-base-200); }
 
     /* ── Main island ── */
-    .main-wrap { margin-left: 262px; padding: 10px 10px 10px 0; min-height: 100vh; box-sizing: border-box; }
+    .main-wrap { margin-left: 262px; padding: 10px 10px 10px 0; height: 100vh; box-sizing: border-box; }
     .main-island {
       background: color-mix(in oklch, var(--color-base-100) 70%, transparent);
       backdrop-filter: blur(28px) saturate(1.8);
@@ -428,8 +429,9 @@
                   inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
       border: 1px solid color-mix(in oklch, white 26%, transparent);
       padding: 24px;
-      min-height: calc(100vh - 20px);
+      height: calc(100vh - 20px);
       box-sizing: border-box;
+      overflow-y: auto;
     }
 
     /* Mobile topbar */
@@ -504,7 +506,8 @@
       #sidebar-overlay.open { display: block; }
       #mobile-topbar { display: flex; }
       .main-wrap { margin-left: 0; padding: 62px 10px 10px; }
-      .main-island { padding: 16px; min-height: calc(100vh - 72px); }
+      .main-wrap { height: 100vh; }
+      .main-island { padding: 16px; height: calc(100vh - 72px); overflow-y: auto; }
     }
 
     /* ── Global: border-radius system ── */
@@ -1234,8 +1237,18 @@ function importPalettesFromFile(input) {
 // Open form in create or edit mode
 function _openPaletteForm(mode, slug) {
   const form = document.getElementById('new-palette-form');
-  const rs = getComputedStyle(document.documentElement);
-  const fromCSS = tok => _cssColorToHex(rs.getPropertyValue(tok).trim());
+
+  // Snapshot CSS variable values for both themes without visual flash.
+  // getComputedStyle is live, so we capture values before restoring the original theme.
+  const _themeToks = ['--tok-bg-page','--color-base-100','--color-base-200','--color-base-300','--color-primary','--tok-panel-bg'];
+  const savedTheme = document.documentElement.getAttribute('data-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', 'light');
+  const _lightSnap = Object.fromEntries(_themeToks.map(t => [t, _cssColorToHex(getComputedStyle(document.documentElement).getPropertyValue(t).trim())]));
+  document.documentElement.setAttribute('data-theme', 'dark');
+  const _darkSnap  = Object.fromEntries(_themeToks.map(t => [t, _cssColorToHex(getComputedStyle(document.documentElement).getPropertyValue(t).trim())]));
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  const fromCSS     = tok => _lightSnap[tok] || '#808080';
+  const fromCSSdark = tok => _darkSnap[tok]  || '#808080';
 
   _paletteFormMode = mode === 'edit' ? slug : 'create';
 
@@ -1272,12 +1285,12 @@ function _openPaletteForm(mode, slug) {
     set('cp-base-300',      fromCSS('--color-base-300'));
     set('cp-primary',       fromCSS('--color-primary'));
     set('cp-panel-bg',      fromCSS('--tok-panel-bg'));
-    set('cp-bg-page-dark',  '#111111');
-    set('cp-base-100-dark', '#1e1e1e');
-    set('cp-base-200-dark', '#181818');
-    set('cp-base-300-dark', '#2a2a2a');
-    set('cp-primary-dark',  fromCSS('--color-primary'));
-    set('cp-panel-bg-dark', '#252525');
+    set('cp-bg-page-dark',  fromCSSdark('--tok-bg-page'));
+    set('cp-base-100-dark', fromCSSdark('--color-base-100'));
+    set('cp-base-200-dark', fromCSSdark('--color-base-200'));
+    set('cp-base-300-dark', fromCSSdark('--color-base-300'));
+    set('cp-primary-dark',  fromCSSdark('--color-primary'));
+    set('cp-panel-bg-dark', fromCSSdark('--tok-panel-bg'));
     if (titleEl) titleEl.textContent = 'Новая палитра';
     if (saveEl)  saveEl.textContent  = 'Сохранить';
   }

@@ -392,10 +392,10 @@ class GWDatePicker {
   _openPopup() {
     this._open = true;
     this.field.classList.add('open');
-    this.popup.classList.add('visible');
-    this._positionPopup();
     this._renderCalendar();
     if (this.withTime) this._renderTime();
+    this.popup.classList.add('visible');
+    this._positionPopup();
     this._onScrollResize = () => this._positionPopup();
     window.addEventListener('scroll', this._onScrollResize, { passive: true, capture: true });
     window.addEventListener('resize', this._onScrollResize, { passive: true });
@@ -413,29 +413,26 @@ class GWDatePicker {
   }
 
   _positionPopup() {
+    const MARGIN = 8, GAP = 6;
     const rect = this.wrap.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const MARGIN = 8;
+    const vw = window.innerWidth, vh = window.innerHeight;
 
-    // Horizontal: align with anchor left edge, clamp to viewport
-    const popupW = Math.min(this.popup.offsetWidth || 280, vw - MARGIN * 2);
+    // Horizontal: align left, clamp to viewport
+    const pw = Math.min(this.popup.offsetWidth || 280, vw - MARGIN * 2);
     let left = rect.left;
-    if (left + popupW > vw - MARGIN) left = vw - MARGIN - popupW;
+    if (left + pw > vw - MARGIN) left = vw - MARGIN - pw;
     if (left < MARGIN) left = MARGIN;
     this.popup.style.left = left + 'px';
     this.popup.style.maxWidth = (vw - MARGIN * 2) + 'px';
 
-    // Vertical: prefer below, flip above if not enough space
-    const spaceBelow = vh - rect.bottom - MARGIN;
-    const spaceAbove = rect.top - MARGIN;
-    if (spaceBelow >= 300 || spaceBelow >= spaceAbove) {
-      this.popup.style.top = (rect.bottom + 6) + 'px';
-      this.popup.style.bottom = 'auto';
-    } else {
-      this.popup.style.top = 'auto';
-      this.popup.style.bottom = (vh - rect.top + 6) + 'px';
-    }
+    // Vertical: start below anchor, shift up if popup goes off bottom of viewport
+    const ph = this.popup.offsetHeight;
+    let top = rect.bottom + GAP;
+    const overflow = top + ph - (vh - MARGIN);
+    if (overflow > 0) top -= overflow;
+    if (top < MARGIN) top = MARGIN;
+    this.popup.style.top = top + 'px';
+    this.popup.style.bottom = 'auto';
   }
 
   _navigate(dir) {

@@ -19,6 +19,7 @@ from extensions import db
 from models import (
     Task, User, Department, TaskType, TaskStatus, Urgency,
     TimeLog, TaskComment, Role,
+    Plan, PlanGroup, Rhythm, RhythmFrequency, TaskTag,
 )
 
 api_v1_bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
@@ -34,6 +35,7 @@ def _user(u):
         'full_name': u.full_name,
         'role': u.role,
         'is_active': u.is_active,
+        'avatar_url': f'/api/avatar/{u.id}',
     }
 
 
@@ -79,6 +81,18 @@ def _task(task, secs=None, detail=False):
                 for a in task.attachments
             ],
             'comments': [_comment(c) for c in task.comments],
+            'subtasks': [
+                {
+                    'id': s.id,
+                    'title': s.title,
+                    'status': s.status,
+                    'urgency': s.urgency,
+                    'task_type': s.task_type,
+                    'assigned_to': _user(s.assigned_to),
+                    'total_seconds': s.total_seconds,
+                }
+                for s in task.subtasks
+            ],
         })
     return d
 
@@ -242,6 +256,10 @@ def tasks_list():
     task_type = request.args.get('task_type')
     if task_type:
         q = q.filter(Task.task_type == task_type)
+
+    parent_task_id = request.args.get('parent_task_id', type=int)
+    if parent_task_id:
+        q = q.filter(Task.parent_task_id == parent_task_id)
 
     search = request.args.get('search', '').strip()
     if search:
@@ -674,6 +692,487 @@ def get_users():
         .all()
     )
     return _ok([_user(u) for u in users])
+
+
+# ── Plans ─────────────────────────────────────────────────────────────────────
+
+def _plan(p):
+    return {
+        'id': p.id,
+        'title': p.title,
+        'description': p.description,
+        'task_type': p.task_type,
+        'urgency': p.urgency,
+        'tags': p.tags or [],
+        'dynamic_fields': p.dynamic_fields or {},
+        'department': {'id': p.department.id, 'name': p.department.name} if p.department else None,
+        'group': {'id': p.group.id, 'name': p.group.name} if p.group else None,
+        'release_date': p.release_date.isoformat() if p.release_date else None,
+        'is_due': p.is_due,
+        'customer_name': p.customer_name,
+        'created_by': _user(p.created_by),
+        'created_at': p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+@api_v1_bp.get('/plans')
+@jwt_required()
+def plans_list():
+    """Список активных планов (не конвертированных)."""
+    group_id = request.args.get('group_id', type=int)
+    q = Plan.query.filter_by(is_converted=False)
+    if group_id:
+        q = q.filter_by(group_id=group_id)
+    plans = q.order_by(Plan.release_date.asc(), Plan.created_at.desc()).all()
+    groups = PlanGroup.query.order_by(PlanGroup.name).all()
+    return _ok({
+        'plans': [_plan(p) for p in plans],
+        'groups': [{'id': g.id, 'name': g.name} for g in groups],
+    })
+
+
+@api_v1_bp.post('/plans')
+@jwt_required()
+def plan_create():
+    """Создать план. Body: {title, task_type, urgency, description, department_id, group_id, release_date, tags}"""
+    body = request.get_json(silent=True) or {}
+    title = (body.get('title') or '').strip()
+    task_type = (body.get('task_type') or '').strip()
+    if not title:
+        return _err('title обязателен')
+    if not task_type:
+        return _err('task_type обязателен')
+    try:
+        release_date = _parse_deadline(body.get('release_date'))
+    except ValueError as e:
+        return _err(str(e))
+    plan = Plan(
+        title=title,
+        description=(body.get('description') or '').strip() or None,
+        task_type=task_type,
+        urgency=body.get('urgency', Urgency.NORMAL),
+        tags=body.get('tags') or [],
+        department_id=body.get('department_id'),
+        group_id=body.get('group_id'),
+        release_date=release_date,
+        customer_name=(body.get('customer_name') or '').strip() or None,
+        created_by_id=jwt_user.id,
+    )
+    db.session.add(plan)
+    db.session.commit()
+    return _ok(_plan(plan), code=201)
+
+
+@api_v1_bp.delete('/plans/<int:plan_id>')
+@jwt_required()
+def plan_delete(plan_id):
+    """Удалить план."""
+    plan = Plan.query.get_or_404(plan_id)
+    if not jwt_user.can_admin and plan.created_by_id != jwt_user.id:
+        return _err('Нет прав', 403)
+    db.session.delete(plan)
+    db.session.commit()
+    return _ok({'deleted': plan_id})
+
+
+@api_v1_bp.post('/plans/<int:plan_id>/push')
+@jwt_required()
+def plan_push(plan_id):
+    """Конвертировать план в задачу (удаляет план)."""
+    plan = Plan.query.get_or_404(plan_id)
+    tags = list(plan.tags or [])
+    if plan.task_type == 'publication' and TaskTag.PUBLICATION not in tags:
+        tags.append(TaskTag.PUBLICATION)
+    task = Task(
+        title=plan.title,
+        description=plan.description,
+        customer_name=plan.customer_name,
+        customer_phone=plan.customer_phone,
+        department_id=plan.department_id,
+        task_type=plan.task_type,
+        urgency=plan.urgency or Urgency.NORMAL,
+        tags=tags,
+        dynamic_fields=plan.dynamic_fields or {},
+        status=TaskStatus.NEW,
+        created_by_id=plan.created_by_id or jwt_user.id,
+    )
+    db.session.add(task)
+    db.session.flush()
+    if plan.task_type == 'publication':
+        db.session.add(Task(
+            title=f'[Дизайн] {task.title}', task_type='publication',
+            tags=[TaskTag.DESIGN], urgency=task.urgency,
+            department_id=task.department_id, parent_task_id=task.id,
+            status=TaskStatus.NEW, dynamic_fields={}, created_by_id=jwt_user.id,
+        ))
+        db.session.add(Task(
+            title=f'[Текст] {task.title}', task_type='publication',
+            tags=[TaskTag.TEXT], urgency=task.urgency,
+            department_id=task.department_id, parent_task_id=task.id,
+            status=TaskStatus.NEW, dynamic_fields={}, created_by_id=jwt_user.id,
+        ))
+    db.session.delete(plan)
+    db.session.commit()
+    secs_map = _secs_for([task.id])
+    return _ok(_task(task, secs=secs_map.get(task.id, 0), detail=True))
+
+
+@api_v1_bp.post('/plan-groups')
+@jwt_required()
+def plan_group_create():
+    """Создать группу планов. Body: {name}"""
+    body = request.get_json(silent=True) or {}
+    name = (body.get('name') or '').strip()
+    if not name:
+        return _err('name обязателен')
+    if PlanGroup.query.filter_by(name=name).first():
+        return _err('Группа с таким названием уже существует')
+    g = PlanGroup(name=name, created_by_id=jwt_user.id)
+    db.session.add(g)
+    db.session.commit()
+    return _ok({'id': g.id, 'name': g.name}, code=201)
+
+
+@api_v1_bp.delete('/plan-groups/<int:group_id>')
+@jwt_required()
+def plan_group_delete(group_id):
+    """Удалить группу планов (только manager+)."""
+    if not jwt_user.can_admin:
+        return _err('Нет прав', 403)
+    g = PlanGroup.query.get_or_404(group_id)
+    Plan.query.filter_by(group_id=group_id).update({'group_id': None})
+    db.session.delete(g)
+    db.session.commit()
+    return _ok({'deleted': group_id})
+
+
+# ── Rhythms ───────────────────────────────────────────────────────────────────
+
+def _rhythm(r):
+    return {
+        'id': r.id,
+        'name': r.name,
+        'description': r.description,
+        'frequency': r.frequency,
+        'day_of_week': r.day_of_week,
+        'day_of_month': r.day_of_month,
+        'trigger_time': r.trigger_time,
+        'task_title': r.task_title,
+        'task_description': r.task_description,
+        'task_type': r.task_type,
+        'task_urgency': r.task_urgency,
+        'task_tags': r.task_tags or [],
+        'department': {'id': r.department.id, 'name': r.department.name} if r.department else None,
+        'is_active': r.is_active,
+        'is_due': r.is_due,
+        'schedule_label': r.schedule_label,
+        'last_run_at': r.last_run_at.isoformat() if r.last_run_at else None,
+        'created_at': r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+@api_v1_bp.get('/rhythms')
+@jwt_required()
+def rhythms_list():
+    """Список ритмов."""
+    rhythms = Rhythm.query.order_by(Rhythm.name).all()
+    return _ok([_rhythm(r) for r in rhythms])
+
+
+@api_v1_bp.post('/rhythms')
+@jwt_required()
+def rhythm_create():
+    """Создать ритм."""
+    body = request.get_json(silent=True) or {}
+    name = (body.get('name') or '').strip()
+    task_title = (body.get('task_title') or '').strip()
+    task_type = (body.get('task_type') or '').strip()
+    if not name:
+        return _err('name обязателен')
+    if not task_title:
+        return _err('task_title обязателен')
+    if not task_type:
+        return _err('task_type обязателен')
+    r = Rhythm(
+        name=name,
+        description=(body.get('description') or '').strip() or None,
+        frequency=body.get('frequency', RhythmFrequency.DAILY),
+        day_of_week=body.get('day_of_week'),
+        day_of_month=body.get('day_of_month'),
+        trigger_time=body.get('trigger_time') or None,
+        task_title=task_title,
+        task_description=(body.get('task_description') or '').strip() or None,
+        task_type=task_type,
+        task_urgency=body.get('task_urgency', Urgency.NORMAL),
+        task_tags=body.get('task_tags') or [],
+        department_id=body.get('department_id'),
+        is_active=body.get('is_active', True),
+        created_by_id=jwt_user.id,
+    )
+    db.session.add(r)
+    db.session.commit()
+    return _ok(_rhythm(r), code=201)
+
+
+@api_v1_bp.post('/rhythms/<int:rhythm_id>/toggle')
+@jwt_required()
+def rhythm_toggle(rhythm_id):
+    """Включить/выключить ритм."""
+    r = Rhythm.query.get_or_404(rhythm_id)
+    r.is_active = not r.is_active
+    db.session.commit()
+    return _ok({'is_active': r.is_active})
+
+
+@api_v1_bp.post('/rhythms/<int:rhythm_id>/run')
+@jwt_required()
+def rhythm_run(rhythm_id):
+    """Запустить ритм сейчас (создать задачу)."""
+    r = Rhythm.query.get_or_404(rhythm_id)
+    tags = list(r.task_tags or [])
+    task = Task(
+        title=r.task_title,
+        description=r.task_description,
+        task_type=r.task_type,
+        tags=tags,
+        urgency=r.task_urgency or Urgency.NORMAL,
+        department_id=r.department_id,
+        status=TaskStatus.NEW,
+        created_by_id=jwt_user.id,
+        dynamic_fields={},
+    )
+    db.session.add(task)
+    db.session.flush()
+    if r.task_type == 'publication':
+        from models import TaskTag as TT
+        db.session.add(Task(
+            title=f'[Дизайн] {task.title}', task_type='publication',
+            tags=[TT.DESIGN], urgency=task.urgency,
+            department_id=task.department_id, parent_task_id=task.id,
+            status=TaskStatus.NEW, dynamic_fields={}, created_by_id=jwt_user.id,
+        ))
+        db.session.add(Task(
+            title=f'[Текст] {task.title}', task_type='publication',
+            tags=[TT.TEXT], urgency=task.urgency,
+            department_id=task.department_id, parent_task_id=task.id,
+            status=TaskStatus.NEW, dynamic_fields={}, created_by_id=jwt_user.id,
+        ))
+    r.last_run_at = datetime.utcnow()
+    db.session.commit()
+    return _ok(_task(task, secs=0, detail=False))
+
+
+@api_v1_bp.delete('/rhythms/<int:rhythm_id>')
+@jwt_required()
+def rhythm_delete(rhythm_id):
+    """Удалить ритм."""
+    r = Rhythm.query.get_or_404(rhythm_id)
+    db.session.delete(r)
+    db.session.commit()
+    return _ok({'deleted': rhythm_id})
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+@api_v1_bp.get('/analytics/summary')
+@jwt_required()
+def analytics_summary():
+    """
+    Сводная аналитика.
+    Query: period=day|week|month|year (default: week)
+    """
+    from datetime import timedelta
+    period = request.args.get('period', 'week')
+    tz = current_app.config.get('TZ_OFFSET_HOURS', 3)
+    now_utc = datetime.utcnow()
+    now_local = now_utc + timedelta(hours=tz)
+
+    if period == 'day':
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'week':
+        start_local = (now_local - timedelta(days=now_local.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'month':
+        start_local = now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'year':
+        start_local = now_local.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_local = now_local - timedelta(days=7)
+
+    start = start_local - timedelta(hours=tz)
+
+    # Tasks by status in period
+    status_rows = (
+        db.session.query(Task.status, sqlfunc.count(Task.id))
+        .filter(Task.created_at >= start, Task.is_archived == False)
+        .group_by(Task.status).all()
+    )
+    by_status = {s: 0 for s in ['new', 'in_progress', 'paused', 'done']}
+    for s, cnt in status_rows:
+        if s in by_status:
+            by_status[s] = cnt
+    total = sum(by_status.values())
+
+    # Tasks by type (top 8)
+    type_rows = (
+        db.session.query(Task.task_type, sqlfunc.count(Task.id))
+        .filter(Task.created_at >= start, Task.is_archived == False)
+        .group_by(Task.task_type)
+        .order_by(sqlfunc.count(Task.id).desc())
+        .limit(8).all()
+    )
+    by_type = [{'type': t or 'other', 'count': cnt} for t, cnt in type_rows]
+
+    # Total time worked in period (all users)
+    time_rows = (
+        db.session.query(
+            sqlfunc.coalesce(
+                sqlfunc.sum(
+                    sqlfunc.extract('epoch',
+                        sqlfunc.coalesce(TimeLog.ended_at, now_utc) - TimeLog.started_at)
+                ), 0
+            )
+        )
+        .filter(TimeLog.started_at >= start)
+        .scalar()
+    )
+    total_seconds = int(time_rows or 0)
+
+    # My time worked
+    my_time = (
+        db.session.query(
+            sqlfunc.coalesce(
+                sqlfunc.sum(
+                    sqlfunc.extract('epoch',
+                        sqlfunc.coalesce(TimeLog.ended_at, now_utc) - TimeLog.started_at)
+                ), 0
+            )
+        )
+        .filter(TimeLog.started_at >= start, TimeLog.user_id == jwt_user.id)
+        .scalar()
+    )
+    my_seconds = int(my_time or 0)
+
+    # Top workers by time
+    worker_rows = (
+        db.session.query(
+            TimeLog.user_id,
+            sqlfunc.coalesce(
+                sqlfunc.sum(
+                    sqlfunc.extract('epoch',
+                        sqlfunc.coalesce(TimeLog.ended_at, now_utc) - TimeLog.started_at)
+                ), 0
+            ).label('secs')
+        )
+        .filter(TimeLog.started_at >= start)
+        .group_by(TimeLog.user_id)
+        .order_by(sqlfunc.text('secs DESC'))
+        .limit(5).all()
+    )
+    user_ids = [r.user_id for r in worker_rows]
+    users_map = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+    top_workers = [
+        {
+            'user': _user(users_map.get(r.user_id)),
+            'seconds': int(r.secs),
+        }
+        for r in worker_rows if users_map.get(r.user_id)
+    ]
+
+    return _ok({
+        'period': period,
+        'by_status': by_status,
+        'total': total,
+        'by_type': by_type,
+        'total_seconds': total_seconds,
+        'my_seconds': my_seconds,
+        'top_workers': top_workers,
+    })
+
+
+# ── Media Plan ────────────────────────────────────────────────────────────────
+
+@api_v1_bp.get('/media-plan')
+@jwt_required()
+def media_plan():
+    """
+    Медиаплан — публикационные задачи, сгруппированные по дате.
+    Query: month=YYYY-MM (default: текущий месяц)
+    """
+    from datetime import date, timedelta
+    month_str = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    try:
+        year, month = map(int, month_str.split('-'))
+        month_start = date(year, month, 1)
+    except (ValueError, AttributeError):
+        return _err('Неверный формат month (YYYY-MM)')
+
+    if month == 12:
+        month_end = date(year + 1, 1, 1)
+    else:
+        month_end = date(year, month + 1, 1)
+
+    # Задачи публикационного типа (placement, publication)
+    all_pubs = Task.query.filter(
+        Task.task_type.in_(['placement', 'publication']),
+        Task.is_archived == False,
+    ).all()
+
+    by_day = {}
+    no_date = []
+
+    for t in all_pubs:
+        raw = (t.dynamic_fields or {}).get('pub_date', '')
+        pub_dt = None
+        if raw:
+            try:
+                pub_dt = datetime.fromisoformat(raw)
+            except Exception:
+                pass
+
+        if pub_dt and month_start <= pub_dt.date() < month_end:
+            day = pub_dt.day
+            by_day.setdefault(day, []).append({
+                'id': t.id,
+                'title': t.title,
+                'status': t.status,
+                'task_type': t.task_type,
+                'pub_time': pub_dt.strftime('%H:%M'),
+                'department': {'id': t.department.id, 'name': t.department.name} if t.department else None,
+                'dynamic_fields': t.dynamic_fields or {},
+            })
+        elif not pub_dt:
+            no_date.append({
+                'id': t.id,
+                'title': t.title,
+                'status': t.status,
+                'task_type': t.task_type,
+                'department': {'id': t.department.id, 'name': t.department.name} if t.department else None,
+            })
+
+    # Sort items within each day by time
+    for day_items in by_day.values():
+        day_items.sort(key=lambda x: x['pub_time'])
+
+    return _ok({
+        'month': month_str,
+        'year': year,
+        'month_num': month,
+        'by_day': {str(k): v for k, v in sorted(by_day.items())},
+        'no_date': no_date,
+    })
+
+
+# ── Tags ──────────────────────────────────────────────────────────────────────
+
+@api_v1_bp.get('/tags')
+@jwt_required()
+def get_tags():
+    """Предопределённые теги."""
+    return _ok([
+        {'slug': t, 'label': t}
+        for t in TaskTag.ALL
+    ])
 
 
 # ── Swagger UI ────────────────────────────────────────────────────────────────

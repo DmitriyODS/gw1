@@ -121,6 +121,15 @@ def list_tasks():
     # 1 запрос: секунды только для загруженных задач
     secs_by_task = _build_secs([t.id for t in tasks])
 
+    # Просроченные задачи для модалки
+    now = datetime.utcnow()
+    overdue_tasks = Task.query.filter(
+        Task.status != TaskStatus.DONE,
+        Task.is_archived == False,
+        Task.deadline < now,
+        Task.deadline.isnot(None),
+    ).order_by(Task.deadline.asc()).limit(50).all()
+
     return render_template('tasks/list.html', tasks=tasks,
                            TaskStatus=TaskStatus, Urgency=Urgency,
                            TaskTag=TaskTag,
@@ -130,7 +139,8 @@ def list_tasks():
                            sort_new=sort_new,
                            done_total=done_total,
                            done_has_more=done_has_more,
-                           done_page_size=DONE_PAGE_SIZE)
+                           done_page_size=DONE_PAGE_SIZE,
+                           overdue_tasks=overdue_tasks)
 
 
 @tasks_bp.route('/tasks/done-more')

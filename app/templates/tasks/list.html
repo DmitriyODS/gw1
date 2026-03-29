@@ -1121,5 +1121,53 @@ if (localStorage.getItem('gw-sort-new') === '1') {
   applySortNew();
   syncToggleButtons();
 }
+
+{% if overdue_tasks %}
+(function() {
+  if (!sessionStorage.getItem('gw-overdue-shown')) {
+    sessionStorage.setItem('gw-overdue-shown', '1');
+    document.getElementById('overdueModal').showModal();
+  }
+})();
+{% endif %}
 </script>
+
+{% if overdue_tasks %}
+<dialog id="overdueModal" class="modal">
+  <div class="modal-box" style="max-width:480px; max-height:80vh; display:flex; flex-direction:column;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+      <span class="material-icons-round" style="color:var(--color-error); font-size:1.5rem;">schedule</span>
+      <h3 style="font-size:1.1rem; font-weight:700; margin:0;">Давай сделаем это!</h3>
+    </div>
+    <p style="font-size:0.85rem; color:color-mix(in oklch, var(--color-base-content) 65%, transparent); margin:0 0 14px;">
+      У нас накопились просроченные задачи
+    </p>
+    <div style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:6px;">
+      {% for task in overdue_tasks %}
+      <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+         onclick="document.getElementById('overdueModal').close()"
+         style="display:flex; align-items:center; gap:10px; padding:8px 10px;
+                border-radius:10px; text-decoration:none; color:inherit;
+                background:color-mix(in oklch, var(--color-error) 8%, var(--tok-panel-bg));
+                border:1px solid color-mix(in oklch, var(--color-error) 20%, transparent);
+                transition:background 0.15s;">
+        <span class="material-icons-round" style="font-size:1rem; color:var(--color-error); flex-shrink:0;">warning</span>
+        <span style="flex:1; font-size:0.85rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          {{ task.title }}
+        </span>
+        <span style="font-size:0.75rem; white-space:nowrap; color:var(--color-error); opacity:0.8;">
+          {{ task.deadline.strftime('%d.%m %H:%M') }}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="modal-action" style="margin-top:14px;">
+      <form method="dialog">
+        <button class="btn btn-sm btn-primary">Понял, иду работать</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
 {% endblock %}

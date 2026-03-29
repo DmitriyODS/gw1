@@ -522,19 +522,32 @@
         <span class="text-xs text-base-content/40">
           {{ g.plans | list | length }} планов
         </span>
-        <form method="post" action="{{ url_for('plans.delete_group', group_id=g.id) }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-ghost btn-xs text-error"
-                  onclick="return confirm('Удалить группу «{{ g.name }}»? Планы останутся без группы.')">
-            <i class="bi bi-trash"></i>
-          </button>
-        </form>
+        <button type="button" class="btn btn-ghost btn-xs text-error"
+                onclick="confirmDeleteGroup({{ g.id }}, '{{ g.name | replace("'", "\\'") }}')">
+          <i class="bi bi-trash"></i>
+        </button>
       </li>
       {% endfor %}
     </ul>
     <div class="modal-action">
       <button type="button" class="btn btn-ghost"
               onclick="document.getElementById('manageGroupsModal').close()">Закрыть</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<dialog id="deleteGroupModal" class="modal">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg text-error"><i class="bi bi-trash"></i> Удалить группу?</h3>
+    <p class="py-3">Группа <strong id="deleteGroupName"></strong> будет удалена. Планы останутся без группы.</p>
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost"
+              onclick="document.getElementById('deleteGroupModal').close()">Отмена</button>
+      <form id="deleteGroupForm" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-error">Удалить</button>
+      </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -726,6 +739,13 @@ function confirmPush(btn) {
   document.getElementById('pushPlanName').textContent = plan.title;
   document.getElementById('pushPlanForm').action = `/plans/${id}/push`;
   document.getElementById('pushPlanModal').showModal();
+}
+
+function confirmDeleteGroup(groupId, groupName) {
+  document.getElementById('deleteGroupName').textContent = '«' + groupName + '»';
+  document.getElementById('deleteGroupForm').action = `/plans/groups/${groupId}/delete`;
+  document.getElementById('manageGroupsModal').close();
+  document.getElementById('deleteGroupModal').showModal();
 }
 </script>
 {% endblock %}

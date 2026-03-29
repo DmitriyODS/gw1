@@ -117,6 +117,7 @@
     0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 40%, transparent); }
     50% { box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-primary) 0%, transparent); }
   }
+  @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
 
   .empty-col {
     text-align: center; padding: 32px 16px;
@@ -259,11 +260,17 @@
 
 <!-- Page header -->
 <div class="flex items-center gap-3 mb-4 flex-wrap">
-  <div class="flex-1 relative min-w-48">
-    <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10"></i>
+  <div class="flex-1 relative min-w-48" id="search-box-wrap">
+    <i id="search-icon" class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10" style="transition:opacity 0.15s"></i>
     <input type="text" id="task-search" placeholder="Поиск по названию задачи"
            class="input input-bordered w-full rounded-full pl-9 text-sm"
            autocomplete="off" oninput="onSearchInput()">
+    <button id="search-clear-btn"
+            onclick="clearSearch()"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content z-10 hidden"
+            tabindex="-1" type="button">
+      <i class="bi bi-x-lg text-xs"></i>
+    </button>
   </div>
   <a href="{{ url_for('tasks.create') }}" class="btn btn-primary gap-2 shrink-0">
     <i class="bi bi-plus-lg"></i> Создать задачу
@@ -561,9 +568,98 @@ async function loadMoreDone(offset) {
   }
 }
 
-// ── Search (inline input) ──
+// ── Search: debounced server-side ─────────────────────────────────────────────
+let _searchDebounce = null;
+let _searchMode = false;
+// Сохраняем оригинальный HTML колонок до первого поиска (состояние с сервера)
+const _origColContent = {};
+
+function _saveOrigCols() {
+  document.querySelectorAll('.kanban-body').forEach(b => {
+    _origColContent[b.dataset.status] = b.innerHTML;
+  });
+}
+
+function _setSearchLoading(on) {
+  const icon = document.getElementById('search-icon');
+  const input = document.getElementById('task-search');
+  if (on) {
+    icon.className = 'bi bi-arrow-repeat absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm pointer-events-none z-10';
+    icon.style.animation = 'spin 0.7s linear infinite';
+    input.classList.add('input-primary');
+  } else {
+    icon.className = 'bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10';
+    icon.style.animation = '';
+    input.classList.remove('input-primary');
+  }
+}
+
+function _restoreOrigCols() {
+  for (const [status, html] of Object.entries(_origColContent)) {
+    const body = document.querySelector(`.kanban-body[data-status="${status}"]`);
+    if (body) { body.innerHTML = html; updateCount(body); }
+  }
+}
+
+function clearSearch() {
+  const input = document.getElementById('task-search');
+  input.value = '';
+  document.getElementById('search-clear-btn').classList.add('hidden');
+  clearTimeout(_searchDebounce);
+  _setSearchLoading(false);
+  if (_searchMode) {
+    _searchMode = false;
+    _restoreOrigCols();
+    applyFilters();
+  } else {
+    applyFilters();
+  }
+  input.focus();
+}
+
+async function _doServerSearch(q) {
+  _setSearchLoading(true);
+  try {
+    const r = await fetch(`/tasks/search?q=${encodeURIComponent(q)}`);
+    if (r.status === 204) return;
+    if (!r.ok) return;
+    const html = await r.text();
+    _searchMode = true;
+
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+
+    for (const status of ['new', 'in_progress', 'paused', 'done']) {
+      const body = document.querySelector(`.kanban-body[data-status="${status}"]`);
+      const src = tmp.querySelector(`[data-status="${status}"]`);
+      if (body && src) { body.innerHTML = src.innerHTML; updateCount(body); }
+    }
+    document.getElementById('btn-load-more-done')?.remove();
+    applyFilters();
+  } catch (_) {
+  } finally {
+    _setSearchLoading(false);
+  }
+}
+
 function onSearchInput() {
+  const q = document.getElementById('task-search').value.trim();
+  document.getElementById('search-clear-btn').classList.toggle('hidden', !q);
+  clearTimeout(_searchDebounce);
+
+  if (!q) {
+    _setSearchLoading(false);
+    if (_searchMode) {
+      _searchMode = false;
+      _restoreOrigCols();
+    }
+    applyFilters();
+    return;
+  }
+
+  // Немедленная клиентская фильтрация — пока идёт дебаунс
   applyFilters();
+  _searchDebounce = setTimeout(() => _doServerSearch(q), 400);
 }
 
 // ── Tags dropdown ──
@@ -953,14 +1049,41 @@ async function pollSync() {
     const snapshot = await r.json();
 
     const domIds = new Set([...document.querySelectorAll('.task-card[data-id]')].map(c => c.dataset.id));
-    for (const id of Object.keys(snapshot)) {
-      if (!domIds.has(id)) { location.reload(); return; }
+
+    // Задачи в снапшоте, которых нет в DOM → новые задачи (созданы другим пользователем).
+    // Вставляем только если НЕ в режиме поиска (иначе карточка может не совпадать с запросом)
+    // и статус не done (иначе это просто пагинированные задачи).
+    if (!_searchMode) {
+      for (const [id, data] of Object.entries(snapshot)) {
+        if (domIds.has(id) || data.status === 'done') continue;
+        try {
+          const cr = await fetch(`/tasks/${id}/card`);
+          if (!cr.ok) continue;
+          const html = await cr.text();
+          const tmp = document.createElement('div');
+          tmp.innerHTML = html.trim();
+          const card = tmp.firstElementChild;
+          if (!card) continue;
+          const status = card.dataset.status;
+          const body = document.querySelector(`.kanban-body[data-status="${status}"]`);
+          if (!body) continue;
+          body.querySelectorAll('.empty-col').forEach(e => e.remove());
+          body.prepend(card);
+          domIds.add(id);
+          updateCount(body);
+          applyFilters();
+          _origColContent[status] = body.innerHTML;
+        } catch (_) {}
+      }
     }
 
+    // Карточки, которые есть в DOM — синхронизируем ВСЕГДА (в т.ч. в режиме поиска).
+    // Это гарантирует что пользователь видит актуальный статус и исполнителя.
     const changed = [];
     document.querySelectorAll('.task-card[data-id]').forEach(card => {
       const data = snapshot[card.dataset.id];
       if (data === undefined) {
+        // Задача исчезла из снапшота → заархивирована или удалена
         const body = card.closest('.kanban-body');
         card.remove();
         if (body && !body.querySelector('.task-card')) body.innerHTML = emptyHtml();
@@ -988,6 +1111,7 @@ setInterval(pollSync, 20000);
 
 // ── Init ──
 storeOriginalOrder(); // запомнить серверный порядок до любых сортировок
+_saveOrigCols();       // сохранить HTML колонок для сброса поиска
 LS.load();
 updateTagsBtn();
 updateTagChips();

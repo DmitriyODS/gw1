@@ -179,6 +179,57 @@ def done_more():
     )
 
 
+@tasks_bp.route('/tasks/search')
+@login_required
+def search_tasks():
+    """AJAX: полнотекстовый поиск по заголовку → HTML-фрагмент колонок для JS-подстановки."""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return '', 204
+
+    from collections import defaultdict
+    tasks = (
+        Task.query
+        .options(joinedload(Task.assigned_to), joinedload(Task.department))
+        .filter(
+            Task.is_archived == False,
+            Task.title.ilike(f'%{q}%'),
+        )
+        .order_by(Task.updated_at.desc(), Task.id.desc())
+        .limit(300)
+        .all()
+    )
+
+    tasks_by_status = defaultdict(list)
+    for t in tasks:
+        tasks_by_status[t.status].append(t)
+
+    task_ids = [t.id for t in tasks]
+    secs_by_task = _build_secs(task_ids)
+
+    active_logs = []
+    if task_ids:
+        active_logs = (
+            TimeLog.query
+            .options(joinedload(TimeLog.user))
+            .filter(TimeLog.task_id.in_(task_ids), TimeLog.ended_at.is_(None))
+            .all()
+        )
+    active_timers_by_task = defaultdict(list)
+    for log in active_logs:
+        active_timers_by_task[log.task_id].append(log)
+    my_active_task_ids = {log.task_id for log in active_logs if log.user_id == current_user.id}
+
+    return render_template(
+        'tasks/_search_results.html',
+        tasks_by_status=tasks_by_status,
+        secs_by_task=secs_by_task,
+        active_timers_by_task=active_timers_by_task,
+        my_active_task_ids=my_active_task_ids,
+        TaskStatus=TaskStatus, Urgency=Urgency, TaskTag=TaskTag,
+    )
+
+
 @tasks_bp.route('/tasks/<int:task_id>')
 @login_required
 def detail(task_id):

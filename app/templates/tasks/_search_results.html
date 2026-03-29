@@ -1,0 +1,42 @@
+{#
+  Результаты серверного поиска.
+  JS подставляет innerHTML каждого <div data-status="..."> в соответствующую .kanban-body.
+#}
+{% for status in ['new', 'in_progress', 'paused', 'done'] %}
+{% set col_tasks = tasks_by_status.get(status, []) %}
+<div data-status="{{ status }}">
+  {% if status == 'new' %}
+    {% set ext_tasks = col_tasks | selectattr('is_external') | list %}
+    {% set int_tasks = col_tasks | rejectattr('is_external') | list %}
+    <div class="subsection-block" data-subsection="requests">
+      <div class="subsection-label requests">
+        <span class="subsection-dot requests"></span>
+        Заявки
+        <span class="subsection-count" style="font-size:0.65rem;opacity:0.7;font-weight:600;margin-left:2px">{{ ext_tasks | length }}</span>
+      </div>
+      {% for task in ext_tasks %}{% include 'tasks/_card.html' %}{% endfor %}
+      <div class="subsection-empty empty-col" style="padding:10px 8px;{% if ext_tasks %}display:none{% endif %}">
+        <div class="empty-col-icon"><i class="bi bi-inbox"></i></div>нет заявок
+      </div>
+    </div>
+    <div class="subsection-block" data-subsection="tasks">
+      <div class="subsection-label tasks">
+        <span class="subsection-dot tasks"></span>
+        Задачи
+        <span class="subsection-count" style="font-size:0.65rem;opacity:0.7;font-weight:600;margin-left:2px">{{ int_tasks | length }}</span>
+      </div>
+      {% for task in int_tasks %}{% include 'tasks/_card.html' %}{% endfor %}
+      <div class="subsection-empty empty-col" style="padding:10px 8px;{% if int_tasks %}display:none{% endif %}">
+        <div class="empty-col-icon"><i class="bi bi-inbox"></i></div>нет задач
+      </div>
+    </div>
+  {% else %}
+    {% if not col_tasks %}
+    <div class="empty-col">
+      <div class="empty-col-icon"><i class="bi bi-inbox"></i></div>нет задач
+    </div>
+    {% endif %}
+    {% for task in col_tasks %}{% include 'tasks/_card.html' %}{% endfor %}
+  {% endif %}
+</div>
+{% endfor %}

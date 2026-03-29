@@ -420,6 +420,44 @@ def task_delete(task_id):
     return _ok({'deleted': task_id})
 
 
+@api_v1_bp.post('/tasks/<int:task_id>/archive')
+@jwt_required()
+def task_archive(task_id):
+    """Архивировать / разархивировать задачу (только manager+)."""
+    if not jwt_user.can_admin:
+        return _err('Нет прав', 403)
+    task = Task.query.get_or_404(task_id)
+    task.is_archived = not task.is_archived
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+    return _ok({'archived': task.is_archived})
+
+
+@api_v1_bp.post('/tasks/<int:task_id>/assign')
+@jwt_required()
+def task_assign(task_id):
+    """
+    Делегировать задачу другому исполнителю (только manager+).
+    Body: {user_id: int | null}
+    """
+    if not jwt_user.can_admin:
+        return _err('Нет прав', 403)
+    task = Task.query.get_or_404(task_id)
+    body = request.get_json(silent=True) or {}
+    user_id = body.get('user_id')
+    if user_id is not None:
+        user = db.session.get(User, user_id)
+        if not user:
+            return _err('Пользователь не найден', 404)
+        task.assigned_to_id = user_id
+    else:
+        task.assigned_to_id = None
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+    secs_map = _secs_for([task_id])
+    return _ok(_task(task, secs=secs_map.get(task_id, 0), detail=True))
+
+
 @api_v1_bp.post('/tasks/<int:task_id>/done')
 @jwt_required()
 def task_done(task_id):

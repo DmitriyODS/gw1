@@ -38,6 +38,8 @@ def _maybe_auto_archive():
 
 tasks_bp = Blueprint('tasks', __name__)
 
+DONE_PAGE_SIZE = 20
+
 
 def sorted_tasks(query, sort_new_by_updated=False, include_archived_done=False):
     query = query.options(joinedload(Task.assigned_to), joinedload(Task.department))
@@ -67,33 +69,57 @@ def sorted_tasks(query, sort_new_by_updated=False, include_archived_done=False):
     return sorted(tasks, key=key)
 
 
+def _build_secs(task_ids):
+    """Aggregate time-logged seconds for given task IDs (single SQL query)."""
+    if not task_ids:
+        return {}
+    from sqlalchemy import func as sqlfunc
+    now = datetime.utcnow()
+    rows = db.session.query(
+        TimeLog.task_id,
+        sqlfunc.coalesce(sqlfunc.sum(
+            sqlfunc.extract('epoch', sqlfunc.coalesce(TimeLog.ended_at, now) - TimeLog.started_at)
+        ), 0).label('secs')
+    ).filter(TimeLog.task_id.in_(task_ids)).group_by(TimeLog.task_id).all()
+    return {r.task_id: int(r.secs) for r in rows}
+
+
 @tasks_bp.route('/tasks')
 @login_required
 def list_tasks():
     _maybe_auto_archive()
     sort_new = request.args.get('sort_new', '0') == '1'
-    tasks = sorted_tasks(Task.query, sort_new_by_updated=sort_new, include_archived_done=True)
 
-    # 1 запрос: все активные таймеры с пользователями (вместо N запросов через task.active_timers в шаблоне)
+    # --- Не-done задачи: все, Python-сортировка (обычно мало) ---
+    non_done_tasks = sorted_tasks(
+        Task.query.filter(Task.status != TaskStatus.DONE),
+        sort_new_by_updated=sort_new,
+        include_archived_done=False,
+    )
+
+    # --- Done: первая страница из БД, включая архивные (для JS-тоггла) ---
+    done_q = (
+        Task.query
+        .options(joinedload(Task.assigned_to), joinedload(Task.department))
+        .filter(Task.status == TaskStatus.DONE)
+        .order_by(Task.updated_at.desc(), Task.id.desc())
+    )
+    done_total = done_q.count()
+    done_tasks = done_q.limit(DONE_PAGE_SIZE).all()
+    done_has_more = done_total > DONE_PAGE_SIZE
+
+    tasks = non_done_tasks + done_tasks
+
+    # 1 запрос: активные таймеры
     from collections import defaultdict
     all_active_logs = TimeLog.query.options(joinedload(TimeLog.user)).filter_by(ended_at=None).all()
     active_timers_by_task = defaultdict(list)
     for log in all_active_logs:
         active_timers_by_task[log.task_id].append(log)
-
-    # Производим из уже загруженных логов — отдельный запрос не нужен
     my_active_task_ids = {log.task_id for log in all_active_logs if log.user_id == current_user.id}
 
-    # 1 запрос: суммарное время по задачам (вместо N запросов через task.total_seconds в шаблоне)
-    now = datetime.utcnow()
-    from sqlalchemy import func as sqlfunc
-    secs_rows = db.session.query(
-        TimeLog.task_id,
-        sqlfunc.coalesce(sqlfunc.sum(
-            sqlfunc.extract('epoch', sqlfunc.coalesce(TimeLog.ended_at, now) - TimeLog.started_at)
-        ), 0).label('secs')
-    ).group_by(TimeLog.task_id).all()
-    secs_by_task = {row.task_id: int(row.secs) for row in secs_rows}
+    # 1 запрос: секунды только для загруженных задач
+    secs_by_task = _build_secs([t.id for t in tasks])
 
     return render_template('tasks/list.html', tasks=tasks,
                            TaskStatus=TaskStatus, Urgency=Urgency,
@@ -101,7 +127,56 @@ def list_tasks():
                            my_active_task_ids=my_active_task_ids,
                            active_timers_by_task=active_timers_by_task,
                            secs_by_task=secs_by_task,
-                           sort_new=sort_new)
+                           sort_new=sort_new,
+                           done_total=done_total,
+                           done_has_more=done_has_more,
+                           done_page_size=DONE_PAGE_SIZE)
+
+
+@tasks_bp.route('/tasks/done-more')
+@login_required
+def done_more():
+    """AJAX: следующая страница Done-колонки → HTML-фрагмент с карточками."""
+    offset = max(0, request.args.get('offset', 0, int))
+    tasks = (
+        Task.query
+        .options(joinedload(Task.assigned_to), joinedload(Task.department))
+        .filter(Task.status == TaskStatus.DONE)
+        .order_by(Task.updated_at.desc(), Task.id.desc())
+        .offset(offset)
+        .limit(DONE_PAGE_SIZE + 1)  # +1 чтобы понять, есть ли ещё
+        .all()
+    )
+    has_more = len(tasks) > DONE_PAGE_SIZE
+    tasks = tasks[:DONE_PAGE_SIZE]
+
+    if not tasks:
+        return '', 204
+
+    from collections import defaultdict
+    task_ids = [t.id for t in tasks]
+    secs_by_task = _build_secs(task_ids)
+    active_logs = (
+        TimeLog.query
+        .options(joinedload(TimeLog.user))
+        .filter(TimeLog.task_id.in_(task_ids), TimeLog.ended_at.is_(None))
+        .all()
+    )
+    active_timers_by_task = defaultdict(list)
+    for log in active_logs:
+        active_timers_by_task[log.task_id].append(log)
+    my_active_task_ids = {log.task_id for log in active_logs if log.user_id == current_user.id}
+
+    return render_template(
+        'tasks/_done_cards.html',
+        tasks=tasks,
+        has_more=has_more,
+        next_offset=offset + DONE_PAGE_SIZE,
+        secs_by_task=secs_by_task,
+        active_timers_by_task=active_timers_by_task,
+        my_active_task_ids=my_active_task_ids,
+        TaskStatus=TaskStatus, Urgency=Urgency, TaskTag=TaskTag,
+    )
 
 
 @tasks_bp.route('/tasks/<int:task_id>')

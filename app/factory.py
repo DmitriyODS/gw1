@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from flask import Flask, redirect, url_for
 from flask_login import current_user
-from extensions import db, login_manager, csrf
+from extensions import db, login_manager, csrf, jwt
 
 
 def create_app():
@@ -12,6 +12,7 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
+    jwt.init_app(app)
 
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Необходима авторизация'
@@ -30,6 +31,7 @@ def create_app():
     from blueprints.plans import plans_bp
     from blueprints.lists_bp import lists_bp
     from blueprints.mail_bp import mail_bp
+    from blueprints.api_v1 import api_v1_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(public_bp)
@@ -42,6 +44,17 @@ def create_app():
     app.register_blueprint(plans_bp)
     app.register_blueprint(lists_bp)
     app.register_blueprint(mail_bp)
+    app.register_blueprint(api_v1_bp)
+    csrf.exempt(api_v1_bp)
+
+    # JWT: загружать пользователя из identity (id)
+    from models import User
+
+    @jwt.user_lookup_loader
+    def _user_lookup(_jwt_header, jwt_data):
+        return User.query.filter_by(
+            id=int(jwt_data['sub']), is_active=True
+        ).one_or_none()
 
     @app.context_processor
     def inject_avatar_v():

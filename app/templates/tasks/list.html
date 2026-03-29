@@ -341,7 +341,7 @@
 <div class="lg:hidden mb-3">
   <div class="mobile-col-tabs" id="mobile-tabs">
     {% for status, label, icon in columns %}
-    {% set cnt = grouped.get(status, []) | length %}
+    {% set cnt = done_total if status == 'done' else (grouped.get(status, []) | length) %}
     <button class="mobile-tab {% if loop.first %}active{% endif %}"
             data-status="{{ status }}" onclick="switchMobileTab('{{ status }}')">
       {{ label }}
@@ -363,7 +363,9 @@
         <span class="col-dot"></span>
         {{ label }}
       </div>
-      <span class="kanban-count" id="cnt-{{ status }}">{{ col_tasks | length }}</span>
+      <span class="kanban-count" id="cnt-{{ status }}">
+        {%- if status == 'done' -%}{{ done_total }}{%- else -%}{{ col_tasks | length }}{%- endif -%}
+      </span>
     </div>
 
     <div class="kanban-body" data-status="{{ status }}">
@@ -411,6 +413,14 @@
         {% for task in col_tasks %}
         {% include 'tasks/_card.html' %}
         {% endfor %}
+
+        {% if status == 'done' and done_has_more %}
+        <button class="btn btn-xs btn-ghost w-full gap-1 opacity-50 hover:opacity-100 mt-1"
+                id="btn-load-more-done"
+                onclick="loadMoreDone({{ done_page_size }})">
+          <i class="bi bi-chevron-down"></i> Загрузить ещё
+        </button>
+        {% endif %}
       {% endif %}
     </div>
 
@@ -531,6 +541,24 @@ async function refreshCard(taskId) {
     const old = document.querySelector(`.task-card[data-id="${taskId}"]`);
     if (old) { old.replaceWith(newCard); applyFilters(); }
   } catch (_) {}
+}
+
+// ── Done column: load more ──
+async function loadMoreDone(offset) {
+  const btn = document.getElementById('btn-load-more-done');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Загрузка...'; }
+  try {
+    const r = await fetch(`/tasks/done-more?offset=${offset}`);
+    if (r.status === 204) { if (btn) btn.remove(); return; }
+    if (!r.ok) { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-chevron-down"></i> Загрузить ещё'; } return; }
+    const html = await r.text();
+    const body = document.querySelector('.kanban-body[data-status="done"]');
+    if (btn) btn.remove();
+    body.insertAdjacentHTML('beforeend', html);
+    applyFilters();
+  } catch (_) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-chevron-down"></i> Загрузить ещё'; }
+  }
 }
 
 // ── Search (inline input) ──

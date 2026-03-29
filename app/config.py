@@ -1,10 +1,14 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', SECRET_KEY)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'postgresql://tasktime:tasktime@localhost:5432/tasktime')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {

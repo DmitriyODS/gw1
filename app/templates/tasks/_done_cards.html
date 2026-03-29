@@ -1,0 +1,10 @@
+{% for task in tasks %}
+{% include 'tasks/_card.html' %}
+{% endfor %}
+{% if has_more %}
+<button class="btn btn-xs btn-ghost w-full gap-1 opacity-50 hover:opacity-100 mt-1"
+        id="btn-load-more-done"
+        onclick="loadMoreDone({{ next_offset }})">
+  <i class="bi bi-chevron-down"></i> Загрузить ещё
+</button>
+{% endif %}

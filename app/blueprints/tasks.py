@@ -68,30 +68,57 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
             ]:
                 _ensure_folder(ydisk_token, segment)
 
+            import urllib.parse
+            import urllib.error as _ue
+            disk_api = 'https://cloud-api.yandex.net/v1/disk'
+
+            def _upload_file_unique(token, folder_path, sanitized_name, data):
+                """
+                Загрузить данные в folder_path/sanitized_name с overwrite=false.
+                При конфликте (409) пробует folder_path/base_N.ext пока не найдёт свободное имя.
+                Возвращает итоговый remote_path.
+                """
+                if '.' in sanitized_name:
+                    base, ext = sanitized_name.rsplit('.', 1)
+                else:
+                    base, ext = sanitized_name, ''
+
+                index = 0
+                while True:
+                    if index == 0:
+                        candidate = sanitized_name
+                    else:
+                        candidate = f'{base}_{index}.{ext}' if ext else f'{base}_{index}'
+                    remote_path = f'{folder_path}/{candidate}'
+                    params = urllib.parse.urlencode({'path': remote_path, 'overwrite': 'false'})
+                    req = urllib.request.Request(f'{disk_api}/resources/upload?{params}')
+                    req.add_header('Authorization', f'OAuth {token}')
+                    req.add_header('Accept', 'application/json')
+                    try:
+                        with urllib.request.urlopen(req) as resp:
+                            upload_url = _json.loads(resp.read().decode())['href']
+                    except _ue.HTTPError as e:
+                        if e.code == 409:
+                            index += 1
+                            continue
+                        raise
+                    put_req = urllib.request.Request(upload_url, data=data, method='PUT')
+                    put_req.add_header('Content-Type', 'application/octet-stream')
+                    with urllib.request.urlopen(put_req):
+                        pass
+                    return remote_path
+
             file_results = []
             for temp_path, original_name in temp_files:
                 with _jobs_lock:
                     _ydisk_jobs[job_id]['current_file'] = original_name
 
-                remote_path = f'{comment_path}/{_sanitize(original_name)}'
-
-                # Получаем upload URL
-                import urllib.parse
-                disk_api = 'https://cloud-api.yandex.net/v1/disk'
-                params = urllib.parse.urlencode({'path': remote_path, 'overwrite': 'true'})
-                req = urllib.request.Request(f'{disk_api}/resources/upload?{params}')
-                req.add_header('Authorization', f'OAuth {ydisk_token}')
-                req.add_header('Accept', 'application/json')
-                with urllib.request.urlopen(req) as resp:
-                    upload_url = _json.loads(resp.read().decode())['href']
-
-                # Загружаем из temp-файла
                 with open(temp_path, 'rb') as fh:
                     data = fh.read()
-                put_req = urllib.request.Request(upload_url, data=data, method='PUT')
-                put_req.add_header('Content-Type', 'application/octet-stream')
-                with urllib.request.urlopen(put_req):
-                    pass
+
+                remote_path = _upload_file_unique(
+                    ydisk_token, comment_path, _sanitize(original_name), data
+                )
 
                 file_url = _publish_file(ydisk_token, remote_path)
                 file_results.append({
@@ -100,6 +127,8 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
                     'yadisk_path': remote_path,
                 })
                 _inc_done()
+                with _jobs_lock:
+                    _ydisk_jobs[job_id]['current_file'] = ''
 
             folder_url = _publish_file(ydisk_token, comment_path)
 

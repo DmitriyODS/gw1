@@ -1043,6 +1043,12 @@ function startPolling(taskId, jobId, total) {
         setUploading(false);
         resetProgress();
         showUploadError(d.error || 'Ошибка загрузки на Яндекс Диск');
+      } else if (d.status === 'not_found' || !r.ok) {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+        setUploading(false);
+        resetProgress();
+        showUploadError('Не удалось получить статус загрузки. Возможно, сервер был перезапущен.');
       } else {
         setPhase2(d.done || 0, d.total || total, d.current_file || '');
       }

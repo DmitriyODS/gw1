@@ -61,8 +61,8 @@
           <i class="bi bi-box-arrow-up"></i> Достать из архива
         </button>
         {% endif %}
-        <button id="copyLinkBtn" class="btn btn-ghost btn-sm" title="Скопировать ссылку на задачу" onclick="copyTaskLink()">
-          <i class="bi bi-link-45deg"></i>
+        <button id="copyLinkBtn" class="btn btn-outline btn-sm" title="Скопировать ссылку на задачу" onclick="copyTaskLink()">
+          <i class="bi bi-link-45deg"></i> Скопировать ссылку
         </button>
         <a href="{{ url_for('tasks.edit', task_id=task.id) }}" class="btn btn-outline btn-sm">
           <i class="bi bi-pencil"></i>
@@ -876,7 +876,7 @@ function copyTaskLink() {
   navigator.clipboard.writeText(url).then(() => {
     const btn = document.getElementById('copyLinkBtn');
     const orig = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-check2"></i>';
+    btn.innerHTML = '<i class="bi bi-check2"></i> Скопировано!';
     btn.classList.add('btn-success');
     setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('btn-success'); }, 1500);
   }).catch(() => {

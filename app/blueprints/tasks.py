@@ -1,5 +1,7 @@
 import io
 import os
+import tempfile
+import threading
 import uuid
 import zipfile
 from datetime import datetime, timedelta
@@ -13,6 +15,136 @@ from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, Task
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES, AUTO_TAGS
 
 _last_archive_check: datetime = None
+
+# ── Фоновая загрузка на Яндекс Диск ──────────────────────────────────────────
+_ydisk_jobs: dict = {}
+_jobs_lock = threading.Lock()
+
+
+def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_id, task_title, user_full_name, tz_offset):
+    """
+    Фоновый поток: загружает файлы из temp-директории на YDisk,
+    создаёт CommentAttachment-записи, удаляет temp-файлы.
+    temp_files: список (temp_path, original_name)
+    """
+    import shutil as _sh
+
+    def _set(key, val):
+        with _jobs_lock:
+            _ydisk_jobs[job_id][key] = val
+
+    def _inc_done():
+        with _jobs_lock:
+            _ydisk_jobs[job_id]['done'] += 1
+
+    tmp_dir = None
+    if temp_files:
+        tmp_dir = os.path.dirname(temp_files[0][0])
+
+    with app.app_context():
+        try:
+            _set('status', 'uploading')
+            from services.yandex_disk import (
+                _ensure_folder, _sanitize, _publish_file, ROOT_FOLDER,
+            )
+            import urllib.request
+            import json as _json
+
+            # Строим структуру папок (один раз)
+            from datetime import timedelta as _td
+            now_local = datetime.utcnow() + _td(hours=tz_offset)
+            date_str = now_local.strftime('%Y.%m.%d')
+            time_str = now_local.strftime('%H-%M-%S')
+            task_folder = _sanitize(task_title)
+            user_folder = _sanitize(user_full_name)
+            comment_path = f'{ROOT_FOLDER}/{date_str}/{task_folder}/{user_folder}/{time_str}'
+
+            for segment in [
+                ROOT_FOLDER,
+                f'{ROOT_FOLDER}/{date_str}',
+                f'{ROOT_FOLDER}/{date_str}/{task_folder}',
+                f'{ROOT_FOLDER}/{date_str}/{task_folder}/{user_folder}',
+                comment_path,
+            ]:
+                _ensure_folder(ydisk_token, segment)
+
+            file_results = []
+            for temp_path, original_name in temp_files:
+                with _jobs_lock:
+                    _ydisk_jobs[job_id]['current_file'] = original_name
+
+                remote_path = f'{comment_path}/{_sanitize(original_name)}'
+
+                # Получаем upload URL
+                import urllib.parse
+                disk_api = 'https://cloud-api.yandex.net/v1/disk'
+                params = urllib.parse.urlencode({'path': remote_path, 'overwrite': 'true'})
+                req = urllib.request.Request(f'{disk_api}/resources/upload?{params}')
+                req.add_header('Authorization', f'OAuth {ydisk_token}')
+                req.add_header('Accept', 'application/json')
+                with urllib.request.urlopen(req) as resp:
+                    upload_url = _json.loads(resp.read().decode())['href']
+
+                # Загружаем из temp-файла
+                with open(temp_path, 'rb') as fh:
+                    data = fh.read()
+                put_req = urllib.request.Request(upload_url, data=data, method='PUT')
+                put_req.add_header('Content-Type', 'application/octet-stream')
+                with urllib.request.urlopen(put_req):
+                    pass
+
+                file_url = _publish_file(ydisk_token, remote_path)
+                file_results.append({
+                    'original_name': original_name,
+                    'yadisk_url': file_url,
+                    'yadisk_path': remote_path,
+                })
+                _inc_done()
+
+            folder_url = _publish_file(ydisk_token, comment_path)
+
+            # Сохраняем в БД
+            for res in file_results:
+                att = CommentAttachment(
+                    comment_id=comment_id,
+                    original_name=res['original_name'],
+                    yadisk_url=res['yadisk_url'],
+                    yadisk_path=res['yadisk_path'],
+                    yadisk_folder_url=folder_url,
+                )
+                db.session.add(att)
+            db.session.commit()
+
+            _set('status', 'complete')
+
+        except Exception as e:
+            app.logger.error(f'YDisk bg upload failed: {e}')
+            # Fallback: сохранить локально
+            try:
+                upload_folder = app.config['UPLOAD_FOLDER']
+                for temp_path, original_name in temp_files:
+                    ext = os.path.splitext(original_name)[1].lower()
+                    fname = f'{uuid.uuid4().hex}{ext}'
+                    dst = os.path.join(upload_folder, fname)
+                    _sh.copy2(temp_path, dst)
+                    db.session.add(CommentAttachment(
+                        comment_id=comment_id,
+                        filename=fname,
+                        original_name=original_name,
+                    ))
+                db.session.commit()
+            except Exception as e2:
+                app.logger.error(f'YDisk fallback local save failed: {e2}')
+            with _jobs_lock:
+                _ydisk_jobs[job_id]['status'] = 'error'
+                _ydisk_jobs[job_id]['error'] = str(e)
+        finally:
+            # Удаляем temp-директорию
+            if tmp_dir and os.path.exists(tmp_dir):
+                try:
+                    _sh.rmtree(tmp_dir, ignore_errors=True)
+                except Exception:
+                    pass
 
 
 def touch(task):
@@ -775,39 +907,67 @@ def add_comment(task_id):
 
     if files:
         ydisk_token = current_app.config.get('YANDEX_DISK_TOKEN')
-        if ydisk_token:
+        if ydisk_token and is_xhr:
+            # ── Сохраняем во временную директорию, фоновый поток грузит на YDisk ──
+            tmp_dir = tempfile.mkdtemp(prefix='gw_yd_')
+            temp_files = []
+            for f in files:
+                ext = os.path.splitext(f.filename)[1].lower()
+                tmp_path = os.path.join(tmp_dir, f'{uuid.uuid4().hex}{ext}')
+                f.seek(0)
+                f.save(tmp_path)
+                temp_files.append((tmp_path, f.filename))
+
+            job_id = uuid.uuid4().hex
+            with _jobs_lock:
+                _ydisk_jobs[job_id] = {
+                    'status': 'pending',
+                    'total': len(temp_files),
+                    'done': 0,
+                    'current_file': '',
+                    'error': None,
+                }
+
+            db.session.commit()  # коммитим комментарий до запуска треда
+
+            app = current_app._get_current_object()
+            tz = current_app.config.get('TZ_OFFSET_HOURS', 3)
+            t = threading.Thread(
+                target=_bg_upload_to_ydisk,
+                args=(app, job_id, comment.id, temp_files,
+                      ydisk_token, task.id, task.title,
+                      current_user.full_name, tz),
+                daemon=True,
+            )
+            t.start()
+            return jsonify({'job_id': job_id, 'total': len(temp_files)})
+        elif ydisk_token:
+            # Не-XHR (редкий случай): синхронная загрузка на YDisk
             try:
                 from services.yandex_disk import upload_comment_files
                 tz = current_app.config.get('TZ_OFFSET_HOURS', 3)
                 files_info = [(f, f.filename) for f in files]
                 file_results, folder_url = upload_comment_files(
-                    token=ydisk_token,
-                    task=task,
-                    user=current_user,
-                    files_info=files_info,
-                    tz_offset=tz,
+                    token=ydisk_token, task=task, user=current_user,
+                    files_info=files_info, tz_offset=tz,
                 )
                 for res in file_results:
-                    att = CommentAttachment(
+                    db.session.add(CommentAttachment(
                         comment_id=comment.id,
                         original_name=res['original_name'],
                         yadisk_url=res['yadisk_url'],
                         yadisk_path=res['yadisk_path'],
                         yadisk_folder_url=folder_url,
-                    )
-                    db.session.add(att)
+                    ))
             except Exception as e:
                 current_app.logger.error(f'YDisk comment upload failed: {e}')
-                # Fallback: сохранить локально если YDisk недоступен
                 for f in files:
                     ext = os.path.splitext(f.filename)[1].lower()
                     fname = f'{uuid.uuid4().hex}{ext}'
                     f.seek(0)
                     f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
                     db.session.add(CommentAttachment(
-                        comment_id=comment.id,
-                        filename=fname,
-                        original_name=f.filename,
+                        comment_id=comment.id, filename=fname, original_name=f.filename,
                     ))
         else:
             # YDisk не настроен — сохраняем локально
@@ -816,9 +976,7 @@ def add_comment(task_id):
                 fname = f'{uuid.uuid4().hex}{ext}'
                 f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], fname))
                 db.session.add(CommentAttachment(
-                    comment_id=comment.id,
-                    filename=fname,
-                    original_name=f.filename,
+                    comment_id=comment.id, filename=fname, original_name=f.filename,
                 ))
 
     db.session.commit()
@@ -859,6 +1017,23 @@ def delete_comment(task_id, comment_id):
     db.session.delete(comment)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@tasks_bp.route('/tasks/<int:task_id>/upload-status/<string:job_id>')
+@login_required
+def upload_status(task_id, job_id):
+    """Polling endpoint: статус фоновой загрузки файлов на Яндекс Диск."""
+    with _jobs_lock:
+        job = _ydisk_jobs.get(job_id)
+    if not job:
+        return jsonify({'status': 'not_found'}), 404
+    return jsonify({
+        'status': job['status'],
+        'total': job['total'],
+        'done': job['done'],
+        'current_file': job.get('current_file', ''),
+        'error': job.get('error'),
+    })
 
 
 @tasks_bp.route('/tasks/<int:task_id>/card')

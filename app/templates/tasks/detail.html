@@ -61,6 +61,9 @@
           <i class="bi bi-box-arrow-up"></i> Достать из архива
         </button>
         {% endif %}
+        <button id="copyLinkBtn" class="btn btn-ghost btn-sm" title="Скопировать ссылку на задачу" onclick="copyTaskLink()">
+          <i class="bi bi-link-45deg"></i>
+        </button>
         <a href="{{ url_for('tasks.edit', task_id=task.id) }}" class="btn btn-outline btn-sm">
           <i class="bi bi-pencil"></i>
         </a>
@@ -498,9 +501,6 @@
               <div id="upload-progress-bar"
                    class="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-300"
                    style="width:0%"></div>
-              <div id="upload-progress-indet" class="hidden absolute inset-0">
-                <div class="yd-indeterminate h-full rounded-full bg-warning"></div>
-              </div>
             </div>
           </div>
           <!-- Инлайн-ошибка -->
@@ -870,6 +870,28 @@ async function adminUnpause(taskId) {
   else alert(d.error || 'Ошибка');
 }
 
+// ── Copy task link ──
+function copyTaskLink() {
+  const url = window.location.href.split('?')[0];
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copyLinkBtn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i>';
+    btn.classList.add('btn-success');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('btn-success'); }, 1500);
+  }).catch(() => {
+    // Fallback для старых браузеров
+    const ta = document.createElement('textarea');
+    ta.value = window.location.href.split('?')[0];
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  });
+}
+
 // ── Comment multi-file handling + XHR upload ──
 const commentForm      = document.getElementById('comment-form');
 const commentFileInput = document.getElementById('comment-file-input');
@@ -879,7 +901,6 @@ const dropOverlay      = document.getElementById('drop-overlay');
 const commentSizeInfo  = document.getElementById('comment-size-info');
 const progressWrap     = document.getElementById('upload-progress-wrap');
 const progressBar      = document.getElementById('upload-progress-bar');
-const progressIndet    = document.getElementById('upload-progress-indet');
 const statusText       = document.getElementById('upload-status-text');
 const cancelBtn        = document.getElementById('cancel-upload-btn');
 const submitBtn        = document.getElementById('comment-submit-btn');
@@ -890,6 +911,7 @@ const MAX_COMMENT_BYTES = 500 * 1024 * 1024;
 
 let commentFiles = [];
 let currentXHR = null;
+let _pollTimer = null;
 
 function fmtSize(bytes) {
   if (bytes < 1024) return bytes + ' Б';
@@ -965,34 +987,69 @@ function setUploading(uploading) {
   submitBtn.disabled = uploading;
   fileLabel.classList.toggle('opacity-40', uploading);
   fileLabel.classList.toggle('pointer-events-none', uploading);
-  // Блокируем/разблокируем кнопки удаления
   document.body.classList.toggle('upload-active', uploading);
   if (uploading) hideUploadError();
 }
 
-// Фаза 1: детерминированный прогресс (браузер → сервер)
+// Фаза 1: браузер → сервер (реальный прогресс, 0–50%)
 function setPhase1(pct) {
-  progressBar.classList.remove('hidden');
-  progressIndet.classList.add('hidden');
-  progressBar.style.width = pct + '%';
-  statusText.textContent = `Загрузка: ${pct}%`;
+  // Используем 0–50% диапазон для фазы 1
+  const barPct = Math.round(pct / 2);
+  progressBar.style.width = barPct + '%';
+  statusText.textContent = `Отправка на сервер: ${pct}%`;
   cancelBtn.classList.remove('hidden');
 }
 
-// Фаза 2: indeterminate (сервер сохраняет на Я.Диск)
-function setPhase2() {
-  progressBar.classList.add('hidden');
-  progressIndet.classList.remove('hidden');
-  statusText.textContent = 'Сохранение на Я.Диск...';
-  cancelBtn.classList.add('hidden'); // сервер уже получил файлы, отмена невозможна
+// Фаза 2: сервер → Я.Диск (50–100%, детерминированный по файлам)
+function setPhase2(done, total, currentFile) {
+  const ydPct = total > 0 ? Math.round(done / total * 100) : 0;
+  const barPct = 50 + Math.round(ydPct / 2);
+  progressBar.style.width = barPct + '%';
+  progressBar.classList.remove('bg-primary');
+  progressBar.classList.add('bg-warning');
+  cancelBtn.classList.add('hidden');
+  if (currentFile) {
+    statusText.textContent = `Я.Диск: файл ${done + 1}/${total} — ${currentFile}`;
+  } else {
+    statusText.textContent = `Я.Диск: ${done}/${total} загружено`;
+  }
 }
 
 function resetProgress() {
-  progressBar.classList.remove('hidden');
-  progressIndet.classList.add('hidden');
   progressBar.style.width = '0%';
+  progressBar.classList.add('bg-primary');
+  progressBar.classList.remove('bg-warning');
   statusText.textContent = '';
   cancelBtn.classList.remove('hidden');
+}
+
+// Polling Я.Диск статуса
+function startPolling(taskId, jobId, total) {
+  cancelBtn.classList.add('hidden');
+  setPhase2(0, total, '');
+  _pollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`/tasks/${taskId}/upload-status/${jobId}`);
+      const d = await r.json();
+      if (d.status === 'complete') {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+        setUploading(false);
+        resetProgress();
+        location.reload();
+      } else if (d.status === 'error') {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+        setUploading(false);
+        resetProgress();
+        showUploadError(d.error || 'Ошибка загрузки на Яндекс Диск');
+      } else {
+        setPhase2(d.done || 0, d.total || total, d.current_file || '');
+      }
+    } catch (_) {
+      // Временная ошибка сети — продолжаем polling
+    }
+  }, 1000);
 }
 
 commentFileInput.addEventListener('change', () => addFiles(Array.from(commentFileInput.files)));
@@ -1048,6 +1105,7 @@ commentForm.addEventListener('submit', e => {
 
   const xhr = new XMLHttpRequest();
   currentXHR = xhr;
+  const filesCount = commentFiles.length;
   setUploading(true);
   setPhase1(0);
 
@@ -1055,22 +1113,25 @@ commentForm.addEventListener('submit', e => {
   xhr.upload.addEventListener('progress', e => {
     if (e.lengthComputable) setPhase1(Math.round(e.loaded / e.total * 100));
   });
-  // Фаза 2: сервер сохраняет на Я.Диск (indeterminate)
-  xhr.upload.addEventListener('load', () => {
-    if (commentFiles.length > 0) setPhase2();
-  });
 
   xhr.addEventListener('load', () => {
     currentXHR = null;
-    setUploading(false);
-    resetProgress();
     if (xhr.status >= 200 && xhr.status < 400) {
       try {
         const d = JSON.parse(xhr.responseText);
-        if (d.error) { showUploadError(d.error); return; }
+        if (d.error) { setUploading(false); resetProgress(); showUploadError(d.error); return; }
+        if (d.job_id) {
+          // Фаза 2: polling Я.Диск статуса
+          startPolling({{ task.id }}, d.job_id, d.total || filesCount);
+          return;
+        }
       } catch {}
+      setUploading(false);
+      resetProgress();
       location.reload();
     } else {
+      setUploading(false);
+      resetProgress();
       showUploadError(xhrErrorMsg(xhr.status));
     }
   });

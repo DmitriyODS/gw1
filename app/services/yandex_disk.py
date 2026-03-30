@@ -69,13 +69,31 @@ def _sanitize(name):
     return sanitized[:100] or 'unnamed'
 
 
+def _unique_remote_path(token, folder_path, filename):
+    """
+    Вернуть уникальный путь для файла в папке.
+    Если файл с таким именем уже существует, добавить суффикс _2, _3, ...
+    """
+    base, ext = filename.rsplit('.', 1) if '.' in filename else (filename, '')
+    candidate = f'{folder_path}/{filename}'
+    if not _folder_exists(token, candidate):
+        return candidate
+    index = 2
+    while True:
+        name = f'{base}_{index}.{ext}' if ext else f'{base}_{index}'
+        candidate = f'{folder_path}/{name}'
+        if not _folder_exists(token, candidate):
+            return candidate
+        index += 1
+
+
 # ── Загрузка одного файла ─────────────────────────────────────────────────────
 
 def _upload_fileobj(token, fileobj, remote_path):
     """Загрузить файловый объект (Werkzeug FileStorage или любой file-like) на YDisk."""
     resp = _request(token, 'GET', '/resources/upload', params={
         'path': remote_path,
-        'overwrite': 'true',
+        'overwrite': 'false',
     })
     upload_url = resp['href']
     fileobj.seek(0)
@@ -170,7 +188,7 @@ def upload_comment_files(token, task, user, files_info, tz_offset=3):
 
     file_results = []
     for fileobj, original_name in files_info:
-        remote_path = f'{comment_path}/{_sanitize(original_name)}'
+        remote_path = _unique_remote_path(token, comment_path, _sanitize(original_name))
         _upload_fileobj(token, fileobj, remote_path)
         file_url = _publish_file(token, remote_path)
         file_results.append({
@@ -218,7 +236,7 @@ def upload_task_files(token, task, files_info, tz_offset=3):
 
     file_results = []
     for fileobj, original_name in files_info:
-        remote_path = f'{attach_path}/{_sanitize(original_name)}'
+        remote_path = _unique_remote_path(token, attach_path, _sanitize(original_name))
         _upload_fileobj(token, fileobj, remote_path)
         file_url = _publish_file(token, remote_path)
         file_results.append({

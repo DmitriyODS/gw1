@@ -117,7 +117,23 @@
     0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 40%, transparent); }
     50% { box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-primary) 0%, transparent); }
   }
-  @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .search-spinner {
+    display: none;
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid color-mix(in oklch, var(--color-primary) 25%, transparent);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .search-spinner.active { display: block; }
 
   .empty-col {
     text-align: center; padding: 32px 16px;
@@ -261,7 +277,8 @@
 <!-- Page header -->
 <div class="flex items-center gap-3 mb-4 flex-wrap">
   <div class="flex-1 relative min-w-48" id="search-box-wrap">
-    <i id="search-icon" class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10" style="transition:opacity 0.15s"></i>
+    <i id="search-icon" class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10"></i>
+    <span id="search-spinner" class="search-spinner"></span>
     <input type="text" id="task-search" placeholder="Поиск по названию задачи"
            class="input input-bordered w-full rounded-full pl-9 text-sm"
            autocomplete="off" oninput="onSearchInput()">
@@ -582,14 +599,15 @@ function _saveOrigCols() {
 
 function _setSearchLoading(on) {
   const icon = document.getElementById('search-icon');
+  const spinner = document.getElementById('search-spinner');
   const input = document.getElementById('task-search');
   if (on) {
-    icon.className = 'bi bi-arrow-repeat absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm pointer-events-none z-10';
-    icon.style.animation = 'spin 0.7s linear infinite';
+    icon.style.display = 'none';
+    spinner.classList.add('active');
     input.classList.add('input-primary');
   } else {
-    icon.className = 'bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm pointer-events-none z-10';
-    icon.style.animation = '';
+    icon.style.display = '';
+    spinner.classList.remove('active');
     input.classList.remove('input-primary');
   }
 }

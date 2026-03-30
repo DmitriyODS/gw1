@@ -152,6 +152,7 @@ class TaskType(db.Model):
     slug = db.Column(db.String(50), unique=True, nullable=False)
     label = db.Column(db.String(200), nullable=False)
     sort_order = db.Column(db.Integer, default=0)
+    coefficient = db.Column(db.Float, nullable=False, default=1.0, server_default='1.0')
 
 
 class Task(db.Model):

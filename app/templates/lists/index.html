@@ -87,6 +87,7 @@
         <tr>
           <th class="hidden sm:table-cell">Slug</th>
           <th>Название</th>
+          <th style="width:110px" title="Коэффициент сложности для рейтинга сотрудников">Коэфф.</th>
           <th style="width:100px"></th>
         </tr>
       </thead>
@@ -96,8 +97,11 @@
           <td class="hidden sm:table-cell"><span class="slug-badge">{{ tt.slug }}</span></td>
           <td class="font-medium">{{ tt.label }}</td>
           <td>
+            <span class="badge badge-ghost font-mono text-xs">×{{ tt.coefficient | round(1) }}</span>
+          </td>
+          <td>
             <div class="flex items-center gap-1 justify-end">
-              <button class="btn btn-ghost btn-xs gap-1" onclick="openEditModal({{ tt.id }}, '{{ tt.label | e }}')">
+              <button class="btn btn-ghost btn-xs gap-1" onclick="openEditModal({{ tt.id }}, '{{ tt.label | e }}', {{ tt.coefficient }})">
                 <i class="bi bi-pencil"></i>
               </button>
               <button class="btn btn-ghost btn-xs text-error gap-1" onclick="openDeleteModal({{ tt.id }}, '{{ tt.label | e }}', 'tt')">
@@ -107,7 +111,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="3" class="text-center py-8 opacity-40">Нет типов задач</td></tr>
+        <tr><td colspan="4" class="text-center py-8 opacity-40">Нет типов задач</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -247,6 +251,12 @@ function openCreateModal() {
         <label class="label pb-1"><span class="label-text font-semibold">Название <span class="text-error">*</span></span></label>
         <input type="text" id="create-label" class="input input-bordered w-full"
                placeholder="Название типа задачи" autocomplete="off">
+      </div>
+      <div>
+        <label class="label pb-1"><span class="label-text font-semibold">Коэффициент сложности</span></label>
+        <input type="number" id="create-coefficient" class="input input-bordered w-full"
+               value="1" min="0.1" step="0.1" autocomplete="off">
+        <div class="text-xs opacity-50 mt-1">Базовая задача = 1 (норма ~20 мин). Чем сложнее — тем выше. Используется в рейтинге сотрудников.</div>
       </div>`;
   } else {
     title.textContent = 'Добавить подразделение';
@@ -271,8 +281,10 @@ document.getElementById('createConfirmBtn').addEventListener('click', async () =
   if (LIST_TYPE === 'task_types') {
     const slug = document.getElementById('create-slug').value.trim();
     const label = document.getElementById('create-label').value.trim();
+    const coefficient = parseFloat(document.getElementById('create-coefficient').value) || 1.0;
     if (!slug || !label) { showError('Заполните все обязательные поля'); return; }
-    body = { slug, label };
+    if (coefficient <= 0) { showError('Коэффициент должен быть положительным числом'); return; }
+    body = { slug, label, coefficient };
     url = '/lists/task-types';
   } else {
     const name = document.getElementById('create-name').value.trim();
@@ -296,20 +308,28 @@ document.getElementById('createConfirmBtn').addEventListener('click', async () =
 // ── Edit ──
 let _editId = null;
 
-function openEditModal(id, label, head) {
+function openEditModal(id, label, headOrCoef) {
   _editId = id;
   const title = document.getElementById('editModalTitle');
   const fields = document.getElementById('editModalFields');
 
   if (LIST_TYPE === 'task_types') {
+    const coefficient = typeof headOrCoef === 'number' ? headOrCoef : 1.0;
     title.textContent = 'Редактировать тип задачи';
     fields.innerHTML = `
       <div>
         <label class="label pb-1"><span class="label-text font-semibold">Название <span class="text-error">*</span></span></label>
         <input type="text" id="edit-label" class="input input-bordered w-full"
                value="${escHtml(label)}" autocomplete="off">
+      </div>
+      <div>
+        <label class="label pb-1"><span class="label-text font-semibold">Коэффициент сложности</span></label>
+        <input type="number" id="edit-coefficient" class="input input-bordered w-full"
+               value="${coefficient}" min="0.1" step="0.1" autocomplete="off">
+        <div class="text-xs opacity-50 mt-1">Базовая задача = 1. Используется в рейтинге сотрудников.</div>
       </div>`;
   } else {
+    const head = typeof headOrCoef === 'string' ? headOrCoef : '';
     title.textContent = 'Редактировать подразделение';
     fields.innerHTML = `
       <div>
@@ -320,7 +340,7 @@ function openEditModal(id, label, head) {
       <div>
         <label class="label pb-1"><span class="label-text">Начальник отдела</span></label>
         <input type="text" id="edit-head" class="input input-bordered w-full"
-               value="${escHtml(head || '')}" placeholder="ФИО начальника (необязательно)" autocomplete="off">
+               value="${escHtml(head)}" placeholder="ФИО начальника (необязательно)" autocomplete="off">
       </div>`;
   }
   document.getElementById('editModal').showModal();
@@ -332,8 +352,10 @@ document.getElementById('editConfirmBtn').addEventListener('click', async () => 
   let body, url;
   if (LIST_TYPE === 'task_types') {
     const label = document.getElementById('edit-label').value.trim();
+    const coefficient = parseFloat(document.getElementById('edit-coefficient').value) || 1.0;
     if (!label) { showError('Укажите название'); return; }
-    body = { label };
+    if (coefficient <= 0) { showError('Коэффициент должен быть положительным числом'); return; }
+    body = { label, coefficient };
     url = `/lists/task-types/${_editId}`;
   } else {
     const name = document.getElementById('edit-name').value.trim();

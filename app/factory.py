@@ -157,6 +157,7 @@ def create_app():
             ('users', 'mail_user',     'VARCHAR(200)'),
             ('users', 'mail_password', 'VARCHAR(200)'),
             ('tasks', 'is_external',   'BOOLEAN DEFAULT FALSE'),
+            ('task_types', 'coefficient', 'FLOAT NOT NULL DEFAULT 1.0'),
         ]
         for table, col, col_type in cols:
             try:

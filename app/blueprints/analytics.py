@@ -424,22 +424,39 @@ def tv_mode():
 
 
 def compute_staff_scores(start, end=None, limit=5):
-    """Compute employee ranking: R_i = 0.5*(N_i/N_max) + 0.5*(T_min/T_i), scaled to 0-100.
-    N_i — кол-во закрытых задач в периоде.
-    T_i — среднее время на задачу (меньше = эффективнее, поэтому T_min/T_i).
-    Сотрудник с 0 задач в рейтинг не попадает."""
-    now = datetime.utcnow()
-    if end is None:
-        end = now
+    """Compute employee ranking based on task complexity coefficient and time efficiency.
 
-    # 1 запрос: кол-во задач и суммарное время одновременно
-    combined_q = db.session.query(
+    For each closed task by user i with type coefficient K and actual time T:
+      expected_time = K * BASELINE_SECS  (baseline: K=1 task should take 1 hour)
+      efficiency    = clamp(expected_time / T, MIN_EFF, MAX_EFF)
+      contribution  = K * efficiency
+
+    user_total = sum of contributions across all tasks
+    score = round(user_total / max_user_total * 100)
+
+    A task done faster than expected (relative to K) boosts the score;
+    slower than expected reduces it.
+    """
+    from models import TaskType
+    if end is None:
+        end = datetime.utcnow()
+
+    BASELINE_SECS = 1200.0   # 20 min — expected time for K=1 task
+    MAX_EFF = 3.0            # cap: at most 3× faster than expected
+    MIN_EFF = 0.1            # floor: even very slow tasks contribute a little
+
+    # Load coefficient map: slug -> coefficient
+    coef_map = {tt.slug: tt.coefficient for tt in TaskType.query.all()}
+
+    # Per-task query: for each (user, task) get task_type and total seconds logged
+    task_q = db.session.query(
         TimeLog.user_id,
         User.full_name,
-        func.count(func.distinct(Task.id)).label('cnt'),
-        func.coalesce(func.sum(
+        Task.id.label('task_id'),
+        Task.task_type,
+        func.sum(
             func.extract('epoch', TimeLog.ended_at - TimeLog.started_at)
-        ), 0).label('secs')
+        ).label('task_secs')
     ).join(Task, TimeLog.task_id == Task.id
     ).join(User, TimeLog.user_id == User.id
     ).filter(
@@ -448,32 +465,34 @@ def compute_staff_scores(start, end=None, limit=5):
         Task.completed_at <= end,
         Task.completed_at.isnot(None),
         TimeLog.ended_at.isnot(None),
-    ).group_by(TimeLog.user_id, User.full_name).all()
+    ).group_by(TimeLog.user_id, User.full_name, Task.id, Task.task_type).all()
 
-    staff = []
-    for u in combined_q:
-        if u.cnt == 0:
+    # Aggregate per user
+    user_data = {}  # user_id -> dict
+    for row in task_q:
+        T = float(row.task_secs) if row.task_secs and row.task_secs > 0 else None
+        if T is None:
             continue
-        total_secs = float(u.secs)
-        avg_secs = total_secs / u.cnt  # среднее время на задачу
-        staff.append({
-            'id': u.user_id,
-            'name': u.full_name,
-            'n': u.cnt,
-            't': avg_secs,       # среднее время (меньше = лучше)
-            'secs': int(total_secs),
-        })
+        K = coef_map.get(row.task_type, 1.0) if row.task_type else 1.0
+        expected = K * BASELINE_SECS
+        eff = max(MIN_EFF, min(MAX_EFF, expected / T))
+        contribution = K * eff
 
+        uid = row.user_id
+        if uid not in user_data:
+            user_data[uid] = {'id': uid, 'name': row.full_name, 'total': 0.0, 'n': 0, 'secs': 0}
+        user_data[uid]['total'] += contribution
+        user_data[uid]['n'] += 1
+        user_data[uid]['secs'] += int(T)
+
+    staff = list(user_data.values())
     if not staff:
         return []
 
-    n_max = max(s['n'] for s in staff) or 1
-    t_min = min(s['t'] for s in staff) or 1  # эталон: самый быстрый
-
+    max_total = max(s['total'] for s in staff) or 1.0
     for s in staff:
-        # N: больше задач — лучше; T: меньше среднее время — лучше (t_min/t_i)
-        t_score = t_min / s['t'] if s['t'] > 0 else 1.0
-        s['score'] = round((0.5 * s['n'] / n_max + 0.5 * t_score) * 100)
+        s['score'] = round(s['total'] / max_total * 100)
+        s['t'] = s['secs'] / s['n'] if s['n'] > 0 else 0  # avg secs per task (для обратной совместимости)
 
     ranked = sorted(staff, key=lambda x: x['score'], reverse=True)
     return ranked[:limit] if limit is not None else ranked

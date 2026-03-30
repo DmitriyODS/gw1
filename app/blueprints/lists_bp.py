@@ -34,11 +34,17 @@ def create_task_type():
         return jsonify({'error': 'Укажите slug и название'}), 400
     if TaskType.query.filter_by(slug=slug).first():
         return jsonify({'error': 'Тип с таким slug уже существует'}), 400
+    try:
+        coefficient = float(data.get('coefficient', 1.0))
+        if coefficient <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Коэффициент должен быть положительным числом'}), 400
     max_order = db.session.query(db.func.max(TaskType.sort_order)).scalar() or 0
-    tt = TaskType(slug=slug, label=label, sort_order=max_order + 1)
+    tt = TaskType(slug=slug, label=label, sort_order=max_order + 1, coefficient=coefficient)
     db.session.add(tt)
     db.session.commit()
-    return jsonify({'ok': True, 'id': tt.id, 'slug': tt.slug, 'label': tt.label})
+    return jsonify({'ok': True, 'id': tt.id, 'slug': tt.slug, 'label': tt.label, 'coefficient': tt.coefficient})
 
 
 @lists_bp.route('/task-types/<int:tt_id>', methods=['PUT'])
@@ -52,6 +58,14 @@ def update_task_type(tt_id):
     if not label:
         return jsonify({'error': 'Укажите название'}), 400
     tt.label = label
+    if 'coefficient' in data:
+        try:
+            coefficient = float(data['coefficient'])
+            if coefficient <= 0:
+                raise ValueError
+            tt.coefficient = coefficient
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Коэффициент должен быть положительным числом'}), 400
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -125,7 +139,7 @@ def export_task_types():
     if not current_user.can_manage:
         return jsonify({'error': 'Нет прав'}), 403
     types = TaskType.query.order_by(TaskType.label).all()
-    data = [{'slug': t.slug, 'label': t.label, 'sort_order': t.sort_order} for t in types]
+    data = [{'slug': t.slug, 'label': t.label, 'sort_order': t.sort_order, 'coefficient': t.coefficient} for t in types]
     return Response(
         json.dumps({'task_types': data}, ensure_ascii=False, indent=2),
         mimetype='application/json',
@@ -158,7 +172,12 @@ def import_task_types():
         if TaskType.query.filter_by(slug=slug).first():
             continue
         max_order = db.session.query(db.func.max(TaskType.sort_order)).scalar() or 0
-        db.session.add(TaskType(slug=slug, label=label, sort_order=item.get('sort_order', max_order + 1)))
+        try:
+            coef = float(item.get('coefficient', 1.0))
+            coef = coef if coef > 0 else 1.0
+        except (TypeError, ValueError):
+            coef = 1.0
+        db.session.add(TaskType(slug=slug, label=label, sort_order=item.get('sort_order', max_order + 1), coefficient=coef))
         added += 1
     db.session.commit()
     return jsonify({'ok': True, 'added': added})

@@ -117,7 +117,7 @@
     0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 40%, transparent); }
     50% { box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-primary) 0%, transparent); }
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spin { from { transform: translateY(-50%) rotate(0deg); } to { transform: translateY(-50%) rotate(360deg); } }
   .search-spinner {
     display: none;
     position: absolute;

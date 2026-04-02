@@ -334,12 +334,12 @@
             </span>
             {% if current_user.can_admin %}
               {% if task.status == TaskStatus.IN_PROGRESS %}
-              <button class="btn btn-warning btn-sm" onclick="adminPause({{ task.id }})">
+              <button class="btn btn-warning btn-sm" onclick="handleTransition({{ task.id }}, 'paused')">
                 <i class="bi bi-pause-fill"></i> Пауза
               </button>
               {% elif task.status == TaskStatus.PAUSED %}
-              <button class="btn btn-ghost btn-sm border border-base-300" onclick="adminUnpause({{ task.id }})">
-                <i class="bi bi-arrow-counterclockwise"></i> Снять с паузы
+              <button class="btn btn-ghost btn-sm border border-base-300" onclick="handleTransition({{ task.id }}, 'in_progress')">
+                <i class="bi bi-play-fill"></i> Взять в работу
               </button>
               {% endif %}
               <button class="btn btn-primary btn-sm"
@@ -350,12 +350,12 @@
             {% endif %}
             {% else %}
               {% if (is_free or is_mine) and not my_active %}
-              <button class="btn btn-primary btn-sm" onclick="handleStart({{ task.id }})">
+              <button class="btn btn-primary btn-sm" onclick="handleTransition({{ task.id }}, 'in_progress')">
                 <i class="bi bi-play-fill"></i> {% if is_mine %}Продолжить{% else %}Старт{% endif %}
               </button>
               {% endif %}
               {% if my_active %}
-              <button class="btn btn-warning btn-sm" onclick="handlePause({{ task.id }})">
+              <button class="btn btn-warning btn-sm" onclick="handleTransition({{ task.id }}, 'paused')">
                 <i class="bi bi-pause-fill"></i> Пауза
               </button>
               {% endif %}
@@ -445,6 +445,11 @@
               <a href="{{ url_for('tasks.uploaded_file', filename=att.filename) }}" target="_blank"
                  class="inline-flex items-center gap-1 text-xs text-primary hover:underline bg-base-200 rounded px-2 py-0.5">
                 <i class="bi bi-paperclip"></i> {{ att.original_name }}
+              </a>
+              {% elif att.yadisk_path and c_folder_url %}
+              <a href="{{ c_folder_url }}" target="_blank" rel="noopener"
+                 class="inline-flex items-center gap-1 text-xs text-warning hover:underline bg-warning/10 rounded px-2 py-0.5">
+                <i class="bi bi-cloud"></i> {{ att.original_name }}
               </a>
               {% endif %}
               {% endfor %}
@@ -568,7 +573,7 @@
     <p class="py-4">Хотите сразу начать работу над ней?</p>
     <div class="modal-action">
       <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
-      <button class="btn btn-primary" onclick="handleStart({{ task.id }}); document.getElementById('justCreatedModal').close();">
+      <button class="btn btn-primary" onclick="document.getElementById('justCreatedModal').close(); handleTransition({{ task.id }}, 'in_progress')">
         <i class="bi bi-play-fill"></i> Старт
       </button>
     </div>
@@ -612,12 +617,9 @@
     <p class="py-4">Задача будет отмечена как выполненная. Таймер будет остановлен.</p>
     <div class="modal-action">
       <form method="dialog"><button class="btn btn-ghost">Отмена</button></form>
-      <form method="post" action="{{ url_for('tasks.mark_done', task_id=task.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-check-circle"></i> Закрыть
-        </button>
-      </form>
+      <button class="btn btn-primary" onclick="document.getElementById('doneModal').close(); handleTransition({{ task.id }}, 'done')">
+        <i class="bi bi-check-circle"></i> Закрыть
+      </button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -757,34 +759,45 @@ document.getElementById('unarchiveConfirmBtn').addEventListener('click', async (
 });
 {% endif %}
 
-// ── Timer handlers ──
-function handleStart(taskId) {
-  post(`/tasks/${taskId}/timer/start`).then(data => {
-    if (data.taken) {
-      document.getElementById('takenByName').textContent = data.by;
-      document.getElementById('takenModal').showModal();
-    } else if (data.conflict) {
-      document.getElementById('conflictTitle').textContent = data.active_task_title;
-      _pendingForceTaskId = taskId;
-      document.getElementById('conflictModal').showModal();
-    } else {
-      location.reload();
-    }
+// ── Transition handler ──
+async function handleTransition(taskId, to, force = false) {
+  const r = await fetch(`/tasks/${taskId}/transition`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({to, force}),
   });
+  const d = await r.json();
+  if (d.error === 'need_task_type') {
+    window.location.href = `/tasks/${taskId}/edit`;
+    return;
+  }
+  if (d.taken) {
+    document.getElementById('takenByName').textContent = d.by;
+    document.getElementById('takenModal').showModal();
+    return;
+  }
+  if (d.conflict) {
+    document.getElementById('conflictTitle').textContent = d.active_task_title;
+    _pendingForceTaskId = taskId;
+    _pendingForceTo = to;
+    document.getElementById('conflictModal').showModal();
+    return;
+  }
+  if (d.ok) location.reload();
+  else alert(d.error || 'Ошибка');
 }
 
 let _pendingForceTaskId = null;
+let _pendingForceTo = null;
 document.getElementById('conflictConfirmBtn')?.addEventListener('click', () => {
   document.getElementById('conflictModal').close();
   if (!_pendingForceTaskId) return;
   const taskId = _pendingForceTaskId;
+  const to = _pendingForceTo;
   _pendingForceTaskId = null;
-  post(`/tasks/${taskId}/timer/force_start`).then(() => location.reload());
+  _pendingForceTo = null;
+  handleTransition(taskId, to, true);
 });
-
-function handlePause(taskId) {
-  post(`/tasks/${taskId}/timer/pause`).then(() => location.reload());
-}
 
 // ── Delete attachment ──
 let _pendingDelAttId = null, _pendingDelAttTaskId = null;
@@ -853,22 +866,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 {% endif %}
 
-// ── Admin pause / unpause ──
-async function adminPause(taskId) {
-  const d = await post(`/tasks/${taskId}/admin-pause`);
-  if (d.ok) location.reload();
-  else alert(d.error || 'Ошибка');
-}
-async function adminUnpause(taskId) {
-  const r = await fetch(`/tasks/${taskId}/move`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({status: 'new'})
-  });
-  const d = await r.json();
-  if (d.ok) location.reload();
-  else alert(d.error || 'Ошибка');
-}
 
 // ── Copy task link ──
 function copyTaskLink() {
@@ -1024,12 +1021,13 @@ function resetProgress() {
 }
 
 // Polling Я.Диск статуса
-function startPolling(taskId, jobId, total) {
+function startPolling(taskId, jobId, total, commentId) {
   cancelBtn.classList.add('hidden');
   setPhase2(0, total, '');
+  const pollUrl = `/tasks/${taskId}/upload-status/${jobId}` + (commentId ? `?comment_id=${commentId}` : '');
   _pollTimer = setInterval(async () => {
     try {
-      const r = await fetch(`/tasks/${taskId}/upload-status/${jobId}`);
+      const r = await fetch(pollUrl);
       const d = await r.json();
       if (d.status === 'complete') {
         clearInterval(_pollTimer);
@@ -1037,18 +1035,14 @@ function startPolling(taskId, jobId, total) {
         setUploading(false);
         resetProgress();
         location.reload();
-      } else if (d.status === 'error') {
+      } else if (d.status === 'error' || !r.ok) {
+        // Комментарий удалён на сервере (транзакция откатана).
+        // Показываем ошибку, форма остаётся заполненной — пользователь может повторить.
         clearInterval(_pollTimer);
         _pollTimer = null;
         setUploading(false);
         resetProgress();
-        showUploadError(d.error || 'Ошибка загрузки на Яндекс Диск');
-      } else if (d.status === 'not_found' || !r.ok) {
-        clearInterval(_pollTimer);
-        _pollTimer = null;
-        setUploading(false);
-        resetProgress();
-        showUploadError('Не удалось получить статус загрузки. Возможно, сервер был перезапущен.');
+        showUploadError(d.error || 'Не удалось сохранить файлы. Попробуйте ещё раз.');
       } else {
         setPhase2(d.done || 0, d.total || total, d.current_file || '');
       }
@@ -1128,7 +1122,7 @@ commentForm.addEventListener('submit', e => {
         if (d.error) { setUploading(false); resetProgress(); showUploadError(d.error); return; }
         if (d.job_id) {
           // Фаза 2: polling Я.Диск статуса
-          startPolling({{ task.id }}, d.job_id, d.total || filesCount);
+          startPolling({{ task.id }}, d.job_id, d.total || filesCount, d.comment_id);
           return;
         }
       } catch {}

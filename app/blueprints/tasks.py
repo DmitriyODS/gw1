@@ -148,8 +148,10 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
 
         except Exception as e:
             app.logger.error(f'YDisk bg upload failed: {e}')
-            # Fallback: сохранить локально
+            # Fallback: попробовать сохранить локально
+            fallback_ok = False
             try:
+                db.session.rollback()
                 upload_folder = app.config['UPLOAD_FOLDER']
                 for temp_path, original_name in temp_files:
                     ext = os.path.splitext(original_name)[1].lower()
@@ -162,11 +164,26 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
                         original_name=original_name,
                     ))
                 db.session.commit()
+                fallback_ok = True
             except Exception as e2:
                 app.logger.error(f'YDisk fallback local save failed: {e2}')
-            with _jobs_lock:
-                _ydisk_jobs[job_id]['status'] = 'error'
-                _ydisk_jobs[job_id]['error'] = str(e)
+
+            if fallback_ok:
+                # Файлы сохранены локально — транзакция считается успешной
+                _set('status', 'complete')
+            else:
+                # Ни YDisk, ни локальное хранилище не сработали — откатываем комментарий
+                try:
+                    db.session.rollback()
+                    from models import TaskComment as _TC
+                    comment_obj = _TC.query.get(comment_id)
+                    if comment_obj:
+                        db.session.delete(comment_obj)
+                        db.session.commit()
+                except Exception as e3:
+                    app.logger.error(f'Comment rollback failed: {e3}')
+                _set('status', 'error')
+                _set('error', str(e))
         finally:
             # Удаляем temp-директорию
             if tmp_dir and os.path.exists(tmp_dir):
@@ -597,141 +614,146 @@ def _task_from_form(form, task=None, created_by_id=None):
     return task
 
 
-# ---------- Kanban move ----------
+# ---------- Unified transition API ----------
 
-@tasks_bp.route('/tasks/<int:task_id>/move', methods=['POST'])
+@tasks_bp.route('/tasks/<int:task_id>/transition', methods=['POST'])
 @login_required
-def move_task(task_id):
-    task = Task.query.get_or_404(task_id)
-    if task.assigned_to_id != current_user.id and task.created_by_id != current_user.id and not current_user.can_admin:
-        return jsonify({'error': 'Нет прав для перемещения этой задачи'}), 403
-    status = request.json.get('status')
-    if status not in TaskStatus.LABELS:
+def transition(task_id):
+    """Single endpoint for all card status transitions (kanban + detail page)."""
+    data = request.get_json() or {}
+    to_status = data.get('to')
+    force = bool(data.get('force', False))
+
+    if to_status not in TaskStatus.LABELS:
         return jsonify({'error': 'Неверный статус'}), 400
-    if status == TaskStatus.IN_PROGRESS:
-        return jsonify({'error': 'Нельзя перетащить в «В работе» — используйте кнопку таймера'}), 400
-    if task.is_external and not task.task_type:
-        return jsonify({'error': 'need_task_type', 'task_id': task_id}), 400
-    now = datetime.utcnow()
-    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
-        {'ended_at': now}, synchronize_session=False
-    )
-    task.status = status
-    # Moving back to NEW unassigns the task
-    if status == TaskStatus.NEW:
-        task.assigned_to_id = None
-    # Clear completed_at when moving out of DONE to prevent premature auto-archive
-    if status != TaskStatus.DONE:
-        task.completed_at = None
-    touch(task)
-    db.session.commit()
-    return jsonify({'ok': True})
 
-
-# ---------- Timer API ----------
-
-@tasks_bp.route('/tasks/<int:task_id>/timer/start', methods=['POST'])
-@login_required
-def timer_start(task_id):
     task = Task.query.options(joinedload(Task.assigned_to)).get_or_404(task_id)
-    if task.status == TaskStatus.DONE:
-        return jsonify({'error': 'Нельзя запустить таймер для завершённой задачи'}), 400
+    now = datetime.utcnow()
 
-    # External requests require task_type to be set before starting
-    if task.is_external and not task.task_type:
+    is_assignee = task.assigned_to_id == current_user.id
+    is_free = task.assigned_to_id is None
+    can_admin = current_user.can_admin
+
+    # Заявки без типа нельзя перевести ни в какой статус, кроме NEW
+    if task.is_external and not task.task_type and to_status != TaskStatus.NEW:
         return jsonify({'error': 'need_task_type', 'task_id': task_id}), 400
 
-    # Task is claimed by someone else
-    if task.assigned_to_id and task.assigned_to_id != current_user.id:
-        return jsonify({
-            'taken': True,
-            'by': task.assigned_to.full_name,  # нет доп. запроса — loaded eagerly
-        })
+    # ── → IN_PROGRESS ────────────────────────────────────────────────────────
+    if to_status == TaskStatus.IN_PROGRESS:
+        # Чужая задача — запрещено для staff/admin (не manager+)
+        if not is_free and not is_assignee and not can_admin:
+            return jsonify({'taken': True, 'by': task.assigned_to.full_name})
 
-    # Already running on this task for this user
-    my_active_here = TimeLog.query.filter_by(
-        task_id=task_id, user_id=current_user.id, ended_at=None
-    ).first()
-    if my_active_here:
-        return jsonify({'success': True, 'already_running': True,
-                        'started_at': my_active_here.started_at.isoformat()})
+        # Уже запущена для этого пользователя — идемпотентно
+        my_active_here = TimeLog.query.filter_by(
+            task_id=task_id, user_id=current_user.id, ended_at=None
+        ).first()
+        if my_active_here:
+            return jsonify({'ok': True, 'already_running': True})
 
-    # User has active timer on a different task — load task joinedload
-    active = (TimeLog.query
-              .options(joinedload(TimeLog.task))
-              .filter_by(user_id=current_user.id, ended_at=None)
-              .first())
-    if active and active.task_id != task_id:
-        return jsonify({
-            'conflict': True,
-            'active_task_id': active.task_id,
-            'active_task_title': active.task.title,  # нет доп. запроса — loaded eagerly
-        })
+        # Конфликт: у пользователя активен таймер на другой задаче
+        active = (TimeLog.query
+                 .options(joinedload(TimeLog.task))
+                 .filter_by(user_id=current_user.id, ended_at=None)
+                 .first())
 
-    log = TimeLog(task_id=task_id, user_id=current_user.id)
-    db.session.add(log)
-    task.status = TaskStatus.IN_PROGRESS
-    task.assigned_to_id = current_user.id   # claim the task
-    touch(task)
-    db.session.commit()
-    return jsonify({'success': True, 'started_at': log.started_at.isoformat()})
+        forced_prev_task_id = None
+        forced_prev_status = None
 
+        if active and active.task_id != task_id:
+            if not force:
+                return jsonify({
+                    'conflict': True,
+                    'active_task_id': active.task_id,
+                    'active_task_title': active.task.title,
+                })
+            # Force: остановить старый таймер, поставить старую задачу на паузу
+            forced_prev_task_id = active.task_id
+            prev_task = active.task
+            active.ended_at = now
+            # autoflush учтёт ended_at при следующем запросе
+            remaining = TimeLog.query.filter_by(task_id=forced_prev_task_id, ended_at=None).first()
+            if not remaining:
+                prev_task.status = TaskStatus.PAUSED
+            forced_prev_status = prev_task.status
+            touch(prev_task)
 
-@tasks_bp.route('/tasks/<int:task_id>/timer/force_start', methods=['POST'])
-@login_required
-def timer_force_start(task_id):
-    prev_task_status = None
-    # Загружаем активный таймер вместе с задачей за 1 запрос (вместо 3)
-    active = (TimeLog.query
-              .options(joinedload(TimeLog.task))
-              .filter_by(user_id=current_user.id, ended_at=None)
-              .first())
-    if active:
-        active.ended_at = datetime.utcnow()
-        prev_task = active.task  # нет доп. запроса — loaded eagerly
-        # Проверяем, остались ли активные таймеры у других пользователей (autoflush учтёт ended_at)
-        remaining = TimeLog.query.filter_by(task_id=prev_task.id, ended_at=None).first()
-        if not remaining:
-            prev_task.status = TaskStatus.PAUSED
-            prev_task_status = TaskStatus.PAUSED
-        else:
-            prev_task_status = TaskStatus.IN_PROGRESS
-
-    task = Task.query.get_or_404(task_id)
-    if task.is_external and not task.task_type:
-        return jsonify({'error': 'need_task_type', 'task_id': task_id}), 400
-    log = TimeLog(task_id=task_id, user_id=current_user.id)
-    task.status = TaskStatus.IN_PROGRESS
-    task.assigned_to_id = current_user.id   # claim new task
-    touch(task)
-    if active:
-        touch(active.task)
-    db.session.add(log)
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        'started_at': log.started_at.isoformat(),
-        'prev_task_status': prev_task_status,
-    })
-
-
-@tasks_bp.route('/tasks/<int:task_id>/timer/pause', methods=['POST'])
-@login_required
-def timer_pause(task_id):
-    log = TimeLog.query.filter_by(task_id=task_id, user_id=current_user.id, ended_at=None).first()
-    task_status = None
-    if log:
-        log.ended_at = datetime.utcnow()
-        task = Task.query.get(task_id)
-        # autoflush учтёт ended_at при следующем запросе — проверяем остальных
-        if not TimeLog.query.filter_by(task_id=task_id, ended_at=None).first():
-            task.status = TaskStatus.PAUSED
-            task_status = TaskStatus.PAUSED
-        else:
-            task_status = TaskStatus.IN_PROGRESS
+        log = TimeLog(task_id=task_id, user_id=current_user.id, started_at=now)
+        db.session.add(log)
+        task.status = TaskStatus.IN_PROGRESS
+        task.assigned_to_id = current_user.id
+        task.completed_at = None
         touch(task)
         db.session.commit()
-    return jsonify({'success': True, 'task_status': task_status})
+
+        return jsonify({
+            'ok': True,
+            'started_at': log.started_at.isoformat(),
+            'prev_task_id': forced_prev_task_id,
+            'prev_task_status': forced_prev_status,
+        })
+
+    # ── → PAUSED ─────────────────────────────────────────────────────────────
+    elif to_status == TaskStatus.PAUSED:
+        if task.status == TaskStatus.DONE:
+            # Из DONE: любой пользователь может взять задачу на паузу, становясь исполнителем
+            task.assigned_to_id = current_user.id
+            task.completed_at = None
+        elif is_free or task.status == TaskStatus.NEW:
+            # Свободная / новая задача → только manager+ может взять на паузу
+            if not can_admin:
+                return jsonify({'error': 'Нет прав'}), 403
+            task.assigned_to_id = current_user.id
+        elif not is_assignee and not can_admin:
+            return jsonify({'error': 'Нет прав'}), 403
+
+        TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+            {'ended_at': now}, synchronize_session=False
+        )
+        task.status = TaskStatus.PAUSED
+        touch(task)
+        db.session.commit()
+        return jsonify({'ok': True})
+
+    # ── → DONE ───────────────────────────────────────────────────────────────
+    elif to_status == TaskStatus.DONE:
+        if not is_assignee and not can_admin:
+            return jsonify({'error': 'Нет прав для завершения задачи'}), 403
+
+        open_count = Task.query.filter(
+            Task.parent_task_id == task_id,
+            Task.status != TaskStatus.DONE,
+            Task.is_archived == False,
+        ).count()
+        if open_count > 0:
+            return jsonify({'error': f'Нельзя закрыть: {open_count} подзадач ещё не выполнены'}), 400
+
+        TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+            {'ended_at': now}, synchronize_session=False
+        )
+        task.status = TaskStatus.DONE
+        task.completed_at = now
+        task.assigned_to_id = None
+        touch(task)
+        db.session.commit()
+        return jsonify({'ok': True})
+
+    # ── → NEW ────────────────────────────────────────────────────────────────
+    elif to_status == TaskStatus.NEW:
+        if not can_admin:
+            return jsonify({'error': 'Нет прав для возврата в «Новые»'}), 403
+
+        TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
+            {'ended_at': now}, synchronize_session=False
+        )
+        task.status = TaskStatus.NEW
+        task.assigned_to_id = None
+        task.completed_at = None
+        touch(task)
+        db.session.commit()
+        return jsonify({'ok': True})
+
+    return jsonify({'error': 'Неверный переход'}), 400
 
 
 @tasks_bp.route('/tasks/<int:task_id>/delegate', methods=['POST'])
@@ -766,23 +788,6 @@ def delegate_task(task_id):
     return jsonify({'success': True, 'assignee_name': new_assignee.full_name})
 
 
-@tasks_bp.route('/tasks/<int:task_id>/admin-pause', methods=['POST'])
-@login_required
-def admin_pause(task_id):
-    """Admin/manager: stop all active timers and pause a task taken by someone else."""
-    if not current_user.can_admin:
-        return jsonify({'error': 'Нет прав'}), 403
-    task = Task.query.get_or_404(task_id)
-    if task.status != TaskStatus.IN_PROGRESS:
-        return jsonify({'error': 'Задача не в работе'}), 400
-    now = datetime.utcnow()
-    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
-        {'ended_at': now}, synchronize_session=False
-    )
-    task.status = TaskStatus.PAUSED
-    touch(task)
-    db.session.commit()
-    return jsonify({'ok': True})
 
 
 @tasks_bp.route('/tasks/<int:task_id>/unassign', methods=['POST'])
@@ -802,38 +807,6 @@ def unassign_task(task_id):
     return jsonify({'success': True})
 
 
-@tasks_bp.route('/tasks/<int:task_id>/done', methods=['POST'])
-@login_required
-def mark_done(task_id):
-    task = Task.query.get_or_404(task_id)
-    if task.assigned_to_id != current_user.id and not current_user.can_admin:
-        flash('Нет прав для закрытия этой задачи', 'error')
-        return redirect(url_for('tasks.detail', task_id=task_id))
-    if task.is_external and not task.task_type:
-        flash('Нельзя закрыть заявку без типа задачи — сначала укажите тип', 'warning')
-        return redirect(url_for('tasks.detail', task_id=task_id))
-
-    # 1 запрос вместо 2 (open_subtasks_count вызывался дважды через property)
-    open_count = Task.query.filter(
-        Task.parent_task_id == task_id,
-        Task.status != TaskStatus.DONE,
-        Task.is_archived == False,
-    ).count()
-    if open_count > 0:
-        flash(f'Нельзя закрыть: {open_count} подзадач ещё не выполнены', 'warning')
-        return redirect(url_for('tasks.detail', task_id=task_id))
-
-    now = datetime.utcnow()
-    TimeLog.query.filter_by(task_id=task_id, ended_at=None).update(
-        {'ended_at': now}, synchronize_session=False
-    )
-    task.status = TaskStatus.DONE
-    task.completed_at = now
-    task.assigned_to_id = None
-    task.updated_at = now
-    db.session.commit()
-    flash('Задача закрыта', 'success')
-    return redirect(url_for('tasks.detail', task_id=task_id))
 
 
 @tasks_bp.route('/uploads/<path:filename>')
@@ -969,7 +942,7 @@ def add_comment(task_id):
                 daemon=True,
             )
             t.start()
-            return jsonify({'job_id': job_id, 'total': len(temp_files)})
+            return jsonify({'job_id': job_id, 'total': len(temp_files), 'comment_id': comment.id})
         elif ydisk_token:
             # Не-XHR (редкий случай): синхронная загрузка на YDisk
             try:
@@ -1055,7 +1028,26 @@ def upload_status(task_id, job_id):
     with _jobs_lock:
         job = _ydisk_jobs.get(job_id)
     if not job:
-        return jsonify({'status': 'not_found'}), 404
+        # Job потерян (сервер перезапустился). Проверяем по comment_id —
+        # сохранились ли вложения в БД.
+        from models import TaskComment as _TC
+        comment_id = request.args.get('comment_id', type=int)
+        if comment_id:
+            comment_obj = _TC.query.get(comment_id)
+            if comment_obj and comment_obj.attachments.count() > 0:
+                # Вложения есть — поток успел завершиться до перезапуска
+                return jsonify({'status': 'complete'})
+            # Вложений нет — откатываем комментарий
+            if comment_obj:
+                try:
+                    db.session.delete(comment_obj)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            return jsonify({'status': 'error',
+                            'error': 'Загрузка прервана (сервер был перезапущен)'})
+        return jsonify({'status': 'error',
+                        'error': 'Загрузка прервана (сервер был перезапущен)'})
     return jsonify({
         'status': job['status'],
         'total': job['total'],

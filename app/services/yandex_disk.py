@@ -16,6 +16,7 @@ Yandex Disk integration via REST API (без сторонних зависимо
 
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -106,12 +107,21 @@ def _upload_fileobj(token, fileobj, remote_path):
 
 def _publish_file(token, path):
     """Опубликовать файл/папку и вернуть публичную ссылку."""
-    _request(token, 'PUT', '/resources/publish', params={'path': path})
-    resp = _request(token, 'GET', '/resources', params={
-        'path': path,
-        'fields': 'public_url',
-    })
-    return resp.get('public_url')
+    put_resp = _request(token, 'PUT', '/resources/publish', params={'path': path})
+    if put_resp.get('public_url'):
+        return put_resp['public_url']
+    # GET с retry: Яндекс иногда не успевает проставить public_url сразу после publish.
+    for delay in (0, 0.5, 1.5):
+        if delay:
+            time.sleep(delay)
+        resp = _request(token, 'GET', '/resources', params={
+            'path': path,
+            'fields': 'public_url',
+        })
+        url = resp.get('public_url')
+        if url:
+            return url
+    return None
 
 
 # ── Публичный API ─────────────────────────────────────────────────────────────

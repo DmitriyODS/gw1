@@ -100,6 +100,7 @@
   .btn-timer:hover { opacity: 0.75; }
   .btn-timer-start { background: color-mix(in oklch, var(--color-primary) 14%, var(--color-base-100)); color: var(--color-primary); }
   .btn-timer-pause { background: color-mix(in oklch, var(--color-warning) 16%, var(--color-base-100)); color: color-mix(in oklch, var(--color-warning) 80%, var(--color-base-content)); }
+  .btn-timer-done  { background: color-mix(in oklch, var(--color-success) 14%, var(--color-base-100)); color: color-mix(in oklch, var(--color-success) 70%, var(--color-base-content)); }
   .btn-timer-start-highlight {
     background: color-mix(in oklch, var(--color-primary) 18%, var(--color-base-100));
     color: var(--color-primary);
@@ -923,27 +924,32 @@ function switchMobileTab(status) {
   document.querySelector(`.mobile-tab[data-status="${status}"]`)?.classList.add('active');
 }
 
-// ── Timer buttons ──
+// ── Button/action clicks ──
 document.getElementById('kanban-wrap').addEventListener('click', e => {
   const card = e.target.closest('.task-card');
   if (card?.classList.contains('was-dragged')) {
     e.preventDefault(); card.classList.remove('was-dragged'); return;
   }
-  const btn = e.target.closest('.btn-timer');
+  const btn = e.target.closest('[data-action]');
   if (!btn) return;
   e.preventDefault(); e.stopPropagation();
-  const { action, id: taskId } = btn.dataset;
-  if (action === 'start') timerStart(taskId);
-  if (action === 'pause') timerPause(taskId);
+  const { action, id: taskId, to } = btn.dataset;
+  if (action === 'transition') transitionTask(taskId, to);
   if (action === 'unarchive') unarchiveTask(taskId);
-  if (action === 'goto-edit') { window.location.href = `/tasks/${taskId}/edit`; }
+  if (action === 'goto-edit') window.location.href = `/tasks/${taskId}/edit`;
 });
 
 let _pendingConflictTaskId = null;
 
-async function timerStart(taskId) {
-  const r = await fetch(`/tasks/${taskId}/timer/start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
+// ── Unified transition ──
+async function transitionTask(taskId, to, force = false) {
+  const r = await fetch(`/tasks/${taskId}/transition`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({to, force}),
+  });
   const d = await r.json();
+
   if (d.error === 'need_task_type') {
     window.location.href = `/tasks/${taskId}/edit`;
     return;
@@ -955,46 +961,32 @@ async function timerStart(taskId) {
   }
   if (d.conflict) {
     document.getElementById('conflictTitle').textContent = d.active_task_title;
-    _pendingConflictTaskId = {newId: taskId, prevId: d.active_task_id};
+    _pendingConflictTaskId = {newId: taskId, to};
     document.getElementById('conflictModal').showModal();
     return;
   }
-  if (!d.success) { showError(d.error || 'Ошибка'); return; }
-  syncTopbarTimer();
+  if (!d.ok) { showError(d.error || 'Ошибка'); return; }
+
+  // Предыдущая задача (если был конфликт с force=true)
+  if (d.prev_task_id) {
+    const prevCard = document.querySelector(`.task-card[data-id="${d.prev_task_id}"]`);
+    if (prevCard && d.prev_task_status === 'paused') moveCard(prevCard, 'paused');
+    refreshCard(d.prev_task_id);
+  }
+
   const card = document.querySelector(`.task-card[data-id="${taskId}"]`);
-  if (card) moveCard(card, 'in_progress');
+  if (card) moveCard(card, to);
   refreshCard(taskId);
+  syncTopbarTimer();
 }
 
 document.getElementById('conflictConfirmBtn').addEventListener('click', async () => {
   document.getElementById('conflictModal').close();
   if (!_pendingConflictTaskId) return;
-  const {newId, prevId} = _pendingConflictTaskId;
+  const {newId, to} = _pendingConflictTaskId;
   _pendingConflictTaskId = null;
-  const r2 = await fetch(`/tasks/${newId}/timer/force_start`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
-  const d2 = await r2.json();
-  if (!d2.success) return;
-  if (prevId) {
-    const prevCard = document.querySelector(`.task-card[data-id="${prevId}"]`);
-    if (prevCard && d2.prev_task_status === 'paused') moveCard(prevCard, 'paused');
-    refreshCard(prevId);
-  }
-  const card = document.querySelector(`.task-card[data-id="${newId}"]`);
-  if (card) moveCard(card, 'in_progress');
-  refreshCard(newId);
-  syncTopbarTimer();
+  await transitionTask(newId, to, true);
 });
-
-async function timerPause(taskId) {
-  const r = await fetch(`/tasks/${taskId}/timer/pause`, {method:'POST', headers:{'X-CSRFToken':CSRF}});
-  const d = await r.json();
-  if (!d.success) return;
-  syncTopbarTimer();
-  const card = document.querySelector(`.task-card[data-id="${taskId}"]`);
-  const newStatus = d.task_status === 'in_progress' ? 'in_progress' : 'paused';
-  if (card && newStatus === 'paused') moveCard(card, 'paused');
-  refreshCard(taskId);
-}
 
 // ── Drag & drop ──
 const wrap = document.getElementById('kanban-wrap');
@@ -1029,32 +1021,11 @@ document.querySelectorAll('.kanban-body').forEach(body => {
     if (!dragCard || body === originBody) return;
     const newStatus = body.dataset.status;
     const taskId = dragCard.dataset.id;
-    const savedCard = dragCard;
-    const savedOrigin = originBody;
     dragCard = null;
 
-    // Дроп в «В работе» → запускаем таймер (со всей механикой конфликтов)
-    if (newStatus === 'in_progress') {
-      savedCard.classList.add('was-dragged');
-      timerStart(taskId);
-      return;
-    }
-
-    const r = await fetch(`/tasks/${taskId}/move`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-      body: JSON.stringify({status: newStatus})
-    });
-    const d = await r.json();
-    if (d.error === 'need_task_type') { window.location.href = `/tasks/${taskId}/edit`; return; }
-    if (!d.ok) { showError(d.error || 'Ошибка'); return; }
+    // Все дропы идут через единый transition — включая IN_PROGRESS
     body.querySelectorAll('.empty-col').forEach(el => el.remove());
-    savedCard.classList.add('was-dragged');
-    body.prepend(savedCard);
-    if (!savedOrigin.querySelector('.task-card')) savedOrigin.innerHTML = emptyHtml();
-    updateCount(savedOrigin); updateCount(body);
-    refreshCard(taskId);
-    syncTopbarTimer();
+    await transitionTask(taskId, newStatus);
   });
 });
 
@@ -1141,12 +1112,7 @@ if (localStorage.getItem('gw-sort-new') === '1') {
 }
 
 {% if overdue_tasks %}
-(function() {
-  if (!sessionStorage.getItem('gw-overdue-shown')) {
-    sessionStorage.setItem('gw-overdue-shown', '1');
-    document.getElementById('overdueModal').showModal();
-  }
-})();
+setTimeout(() => document.getElementById('overdueModal')?.showModal(), 0);
 {% endif %}
 </script>
 

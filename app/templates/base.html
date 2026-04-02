@@ -934,7 +934,7 @@
     <button class="sidebar-logo-btn" onclick="openReleaseNotes(event)" title="История изменений">
       <img src="{{ url_for('static', filename='logo.svg') }}" style="width:22px;height:22px;border-radius:6px;flex-shrink:0;" alt="logo">
       Groove Work
-      <span class="sidebar-version">v1.8.0</span>
+      <span class="sidebar-version">v1.9.0</span>
     </button>
   </div>
 
@@ -1507,6 +1507,8 @@ document.addEventListener('click', (e) => {
 
 // ── Topbar timer ──
 let _topbarTimerInterval = null;
+let _activeTaskId = null;
+let _hourlyNotifyCount = 0;   // сколько часовых уведомлений уже показано за текущую сессию
 
 function _tickTopbar(startedDate) {
   const el = document.getElementById('nav-active-timer');
@@ -1514,6 +1516,39 @@ function _tickTopbar(startedDate) {
   const secs = Math.floor((Date.now() - startedDate) / 1000);
   const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
   el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  // Каждый час — проверяем, не нужно ли спросить у пользователя
+  const hoursPassed = Math.floor(secs / 3600);
+  if (hoursPassed > 0 && hoursPassed > _hourlyNotifyCount) {
+    _hourlyNotifyCount = hoursPassed;
+    _showHourlyModal();
+  }
+}
+
+function _showHourlyModal() {
+  const modal = document.getElementById('hourlyPauseModal');
+  if (modal && !modal.open) modal.showModal();
+}
+
+function hourlyConfirmContinue() {
+  document.getElementById('hourlyPauseModal').close();
+  // Счётчик уже увеличен — следующая проверка через ещё один час
+}
+
+async function hourlyConfirmPause() {
+  document.getElementById('hourlyPauseModal').close();
+  if (!_activeTaskId) return;
+  try {
+    await fetch(`/tasks/${_activeTaskId}/transition`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+      },
+      body: JSON.stringify({to: 'paused'}),
+    });
+  } catch (_) {}
+  location.reload();
 }
 
 function _applyTopbarTimer(taskId, startedAtISO) {
@@ -1526,6 +1561,9 @@ function _applyTopbarTimer(taskId, startedAtISO) {
     badge.dataset.activeStart = iso;
     badge.href = `/tasks/${taskId}`;
     badge.style.display = '';
+    _activeTaskId = taskId;
+    // Пересчитываем, сколько часов уже прошло (задача могла быть в работе до загрузки страницы)
+    _hourlyNotifyCount = Math.floor((Date.now() - started) / 3600000);
     clearInterval(_topbarTimerInterval);
     _tickTopbar(started);
     _topbarTimerInterval = setInterval(() => _tickTopbar(started), 1000);
@@ -1535,6 +1573,8 @@ function _applyTopbarTimer(taskId, startedAtISO) {
 function _clearTopbarTimer() {
   clearInterval(_topbarTimerInterval);
   _topbarTimerInterval = null;
+  _activeTaskId = null;
+  _hourlyNotifyCount = 0;
   const badge = document.getElementById('topbar-timer');
   if (badge) { badge.style.display = 'none'; badge.dataset.activeStart = ''; }
 }
@@ -1595,6 +1635,23 @@ async function syncTopbarTimer() {
 {% block scripts %}{% endblock %}
 
 {% if current_user.is_authenticated %}
+<!-- Hourly pause confirmation modal -->
+<dialog id="hourlyPauseModal" class="modal">
+  <div class="modal-box" style="max-width:380px">
+    <div class="flex items-center gap-3 mb-3">
+      <span class="material-icons-round" style="color:var(--color-warning);font-size:1.5rem">timer</span>
+      <h3 class="font-bold text-base">Вы всё ещё работаете?</h3>
+    </div>
+    <p class="text-sm text-base-content/70 mb-4">Задача в работе уже больше часа. Подтвердите, что продолжаете, или поставьте её на паузу.</p>
+    <div class="modal-action mt-0">
+      <button class="btn btn-ghost btn-sm" onclick="hourlyConfirmContinue()">Да, продолжаю</button>
+      <button class="btn btn-warning btn-sm" onclick="hourlyConfirmPause()">
+        <i class="bi bi-pause-fill"></i> Поставить на паузу
+      </button>
+    </div>
+  </div>
+</dialog>
+
 <!-- Settings modal -->
 <dialog id="settings-modal" class="modal">
   <div class="modal-box max-w-lg p-0 overflow-hidden">

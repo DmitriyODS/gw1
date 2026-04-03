@@ -413,6 +413,15 @@ class Plan(db.Model):
         return bool(self.release_date and self.release_date <= datetime.utcnow() and not self.is_converted)
 
 
+class GameScore(db.Model):
+    __tablename__ = 'game_scores'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    score = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('game_score', uselist=False))
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))

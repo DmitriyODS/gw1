@@ -313,11 +313,11 @@ def migrate_review():
     now = datetime.utcnow()
     # Задачи без completed_at — ставим статус и дату закрытия
     c1 = Task.query.filter(Task.status == 'review', Task.completed_at.is_(None)).update(
-        {'status': TaskStatus.DONE, 'completed_at': now}, synchronize_session=False
+        {'status': TaskStatus.DONE, 'completed_at': now, 'assigned_to_id': None}, synchronize_session=False
     )
     # Задачи с completed_at — только статус
     c2 = Task.query.filter(Task.status == 'review', Task.completed_at.isnot(None)).update(
-        {'status': TaskStatus.DONE}, synchronize_session=False
+        {'status': TaskStatus.DONE, 'assigned_to_id': None}, synchronize_session=False
     )
     db.session.commit()
     flash(f'Переведено в «Готово»: {c1 + c2} задач', 'success')

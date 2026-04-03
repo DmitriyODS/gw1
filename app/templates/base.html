@@ -934,7 +934,7 @@
     <button class="sidebar-logo-btn" onclick="openReleaseNotes(event)" title="История изменений">
       <img src="{{ url_for('static', filename='logo.svg') }}" style="width:22px;height:22px;border-radius:6px;flex-shrink:0;" alt="logo">
       Groove Work
-      <span class="sidebar-version">v1.9.0</span>
+      <span class="sidebar-version">v1.9.1</span>
     </button>
   </div>
 
@@ -1508,7 +1508,6 @@ document.addEventListener('click', (e) => {
 // ── Topbar timer ──
 let _topbarTimerInterval = null;
 let _activeTaskId = null;
-let _hourlyNotifyCount = 0;   // сколько часовых уведомлений уже показано за текущую сессию
 
 function _tickTopbar(startedDate) {
   const el = document.getElementById('nav-active-timer');
@@ -1516,39 +1515,6 @@ function _tickTopbar(startedDate) {
   const secs = Math.floor((Date.now() - startedDate) / 1000);
   const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
   el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-
-  // Каждый час — проверяем, не нужно ли спросить у пользователя
-  const hoursPassed = Math.floor(secs / 3600);
-  if (hoursPassed > 0 && hoursPassed > _hourlyNotifyCount) {
-    _hourlyNotifyCount = hoursPassed;
-    _showHourlyModal();
-  }
-}
-
-function _showHourlyModal() {
-  const modal = document.getElementById('hourlyPauseModal');
-  if (modal && !modal.open) modal.showModal();
-}
-
-function hourlyConfirmContinue() {
-  document.getElementById('hourlyPauseModal').close();
-  // Счётчик уже увеличен — следующая проверка через ещё один час
-}
-
-async function hourlyConfirmPause() {
-  document.getElementById('hourlyPauseModal').close();
-  if (!_activeTaskId) return;
-  try {
-    await fetch(`/tasks/${_activeTaskId}/transition`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
-      },
-      body: JSON.stringify({to: 'paused'}),
-    });
-  } catch (_) {}
-  location.reload();
 }
 
 function _applyTopbarTimer(taskId, startedAtISO) {
@@ -1562,8 +1528,6 @@ function _applyTopbarTimer(taskId, startedAtISO) {
     badge.href = `/tasks/${taskId}`;
     badge.style.display = '';
     _activeTaskId = taskId;
-    // Пересчитываем, сколько часов уже прошло (задача могла быть в работе до загрузки страницы)
-    _hourlyNotifyCount = Math.floor((Date.now() - started) / 3600000);
     clearInterval(_topbarTimerInterval);
     _tickTopbar(started);
     _topbarTimerInterval = setInterval(() => _tickTopbar(started), 1000);
@@ -1574,7 +1538,6 @@ function _clearTopbarTimer() {
   clearInterval(_topbarTimerInterval);
   _topbarTimerInterval = null;
   _activeTaskId = null;
-  _hourlyNotifyCount = 0;
   const badge = document.getElementById('topbar-timer');
   if (badge) { badge.style.display = 'none'; badge.dataset.activeStart = ''; }
 }
@@ -1592,7 +1555,22 @@ async function openReleaseNotes(e) {
     const versions = await r.json();
     content.dataset.loaded = '1';
     content.style = '';
-    content.innerHTML = versions.map((v, idx) => `
+    const _deadline = new Date('2026-04-22T00:00:00');
+    const _today = new Date(); _today.setHours(0,0,0,0);
+    const _daysLeft = Math.max(0, Math.ceil((_deadline - _today) / 86400000));
+    const _dayWord = _daysLeft === 1 ? 'день' : _daysLeft < 5 ? 'дня' : 'дней';
+    const _banner = `<div style="background:linear-gradient(135deg,#dc2626,#ea580c);color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:20px;box-shadow:0 3px 12px rgba(220,38,38,0.3);">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="flex:1;">
+          <div style="font-size:0.78rem;font-weight:600;line-height:1.5;opacity:0.92;">Спасибо всем, кто поддерживал разработку и верил в продукт. До смерти осталось:</div>
+          <div style="font-size:1.9rem;font-weight:900;line-height:1.1;letter-spacing:-0.5px;">${_daysLeft} <span style="font-size:1rem;font-weight:600;opacity:0.85;">${_dayWord}</span></div>
+        </div>
+        <button onclick="document.getElementById('releaseNotesModal').close(); openDeathGame();" style="flex-shrink:0;background:rgba(255,255,255,0.18);border:1.5px solid rgba(255,255,255,0.4);color:#fff;padding:7px 14px;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;transition:background 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.28)'" onmouseleave="this.style.background='rgba(255,255,255,0.18)'">
+          ▶ Играть
+        </button>
+      </div>
+    </div>`;
+    content.innerHTML = _banner + versions.map((v, idx) => `
       <div style="margin-bottom:${idx < versions.length-1 ? '24px' : '0'};">
         <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
           <span style="font-size:1.6rem;font-weight:900;color:var(--color-primary);line-height:1;">v${v.version}</span>
@@ -1635,23 +1613,6 @@ async function syncTopbarTimer() {
 {% block scripts %}{% endblock %}
 
 {% if current_user.is_authenticated %}
-<!-- Hourly pause confirmation modal -->
-<dialog id="hourlyPauseModal" class="modal">
-  <div class="modal-box" style="max-width:380px">
-    <div class="flex items-center gap-3 mb-3">
-      <span class="material-icons-round" style="color:var(--color-warning);font-size:1.5rem">timer</span>
-      <h3 class="font-bold text-base">Вы всё ещё работаете?</h3>
-    </div>
-    <p class="text-sm text-base-content/70 mb-4">Задача в работе уже больше часа. Подтвердите, что продолжаете, или поставьте её на паузу.</p>
-    <div class="modal-action mt-0">
-      <button class="btn btn-ghost btn-sm" onclick="hourlyConfirmContinue()">Да, продолжаю</button>
-      <button class="btn btn-warning btn-sm" onclick="hourlyConfirmPause()">
-        <i class="bi bi-pause-fill"></i> Поставить на паузу
-      </button>
-    </div>
-  </div>
-</dialog>
-
 <!-- Settings modal -->
 <dialog id="settings-modal" class="modal">
   <div class="modal-box max-w-lg p-0 overflow-hidden">
@@ -1944,6 +1905,408 @@ async function syncTopbarTimer() {
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
+
+<!-- Deadline Defender game modal -->
+<dialog id="deathGameModal" class="modal">
+  <div class="modal-box" style="max-width:464px;padding:0;overflow:hidden;background:var(--color-base-100);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--color-base-300);">
+      <span style="font-weight:700;font-size:0.92rem;display:flex;align-items:center;gap:8px;">
+        <span class="material-icons-round" style="font-size:1.1rem;color:var(--color-primary)">rocket_launch</span>
+        Deadline Defender
+      </span>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle" onclick="ddCloseGame()"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+    <!-- Canvas area -->
+    <div style="position:relative;background:#07071a;line-height:0;display:flex;justify-content:center;">
+      <canvas id="ddCanvas" width="420" height="500" style="display:block;"></canvas>
+      <!-- Start overlay -->
+      <div id="ddStartOverlay" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
+        <div style="color:#e2e8f0;font-size:1.45rem;font-weight:900;font-family:monospace;text-shadow:0 0 24px #06b6d4;letter-spacing:0.04em;">DEADLINE DEFENDER</div>
+        <div style="color:#64748b;font-size:0.78rem;text-align:center;line-height:1.7;">
+          Стрелки — движение &nbsp;·&nbsp; Стрельба — автоматическая<br>
+          3 жизни &nbsp;·&nbsp; Уничтожай дедлайны пока они не уничтожили тебя
+        </div>
+        <button id="ddStartBtn" style="margin-top:4px;background:linear-gradient(135deg,#0891b2,#0e7490);color:white;border:none;padding:11px 32px;border-radius:10px;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 0 22px rgba(6,182,212,0.45);">
+          НАЧАТЬ ИГРУ
+        </button>
+        <div style="color:#334155;font-size:0.72rem;font-family:monospace;">ЛУЧШИЙ РЕЗУЛЬТАТ: <span id="ddIdleBest">0</span></div>
+      </div>
+      <!-- Game over overlay -->
+      <div id="ddGameOver" style="position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(7,7,26,0.88);">
+        <div style="color:#f87171;font-size:1.3rem;font-weight:900;font-family:monospace;text-shadow:0 0 18px #ef4444;letter-spacing:0.06em;">GAME OVER</div>
+        <div style="color:#e2e8f0;font-size:0.88rem;font-family:monospace;">Счёт: <span id="ddGoScore" style="color:#fbbf24;font-weight:700;font-size:1rem;">0</span></div>
+        <div style="color:#64748b;font-size:0.8rem;font-family:monospace;">Рекорд: <span id="ddGoBest" style="color:#94a3b8;font-weight:600;">0</span></div>
+        <div id="ddNewRecord" style="display:none;color:#fbbf24;font-size:0.78rem;font-weight:700;font-family:monospace;text-shadow:0 0 12px #fbbf24;">✦ НОВЫЙ РЕКОРД ✦</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <button id="ddRestartBtn" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:white;border:none;padding:9px 22px;border-radius:9px;font-weight:700;font-size:0.88rem;cursor:pointer;">
+            Ещё раз
+          </button>
+          <button id="ddLeaderBtn" style="background:rgba(255,255,255,0.07);color:#94a3b8;border:1px solid rgba(255,255,255,0.13);padding:9px 22px;border-radius:9px;font-weight:600;font-size:0.88rem;cursor:pointer;">
+            Рейтинг
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Leaderboard panel -->
+    <div id="ddLeaderboard" style="display:none;background:var(--color-base-100);border-top:1px solid var(--color-base-300);max-height:220px;overflow-y:auto;"></div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button onclick="ddCloseGame()">close</button></form>
+</dialog>
+
+<script>
+(function() {
+  'use strict';
+  const W = 420, H = 500;
+  let canvas, ctx, raf = null;
+  let state = 'idle'; // idle | playing | over
+  let score = 0, frameN = 0;
+  let spawnRate = 72, baseSpeed = 1.9, diffTimer = 0, diffLevel = 1;
+  let spawnTimer = 0, fireTimer = 0;
+  let player, bullets, deadlines, particles, stars;
+
+  function mkStars() {
+    stars = Array.from({length: 80}, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 1.6 + 0.2,
+      speed: Math.random() * 0.35 + 0.12,
+      a: Math.random() * 0.5 + 0.25
+    }));
+  }
+
+  function resetGame() {
+    player = { x: W/2, y: H - 65, hw: 22, hh: 30, lives: 3, inv: 0 };
+    bullets = []; deadlines = []; particles = [];
+    score = 0; frameN = 0;
+    spawnRate = 72; baseSpeed = 1.9; diffTimer = 0; diffLevel = 1;
+    spawnTimer = 0; fireTimer = 0;
+  }
+
+  const keys = {};
+  function onKey(e) {
+    if (state !== 'playing') return;
+    const dn = e.type === 'keydown';
+    keys[e.key] = dn;
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('keyup', onKey);
+
+  function loop() {
+    update();
+    draw();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function idleLoop() {
+    stars.forEach(s => { s.y += s.speed; if (s.y > H) { s.y = -2; s.x = Math.random() * W; } });
+    drawBg();
+    if (state === 'idle') raf = requestAnimationFrame(idleLoop);
+  }
+
+  function update() {
+    frameN++;
+    // Difficulty ramp: every 9 seconds
+    if (++diffTimer >= 540) {
+      diffTimer = 0; diffLevel++;
+      spawnRate = Math.max(22, spawnRate - 7);
+      baseSpeed = Math.min(6, baseSpeed + 0.18);
+    }
+
+    // Stars
+    stars.forEach(s => { s.y += s.speed; if (s.y > H) { s.y = -2; s.x = Math.random() * W; } });
+
+    // Player movement (4 directions)
+    const spd = 4.2;
+    if (keys['ArrowLeft']  || keys['a']) player.x -= spd;
+    if (keys['ArrowRight'] || keys['d']) player.x += spd;
+    if (keys['ArrowUp']    || keys['w']) player.y -= spd * 0.75;
+    if (keys['ArrowDown']  || keys['s']) player.y += spd * 0.75;
+    player.x = Math.max(player.hw + 4, Math.min(W - player.hw - 4, player.x));
+    player.y = Math.max(player.hh + 24, Math.min(H - player.hh - 4, player.y));
+    if (player.inv > 0) player.inv--;
+
+    // Auto-fire every 20 frames
+    if (++fireTimer >= 20) {
+      fireTimer = 0;
+      bullets.push({ x: player.x, y: player.y - player.hh - 4, vy: -10 });
+    }
+
+    // Move bullets
+    bullets = bullets.filter(b => (b.y += b.vy, b.y > -20));
+
+    // Spawn deadlines
+    if (++spawnTimer >= spawnRate) {
+      spawnTimer = 0;
+      const w = 78 + Math.random() * 26;
+      const variant = Math.floor(Math.random() * 3); // 0=normal 1=fast 2=wide
+      deadlines.push({
+        x: Math.random() * (W - w - 10) + 5,
+        y: -38, w, h: 30,
+        vy: (baseSpeed + Math.random() * 0.7) * (variant === 1 ? 1.55 : 1),
+        variant, shake: 0
+      });
+      // Occasionally spawn a second one slightly offset
+      if (diffLevel >= 3 && Math.random() < 0.3) {
+        const w2 = 78 + Math.random() * 26;
+        deadlines.push({
+          x: Math.random() * (W - w2 - 10) + 5,
+          y: -80, w: w2, h: 30,
+          vy: baseSpeed + Math.random() * 0.5,
+          variant: 0, shake: 0
+        });
+      }
+    }
+
+    // Update deadlines
+    for (let i = deadlines.length - 1; i >= 0; i--) {
+      const d = deadlines[i];
+      d.y += d.vy;
+      if (d.shake > 0) d.shake--;
+
+      // Off-screen
+      if (d.y > H + 50) { deadlines.splice(i, 1); continue; }
+
+      // Bullet hits
+      let hit = false;
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (b.x > d.x - 2 && b.x < d.x + d.w + 2 && b.y > d.y - 2 && b.y < d.y + d.h + 2) {
+          bullets.splice(j, 1);
+          score += 10;
+          burst(d.x + d.w/2, d.y + d.h/2, '#f87171', 14);
+          deadlines.splice(i, 1);
+          hit = true; break;
+        }
+      }
+      if (hit) continue;
+
+      // Player collision
+      if (player.inv === 0) {
+        const px = player.x, py = player.y, phw = player.hw - 5, phh = player.hh - 6;
+        if (d.x < px + phw && d.x + d.w > px - phw && d.y < py + phh && d.y + d.h > py - phh) {
+          player.lives--;
+          player.inv = 110;
+          burst(player.x, player.y, '#67e8f9', 18);
+          deadlines.splice(i, 1);
+          if (player.lives <= 0) { doGameOver(); return; }
+        }
+      }
+    }
+
+    // Particles
+    particles = particles.filter(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.09; p.life--;
+      return p.life > 0;
+    });
+  }
+
+  function burst(x, y, color, n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, spd = Math.random() * 3.5 + 0.8;
+      const life = 18 + Math.floor(Math.random() * 18);
+      particles.push({ x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd, life, maxLife: life, color, r: Math.random()*2.8+0.8 });
+    }
+  }
+
+  function drawBg() {
+    ctx.fillStyle = '#07071a';
+    ctx.fillRect(0, 0, W, H);
+    stars.forEach(s => {
+      ctx.globalAlpha = s.a;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function draw() {
+    drawBg();
+
+    // Bullets
+    ctx.save();
+    ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 10;
+    ctx.fillStyle = '#fde68a';
+    bullets.forEach(b => ctx.fillRect(b.x - 2, b.y - 10, 4, 16));
+    ctx.restore();
+
+    // Deadlines
+    deadlines.forEach(d => {
+      ctx.save();
+      if (d.shake > 0) ctx.translate(Math.sin(d.shake * 2) * 2.5, 0);
+      const colors = d.variant === 1
+        ? { bg: '#7c1717', border: '#fca5a5', text: '#fecaca' }
+        : d.variant === 2
+          ? { bg: '#713f12', border: '#fb923c', text: '#fed7aa' }
+          : { bg: '#7f1d1d', border: '#f87171', text: '#fca5a5' };
+      ctx.shadowColor = colors.border; ctx.shadowBlur = 9;
+      ctx.fillStyle = colors.bg;
+      ctx.beginPath(); ctx.roundRect(d.x, d.y, d.w, d.h, 5); ctx.fill();
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.roundRect(d.x, d.y, d.w, d.h, 5); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = colors.text;
+      ctx.font = 'bold 9.5px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(d.variant === 1 ? '⚡DEADLINE' : d.variant === 2 ? 'OVERDUE!!' : 'DEADLINE', d.x + d.w/2, d.y + d.h/2);
+      ctx.restore();
+    });
+
+    // Particles
+    particles.forEach(p => {
+      ctx.globalAlpha = p.life / p.maxLife;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Player ship
+    if (state === 'playing' && !(player.inv > 0 && Math.floor(frameN / 5) % 2 === 0)) {
+      const px = player.x, py = player.y, hw = player.hw, hh = player.hh;
+      ctx.save(); ctx.translate(px, py);
+      // Engine glow flame
+      ctx.shadowColor = '#f97316'; ctx.shadowBlur = 14;
+      ctx.fillStyle = `hsla(24,95%,${50 + Math.random()*15}%,0.9)`;
+      const fl = 9 + Math.random() * 9;
+      ctx.beginPath(); ctx.moveTo(-7, hh); ctx.lineTo(0, hh + fl); ctx.lineTo(7, hh); ctx.closePath(); ctx.fill();
+      // Wing left
+      ctx.shadowColor = '#0e7490'; ctx.shadowBlur = 10;
+      ctx.fillStyle = '#164e63';
+      ctx.beginPath(); ctx.moveTo(-hw, hh); ctx.lineTo(-hw-9, hh-5); ctx.lineTo(-hw+3, hh-16); ctx.closePath(); ctx.fill();
+      // Wing right
+      ctx.beginPath(); ctx.moveTo(hw, hh); ctx.lineTo(hw+9, hh-5); ctx.lineTo(hw-3, hh-16); ctx.closePath(); ctx.fill();
+      // Body
+      ctx.fillStyle = '#0e7490';
+      ctx.beginPath(); ctx.moveTo(0, -hh); ctx.lineTo(hw, hh); ctx.lineTo(-hw, hh); ctx.closePath(); ctx.fill();
+      // Cockpit
+      ctx.fillStyle = '#67e8f9';
+      ctx.beginPath(); ctx.moveTo(0, -hh+5); ctx.lineTo(5, hh-13); ctx.lineTo(-5, hh-13); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    // HUD
+    ctx.save();
+    ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`SCORE: ${score}`, 12, 12);
+    ctx.fillStyle = '#334155'; ctx.font = '10px monospace';
+    ctx.fillText(`BEST: ${Math.max(score, _ddBest())}`, 12, 30);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#475569'; ctx.font = '10px monospace';
+    ctx.fillText(`LVL ${diffLevel}`, W - 12, 12);
+    // Lives
+    for (let i = 0; i < player.lives; i++) {
+      ctx.save();
+      ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 7;
+      ctx.beginPath(); ctx.arc(W - 14 - i * 20, 32, 5.5, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function _ddBest() {
+    return parseInt(localStorage.getItem('gw-game-best') || '0');
+  }
+
+  async function doGameOver() {
+    state = 'over';
+    cancelAnimationFrame(raf); raf = null;
+    // Final draw
+    draw();
+
+    const prev = _ddBest();
+    const isNew = score > prev;
+    if (isNew) localStorage.setItem('gw-game-best', score);
+
+    // Save to server (only new record)
+    if (isNew && score > 0) {
+      try {
+        await fetch('/tasks/game/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+          body: JSON.stringify({ score })
+        });
+      } catch(_) {}
+    }
+
+    document.getElementById('ddGoScore').textContent = score;
+    document.getElementById('ddGoBest').textContent = Math.max(score, prev);
+    document.getElementById('ddNewRecord').style.display = isNew ? 'block' : 'none';
+    const go = document.getElementById('ddGameOver');
+    go.style.display = 'flex';
+  }
+
+  window.openDeathGame = function() {
+    const modal = document.getElementById('deathGameModal');
+    if (!modal) return;
+    canvas = document.getElementById('ddCanvas');
+    ctx = canvas.getContext('2d');
+    if (!stars) mkStars();
+    state = 'idle';
+    cancelAnimationFrame(raf); raf = null;
+    document.getElementById('ddStartOverlay').style.display = 'flex';
+    document.getElementById('ddGameOver').style.display = 'none';
+    document.getElementById('ddLeaderboard').style.display = 'none';
+    document.getElementById('ddIdleBest').textContent = _ddBest();
+    modal.showModal();
+    raf = requestAnimationFrame(idleLoop);
+  };
+
+  window.ddCloseGame = function() {
+    cancelAnimationFrame(raf); raf = null;
+    state = 'idle';
+    Object.keys(keys).forEach(k => delete keys[k]);
+  };
+
+  window.ddStartGame = function() {
+    cancelAnimationFrame(raf); raf = null;
+    if (!stars) mkStars(); else { /* keep stars positions */ }
+    resetGame();
+    state = 'playing';
+    document.getElementById('ddStartOverlay').style.display = 'none';
+    document.getElementById('ddGameOver').style.display = 'none';
+    document.getElementById('ddLeaderboard').style.display = 'none';
+    raf = requestAnimationFrame(loop);
+  };
+
+  window.ddShowLeaderboard = async function() {
+    const lb = document.getElementById('ddLeaderboard');
+    lb.style.display = 'block';
+    lb.innerHTML = '<div style="text-align:center;padding:14px;opacity:0.35;font-size:0.8rem;">Загрузка...</div>';
+    try {
+      const r = await fetch('/tasks/game/leaderboard');
+      const data = await r.json();
+      if (!data.length) {
+        lb.innerHTML = '<div style="text-align:center;padding:14px;opacity:0.35;font-size:0.8rem;">Пока никто не играл</div>';
+        return;
+      }
+      const medals = ['🥇','🥈','🥉'];
+      lb.innerHTML = `
+        <div style="padding:10px 16px 4px;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;opacity:0.4;">Таблица лидеров</div>
+        <div style="display:flex;flex-direction:column;gap:1px;padding:2px 8px 10px;">
+          ${data.map((e, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;${e.is_me ? 'background:color-mix(in oklch,var(--color-primary) 10%,transparent);' : ''}">
+              <span style="width:22px;text-align:center;font-size:0.85rem;">${medals[i] || (i+1)+'.'}</span>
+              <span style="flex:1;font-size:0.87rem;font-weight:${e.is_me ? '700' : '400'};">${e.name}</span>
+              <span style="font-family:monospace;font-size:0.9rem;font-weight:700;color:var(--color-primary);">${e.score}</span>
+            </div>`).join('')}
+        </div>`;
+    } catch(_) {
+      lb.innerHTML = '<div style="text-align:center;padding:14px;opacity:0.35;font-size:0.8rem;">Ошибка загрузки</div>';
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('deathGameModal');
+    if (!modal) return;
+    modal.addEventListener('close', () => { cancelAnimationFrame(raf); raf = null; state = 'idle'; Object.keys(keys).forEach(k => delete keys[k]); });
+    document.getElementById('ddStartBtn').addEventListener('click', ddStartGame);
+    document.getElementById('ddRestartBtn').addEventListener('click', ddStartGame);
+    document.getElementById('ddLeaderBtn').addEventListener('click', ddShowLeaderboard);
+  });
+})();
+</script>
 {% endif %}
 <script src="{{ url_for('static', filename='gw-datepicker.js') }}"></script>
 </body>

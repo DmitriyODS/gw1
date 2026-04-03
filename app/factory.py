@@ -273,6 +273,17 @@ def create_app():
         db.session.commit()
         print(f'Archived {count} tasks')
 
+    @app.cli.command('fix-done-assignees')
+    def fix_done_assignees():
+        """Clear assigned_to_id for all done tasks (one-time cleanup)."""
+        from models import Task, TaskStatus
+        count = Task.query.filter(
+            Task.status == TaskStatus.DONE,
+            Task.assigned_to_id.isnot(None),
+        ).update({'assigned_to_id': None}, synchronize_session=False)
+        db.session.commit()
+        print(f'Cleared assigned_to_id for {count} done tasks')
+
     @app.cli.command('fix-sequences')
     def fix_sequences():
         """Reset PostgreSQL ID sequences to max(id) — run after manual data import."""

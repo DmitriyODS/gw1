@@ -11,7 +11,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import joinedload
 from extensions import db
-from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, CommentAttachment, User
+from models import Task, Department, TaskStatus, TaskTag, Urgency, TimeLog, TaskComment, CommentAttachment, User, GameScore
 from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBTYPES, AUTO_TAGS
 
 _last_archive_check: datetime = None
@@ -1136,6 +1136,37 @@ def archive_done():
     ).update({'is_archived': True, 'archived_at': now}, synchronize_session=False)
     db.session.commit()
     return jsonify({'ok': True, 'count': count})
+
+
+@tasks_bp.route('/tasks/game/score', methods=['POST'])
+@login_required
+def game_save_score():
+    data = request.get_json(silent=True) or {}
+    new_score = int(data.get('score', 0))
+    gs = GameScore.query.filter_by(user_id=current_user.id).first()
+    if gs is None:
+        gs = GameScore(user_id=current_user.id, score=new_score)
+        db.session.add(gs)
+    elif new_score > gs.score:
+        gs.score = new_score
+        gs.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'ok': True, 'best': gs.score})
+
+
+@tasks_bp.route('/tasks/game/leaderboard')
+@login_required
+def game_leaderboard():
+    rows = db.session.query(GameScore, User)\
+        .join(User, GameScore.user_id == User.id)\
+        .filter(User.is_active == True)\
+        .order_by(GameScore.score.desc())\
+        .limit(10).all()
+    return jsonify([{
+        'name': u.full_name or u.username,
+        'score': gs.score,
+        'is_me': gs.user_id == current_user.id
+    } for gs, u in rows])
 
 
 @tasks_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])

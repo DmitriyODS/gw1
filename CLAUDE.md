@@ -87,6 +87,7 @@ docker compose -f docker-compose.prod.yml exec web flask init-db
 | `migrate-review` | Перевести все задачи со статусом review → done |
 | `fix-none-fields` | Очистить строку "None" в полях customer_* |
 | `archive-old` | Архивировать выполненные задачи старше 365 дней |
+| `fix-done-assignees` | Сбросить assigned_to_id у всех задач в статусе done (одноразовая чистка) |
 | `fix-sequences` | Сбросить PostgreSQL-последовательности после ручного импорта данных |
 
 **Cron для авто-архивации** (добавить в crontab на хосте или через docker exec):

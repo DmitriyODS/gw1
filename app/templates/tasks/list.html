@@ -1112,7 +1112,15 @@ if (localStorage.getItem('gw-sort-new') === '1') {
 }
 
 {% if overdue_tasks %}
-setTimeout(() => document.getElementById('overdueModal')?.showModal(), 0);
+setTimeout(() => {
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const lastShown = localStorage.getItem('gw-overdue-shown');
+  if (lastShown !== today) {
+    localStorage.setItem('gw-overdue-shown', today);
+    document.getElementById('overdueModal')?.showModal();
+  }
+}, 0);
 {% endif %}
 </script>
 

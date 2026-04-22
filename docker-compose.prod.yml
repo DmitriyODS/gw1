@@ -74,4 +74,6 @@ volumes:
   pgdata:
   uploads:
   certbot-conf:
+    external: true
   certbot-www:
+    external: true

@@ -1169,6 +1169,37 @@ def game_leaderboard():
     } for gs, u in rows])
 
 
+@tasks_bp.route('/tasks/game/session/start', methods=['POST'])
+@login_required
+def game_session_start():
+    task = Task(
+        title='Рефлексирование',
+        status=TaskStatus.IN_PROGRESS,
+        created_by_id=current_user.id,
+        assigned_to_id=current_user.id,
+    )
+    db.session.add(task)
+    db.session.commit()
+    return jsonify({'ok': True, 'task_id': task.id})
+
+
+@tasks_bp.route('/tasks/game/session/end', methods=['POST'])
+@login_required
+def game_session_end():
+    data = request.get_json(silent=True) or {}
+    task_id = data.get('task_id')
+    if not task_id:
+        return jsonify({'ok': False}), 400
+    task = Task.query.filter_by(id=task_id, assigned_to_id=current_user.id).first()
+    if not task:
+        return jsonify({'ok': False}), 404
+    task.status = TaskStatus.DONE
+    task.completed_at = datetime.utcnow()
+    task.assigned_to_id = None
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
 @tasks_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])
 @login_required
 def delete_task(task_id):

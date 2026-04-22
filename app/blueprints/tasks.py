@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import tempfile
 import threading
@@ -17,8 +18,42 @@ from blueprints.public import _save_attachments, PLATFORMS, TASK_TYPES, PUB_SUBT
 _last_archive_check: datetime = None
 
 # ── Фоновая загрузка на Яндекс Диск ──────────────────────────────────────────
-_ydisk_jobs: dict = {}
-_jobs_lock = threading.Lock()
+# Состояние job-ов хранится на диске (/tmp/gw_job_<id>.json), а не в памяти процесса,
+# чтобы все воркеры Gunicorn могли читать состояние вне зависимости от того,
+# на каком воркере запущен фоновый поток загрузки.
+
+_JOB_DIR = '/tmp'
+_JOB_PREFIX = 'gw_job_'
+
+
+def _job_path(job_id):
+    return os.path.join(_JOB_DIR, f'{_JOB_PREFIX}{job_id}.json')
+
+
+def _job_read(job_id):
+    """Вернуть dict состояния job или None если файл не найден."""
+    path = _job_path(job_id)
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            return json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _job_write(job_id, state):
+    """Атомарно записать состояние job в файл."""
+    path = _job_path(job_id)
+    tmp_path = path + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as fh:
+        json.dump(state, fh)
+    os.replace(tmp_path, path)
+
+
+def _job_delete(job_id):
+    try:
+        os.remove(_job_path(job_id))
+    except FileNotFoundError:
+        pass
 
 
 def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_id, task_title, user_full_name, tz_offset):
@@ -29,13 +64,10 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
     """
     import shutil as _sh
 
-    def _set(key, val):
-        with _jobs_lock:
-            _ydisk_jobs[job_id][key] = val
-
-    def _inc_done():
-        with _jobs_lock:
-            _ydisk_jobs[job_id]['done'] += 1
+    def _update(**kwargs):
+        state = _job_read(job_id) or {}
+        state.update(kwargs)
+        _job_write(job_id, state)
 
     tmp_dir = None
     if temp_files:
@@ -43,12 +75,11 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
 
     with app.app_context():
         try:
-            _set('status', 'uploading')
+            _update(status='uploading')
             from services.yandex_disk import (
                 _ensure_folder, _sanitize, _publish_file, ROOT_FOLDER,
             )
             import urllib.request
-            import json as _json
 
             # Строим структуру папок (один раз)
             from datetime import timedelta as _td
@@ -96,7 +127,7 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
                     req.add_header('Accept', 'application/json')
                     try:
                         with urllib.request.urlopen(req) as resp:
-                            upload_url = _json.loads(resp.read().decode())['href']
+                            upload_url = json.loads(resp.read().decode())['href']
                     except _ue.HTTPError as e:
                         if e.code == 409:
                             index += 1
@@ -110,8 +141,7 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
 
             file_results = []
             for temp_path, original_name in temp_files:
-                with _jobs_lock:
-                    _ydisk_jobs[job_id]['current_file'] = original_name
+                _update(current_file=original_name)
 
                 with open(temp_path, 'rb') as fh:
                     data = fh.read()
@@ -126,9 +156,8 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
                     'yadisk_url': file_url,
                     'yadisk_path': remote_path,
                 })
-                _inc_done()
-                with _jobs_lock:
-                    _ydisk_jobs[job_id]['current_file'] = ''
+                state = _job_read(job_id) or {}
+                _job_write(job_id, {**state, 'done': state.get('done', 0) + 1, 'current_file': ''})
 
             folder_url = _publish_file(ydisk_token, comment_path)
 
@@ -144,7 +173,7 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
                 db.session.add(att)
             db.session.commit()
 
-            _set('status', 'complete')
+            _update(status='complete')
 
         except Exception as e:
             app.logger.error(f'YDisk bg upload failed: {e}')
@@ -170,7 +199,7 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
 
             if fallback_ok:
                 # Файлы сохранены локально — транзакция считается успешной
-                _set('status', 'complete')
+                _update(status='complete')
             else:
                 # Ни YDisk, ни локальное хранилище не сработали — откатываем комментарий
                 try:
@@ -182,9 +211,9 @@ def _bg_upload_to_ydisk(app, job_id, comment_id, temp_files, ydisk_token, task_i
                         db.session.commit()
                 except Exception as e3:
                     app.logger.error(f'Comment rollback failed: {e3}')
-                _set('status', 'error')
-                _set('error', str(e))
+                _update(status='error', error=str(e))
         finally:
+            _job_delete(job_id)
             # Удаляем temp-директорию
             if tmp_dir and os.path.exists(tmp_dir):
                 try:
@@ -921,14 +950,13 @@ def add_comment(task_id):
                 temp_files.append((tmp_path, f.filename))
 
             job_id = uuid.uuid4().hex
-            with _jobs_lock:
-                _ydisk_jobs[job_id] = {
-                    'status': 'pending',
-                    'total': len(temp_files),
-                    'done': 0,
-                    'current_file': '',
-                    'error': None,
-                }
+            _job_write(job_id, {
+                'status': 'pending',
+                'total': len(temp_files),
+                'done': 0,
+                'current_file': '',
+                'error': None,
+            })
 
             db.session.commit()  # коммитим комментарий до запуска треда
 
@@ -1025,17 +1053,15 @@ def delete_comment(task_id, comment_id):
 @login_required
 def upload_status(task_id, job_id):
     """Polling endpoint: статус фоновой загрузки файлов на Яндекс Диск."""
-    with _jobs_lock:
-        job = _ydisk_jobs.get(job_id)
+    job = _job_read(job_id)
     if not job:
-        # Job потерян (сервер перезапустился). Проверяем по comment_id —
-        # сохранились ли вложения в БД.
+        # Job-файл не найден — фоновый поток уже завершился (удалил файл в finally).
+        # Проверяем по comment_id: сохранились ли вложения в БД.
         from models import TaskComment as _TC
         comment_id = request.args.get('comment_id', type=int)
         if comment_id:
             comment_obj = _TC.query.get(comment_id)
             if comment_obj and comment_obj.attachments.count() > 0:
-                # Вложения есть — поток успел завершиться до перезапуска
                 return jsonify({'status': 'complete'})
             # Вложений нет — откатываем комментарий
             if comment_obj:
@@ -1045,9 +1071,9 @@ def upload_status(task_id, job_id):
                 except Exception:
                     db.session.rollback()
             return jsonify({'status': 'error',
-                            'error': 'Загрузка прервана (сервер был перезапущен)'})
+                            'error': 'Загрузка не завершилась — попробуйте ещё раз'})
         return jsonify({'status': 'error',
-                        'error': 'Загрузка прервана (сервер был перезапущен)'})
+                        'error': 'Загрузка не завершилась — попробуйте ещё раз'})
     return jsonify({
         'status': job['status'],
         'total': job['total'],
